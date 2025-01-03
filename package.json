@@ -1,0 +1,25 @@
+{
+  "name": "tc-si",
+  "displayName": "TC-si",
+  "description": "Turing Complete si file language extension",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "si",
+      "aliases": ["Turing Complete Si file", "si"],
+      "extensions": [".si"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "si",
+      "scopeName": "source.si",
+      "path": "./syntaxes/si.tmLanguage.json"
+    }]
+  }
+}
