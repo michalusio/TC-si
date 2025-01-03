@@ -3,6 +3,9 @@
 	"name": "si",
 	"patterns": [
 		{
+			"include": "#comments"
+		},
+		{
 			"include": "#builtInTypes"
 		},
 		{
@@ -13,9 +16,6 @@
 		},
 		{
 			"include": "#constants"
-		},
-		{
-			"include": "#comments"
 		},
 		{
 			"include": "#strings"
@@ -60,7 +60,7 @@
 				},
 				{
 					"name": "keyword.other.si",
-					"match": "\\b(def|dot|binary|unary|const|let|var)\\b"
+					"match": "\\b(pub|def|dot|binary|unary|const|let|var)\\b"
 				},
 				{
 					"name": "keyword.operator.arithmetic.si",
