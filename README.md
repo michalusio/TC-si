@@ -14,12 +14,4 @@ TC-si is a VSCode language extension that adds basic syntax highlighting for the
 
 If you want to contribute to the language extension, feel free to make bugs, feature requests and PRs!
 
-## Release Notes
-
-### 0.0.1
-
-Initial release of the extension
-
----
-
 **Enjoy!**
