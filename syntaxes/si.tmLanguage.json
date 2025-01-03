@@ -60,7 +60,7 @@
 				},
 				{
 					"name": "keyword.other.si",
-					"match": "\\b(pub|def|dot|binary|unary|const|let|var)\\b"
+					"match": "\\b(pub|def|dot|binary|unary|const|let|var|type)\\b"
 				},
 				{
 					"name": "keyword.operator.arithmetic.si",
