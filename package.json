@@ -1,6 +1,11 @@
 {
   "name": "tc-si",
   "displayName": "TC-si",
+  "icon": "images/logo.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michalusio/TC-si"
+  },
   "description": "Turing Complete si file language extension",
   "version": "0.0.1",
   "engines": {

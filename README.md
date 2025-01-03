@@ -4,11 +4,11 @@ TC-si is a VSCode language extension that adds basic syntax highlighting for the
 
 ## Features
 
-![](imgs/1.png)
+![](images/1.png)
 
-![](imgs/2.png)
+![](images/2.png)
 
-![](imgs/3.png)
+![](images/3.png)
 
 ## Contributing
 
