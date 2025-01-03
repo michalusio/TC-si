@@ -1,6 +1,7 @@
 {
   "name": "tc-si",
   "displayName": "TC-si",
+  "publisher": "Michai",
   "icon": "images/logo.png",
   "repository": {
     "type": "git",
