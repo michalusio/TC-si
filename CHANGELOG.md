@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.2.1]
+
+Added support for "Go to Declaration" for functions and parameters
+Fixed broken images on plugin page
+
 ## [0.2.0]
 
 Added generic types highlighting

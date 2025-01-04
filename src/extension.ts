@@ -1,4 +1,4 @@
-import { languages, Range, SemanticTokensLegend, TextDocument, Position, ProviderResult, SemanticTokens, DocumentSemanticTokensProvider, SemanticTokensBuilder, WorkspaceEdit, RenameProvider, DeclarationProvider, CancellationToken, Declaration } from 'vscode';
+import { languages, Range, SemanticTokensLegend, TextDocument, Position, ProviderResult, SemanticTokens, DocumentSemanticTokensProvider, SemanticTokensBuilder, WorkspaceEdit, RenameProvider, DeclarationProvider, CancellationToken, Declaration, Location } from 'vscode';
 
 const tokenTypes = ['type', 'parameter'];
 const tokenModifiers = ['declaration', 'definition'];
@@ -216,13 +216,46 @@ const selector = { language: 'si', scheme: 'file' };
 
 languages.registerDocumentSemanticTokensProvider(selector, tokenProvider, legend);
 
-// const declarationProvider: DeclarationProvider = {
-// 	provideDeclaration(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Declaration> {
-// 		return null;
-// 	},
-// }
+const declarationProvider: DeclarationProvider = {
+	provideDeclaration(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Declaration> {
+		const renameBase = getRenameBase(document, position);
+		if (renameBase == null) return;
+		switch (renameBase[0]) {
+			case 'function': {
+				return new Location(document.uri, functionData.get(renameBase[1])![0]);
+			}
+			case 'parameter': {
+				const param = parameterData.get(renameBase[1])!;
+				for (const [funcRange, paramRange] of param) {
+					if (funcRange.contains(position)) {
+						return new Location(document.uri, paramRange);
+					}
+				}
+			}
+		}
+	},
+}
+languages.registerDeclarationProvider(selector, declarationProvider);
 
-// languages.registerDeclarationProvider(selector, declarationProvider);
+type RenameType = 'function' | 'parameter';
+
+const getRenameBase = (document: TextDocument, position: Position): [RenameType, string] | null => {
+	for (const func of functionData) {
+		for (const funcRange of func[1]) {
+			if (funcRange.contains(position)) {
+				return ['function', document.getText(funcRange)];
+			}
+		}
+	}
+	for (const param of parameterData) {
+		for (const [_, paramRange] of param[1]) {
+			if (paramRange.contains(position)) {
+				return ['parameter', document.getText(paramRange)];
+			}
+		}
+	}
+	return null;
+}
 
 const renameProvider: RenameProvider = {
 	prepareRename(document, position, token): ProviderResult<Range> {
@@ -247,43 +280,26 @@ const renameProvider: RenameProvider = {
 		if (!/\w+/.test(newName)) {
 			return Promise.reject();
 		}
-
-		let oldFuncName: string | null = null;
-		for (const func of functionData) {
-			for (const funcRange of func[1]) {
-				if (funcRange.contains(position)) {
-					oldFuncName = document.getText(funcRange);
-					break;
+		const renameBase = getRenameBase(document, position);
+		if (renameBase == null) return;
+		const edits = new WorkspaceEdit();
+		switch (renameBase[0]) {
+			case 'function': {
+				const funcRanges = functionData.get(renameBase[1])!;
+				for (const funcRange of funcRanges) {
+					edits.replace(document.uri, funcRange, newName);
 				}
 			}
-		}
-		if (oldFuncName == null) {
-			let oldParamName: string | null = null;
-			for (const param of parameterData) {
-				for (const [_, paramRange] of param[1]) {
-					if (paramRange.contains(position)) {
-						oldParamName = document.getText(paramRange);
-						break;
+			case 'parameter': {
+				const param = parameterData.get(renameBase[1])!;
+				for (const [funcRange, paramRange] of param) {
+					if (funcRange.contains(position)) {
+						edits.replace(document.uri, paramRange, newName);
 					}
 				}
 			}
-			if (oldParamName == null) return;
-			const edits = new WorkspaceEdit();
-			const param = parameterData.get(oldParamName)!;
-			for (const [funcRange, paramRange] of param) {
-				if (funcRange.contains(position)) {
-					edits.replace(document.uri, paramRange, newName);
-				}
-			}
-			return edits;
-		} else {
-			const edits = new WorkspaceEdit();
-			const funcRanges = functionData.get(oldFuncName)!;
-			for (const funcRange of funcRanges) {
-				edits.replace(document.uri, funcRange, newName);
-			}
-			return edits;
 		}
+		return edits;
 	}
 }
 languages.registerRenameProvider(selector, renameProvider);

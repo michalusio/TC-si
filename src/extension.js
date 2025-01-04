@@ -138,12 +138,44 @@ const tokenProvider = {
 };
 const selector = { language: 'si', scheme: 'file' };
 vscode_1.languages.registerDocumentSemanticTokensProvider(selector, tokenProvider, legend);
-// const declarationProvider: DeclarationProvider = {
-// 	provideDeclaration(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Declaration> {
-// 		return null;
-// 	},
-// }
-// languages.registerDeclarationProvider(selector, declarationProvider);
+const declarationProvider = {
+    provideDeclaration(document, position, token) {
+        const renameBase = getRenameBase(document, position);
+        if (renameBase == null)
+            return;
+        switch (renameBase[0]) {
+            case 'function': {
+                return new vscode_1.Location(document.uri, functionData.get(renameBase[1])[0]);
+            }
+            case 'parameter': {
+                const param = parameterData.get(renameBase[1]);
+                for (const [funcRange, paramRange] of param) {
+                    if (funcRange.contains(position)) {
+                        return new vscode_1.Location(document.uri, paramRange);
+                    }
+                }
+            }
+        }
+    },
+};
+vscode_1.languages.registerDeclarationProvider(selector, declarationProvider);
+const getRenameBase = (document, position) => {
+    for (const func of functionData) {
+        for (const funcRange of func[1]) {
+            if (funcRange.contains(position)) {
+                return ['function', document.getText(funcRange)];
+            }
+        }
+    }
+    for (const param of parameterData) {
+        for (const [_, paramRange] of param[1]) {
+            if (paramRange.contains(position)) {
+                return ['parameter', document.getText(paramRange)];
+            }
+        }
+    }
+    return null;
+};
 const renameProvider = {
     prepareRename(document, position, token) {
         for (const func of functionData) {
@@ -166,44 +198,27 @@ const renameProvider = {
         if (!/\w+/.test(newName)) {
             return Promise.reject();
         }
-        let oldFuncName = null;
-        for (const func of functionData) {
-            for (const funcRange of func[1]) {
-                if (funcRange.contains(position)) {
-                    oldFuncName = document.getText(funcRange);
-                    break;
+        const renameBase = getRenameBase(document, position);
+        if (renameBase == null)
+            return;
+        const edits = new vscode_1.WorkspaceEdit();
+        switch (renameBase[0]) {
+            case 'function': {
+                const funcRanges = functionData.get(renameBase[1]);
+                for (const funcRange of funcRanges) {
+                    edits.replace(document.uri, funcRange, newName);
                 }
             }
-        }
-        if (oldFuncName == null) {
-            let oldParamName = null;
-            for (const param of parameterData) {
-                for (const [_, paramRange] of param[1]) {
-                    if (paramRange.contains(position)) {
-                        oldParamName = document.getText(paramRange);
-                        break;
+            case 'parameter': {
+                const param = parameterData.get(renameBase[1]);
+                for (const [funcRange, paramRange] of param) {
+                    if (funcRange.contains(position)) {
+                        edits.replace(document.uri, paramRange, newName);
                     }
                 }
             }
-            if (oldParamName == null)
-                return;
-            const edits = new vscode_1.WorkspaceEdit();
-            const param = parameterData.get(oldParamName);
-            for (const [funcRange, paramRange] of param) {
-                if (funcRange.contains(position)) {
-                    edits.replace(document.uri, paramRange, newName);
-                }
-            }
-            return edits;
         }
-        else {
-            const edits = new vscode_1.WorkspaceEdit();
-            const funcRanges = functionData.get(oldFuncName);
-            for (const funcRange of funcRanges) {
-                edits.replace(document.uri, funcRange, newName);
-            }
-            return edits;
-        }
+        return edits;
     }
 };
 vscode_1.languages.registerRenameProvider(selector, renameProvider);

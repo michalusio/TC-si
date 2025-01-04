@@ -5,7 +5,7 @@
   "icon": "images/logo.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dziczusio/TC-sweet"
+    "url": "https://github.com/michalusio/TC-si"
   },
   "description": "Turing Complete si file language extension",
   "version": "0.2.0",
