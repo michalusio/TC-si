@@ -8,7 +8,7 @@
     "url": "https://github.com/dziczusio/TC-sweet"
   },
   "description": "Turing Complete si file language extension",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "engines": {
     "vscode": "^1.73.0"
   },
@@ -16,8 +16,8 @@
     "Programming Languages"
   ],
   "activationEvents": [
-		"onLanguage:semanticLanguage"
-	],
+    "onLanguage:semanticLanguage"
+  ],
   "main": "./src/extension.js",
   "contributes": {
     "languages": [
@@ -55,8 +55,8 @@
     "watch": "tsc -watch"
   },
   "devDependencies": {
-		"@types/node": "^20",
-		"@types/vscode": "^1.73.0",
-		"typescript": "^5.7.2"
-	}
+    "@types/node": "^20",
+    "@types/vscode": "^1.73.0",
+    "typescript": "^5.7.2"
+  }
 }
