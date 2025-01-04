@@ -8,7 +8,7 @@
     "url": "https://github.com/michalusio/TC-si"
   },
   "description": "Turing Complete si file language extension",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "engines": {
     "vscode": "^1.73.0"
   },
