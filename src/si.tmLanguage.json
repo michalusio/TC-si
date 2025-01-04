@@ -31,12 +31,20 @@
 		"builtInTypes": {
 			"patterns": [
 				{
-					"name": "entity.name.type.si",
-					"match": "\\[*(Int|String|U8|S8|U16|S16|U32|S32|U64|S64)\\]*"
+					"name": "support.type.si",
+					"match": "\\[*(@[A-Z]\\w*)\\]*"
+				},
+				{
+					"name": "support.type.si",
+					"match": "<*(@[A-Z]\\w*)>*"
 				},
 				{
 					"name": "entity.name.type.si",
-					"match": "<*(Int|String|U8|S8|U16|S16|U32|S32|U64|S64)>*"
+					"match": "\\[*([A-Z]\\w*)\\]*"
+				},
+				{
+					"name": "entity.name.type.si",
+					"match": "<*([A-Z]\\w*)>*"
 				}
 			]
 		},
@@ -60,7 +68,7 @@
 				},
 				{
 					"name": "keyword.other.si",
-					"match": "\\b(pub|def|dot|binary|unary|const|let|var|type)\\b"
+					"match": "\\b(pub|def|dot|binary|unary|const|let|var|type|extern|call_conv)\\b"
 				},
 				{
 					"name": "keyword.operator.arithmetic.si",
@@ -146,7 +154,7 @@
 			]
 		},
 		"variables": {
-			"name": "variable.si",
+			"name": "variable.name.si",
 			"match": "\\$?\\w+"
 		}
 	},

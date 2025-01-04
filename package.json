@@ -5,16 +5,20 @@
   "icon": "images/logo.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/michalusio/TC-si"
+    "url": "https://github.com/dziczusio/TC-sweet"
   },
   "description": "Turing Complete si file language extension",
   "version": "0.1.1",
   "engines": {
-    "vscode": "^1.96.0"
+    "vscode": "^1.73.0"
   },
   "categories": [
     "Programming Languages"
   ],
+  "activationEvents": [
+		"onLanguage:semanticLanguage"
+	],
+  "main": "./src/extension.js",
   "contributes": {
     "languages": [
       {
@@ -26,15 +30,33 @@
         "extensions": [
           ".si"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "images/logo.png",
+          "dark": "images/logo.png"
+        }
       }
     ],
     "grammars": [
       {
         "language": "si",
         "scopeName": "source.si",
-        "path": "./syntaxes/si.tmLanguage.json"
+        "path": "./src/si.tmLanguage.json"
       }
     ]
-  }
+  },
+  "configurationDefaults": {
+    "si": {
+      "editor.semanticHighlighting.enabled": true
+    }
+  },
+  "scripts": {
+    "compile": "tsc",
+    "watch": "tsc -watch"
+  },
+  "devDependencies": {
+		"@types/node": "^20",
+		"@types/vscode": "^1.73.0",
+		"typescript": "^5.7.2"
+	}
 }

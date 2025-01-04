@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.2.0]
+
+Added generic types highlighting
+Added support for renaming functions and parameters
+
 ## [0.1.1]
 
 Added type keyword highlighting
