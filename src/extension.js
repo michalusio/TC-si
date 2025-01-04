@@ -1,12 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const vscode_1 = require("vscode");
-const tokenTypes = ['type', 'parameter'];
-const tokenModifiers = ['declaration', 'definition'];
+const tokenTypes = ['type', 'parameter', 'variable'];
+const tokenModifiers = ['declaration', 'definition', 'readonly'];
 const legend = new vscode_1.SemanticTokensLegend(tokenTypes, tokenModifiers);
 let aliasData = new Map();
 let functionData = new Map();
 let parameterData = new Map();
+let variableData = new Map();
+let functionId = 0;
 const getAllAliases = (document) => {
     const result = [];
     for (let lineIndex = 0; lineIndex < document.lineCount; lineIndex++) {
@@ -52,20 +54,14 @@ const getFunctionParameters = (document) => {
         const endParseResult = /\)\s*(\[*[A-Z]\w*\]*)?\s*{$/.exec(line.text.slice(lprl));
         if (endParseResult == null)
             continue;
-        const parameters = line.text
+        const parameters = Array.from(line.text
             .slice(lprl, line.text.length - endParseResult[0].length)
-            .split(',')
-            .map((p, i, all) => {
-            const offset = all.filter((_, j) => j < i).reduce((prev, curr) => prev + curr.length + (prev > 0 ? 1 : 0), 0);
-            const ppr = /(\s*)(\w+)(\s*:\s*)(\[*[A-Z]\w*\]*)/.exec(p);
-            if (ppr == null)
-                return null;
-            return {
-                text: ppr[2],
-                name: new vscode_1.Range(lineIndex, lprl + offset + ppr[1].length, lineIndex, lprl + offset + ppr[1].length + ppr[2].length)
-            };
-        })
-            .filter((p) => p != null);
+            .matchAll(/(\$?\w+)(\s*:\s*)(\[*[A-Z]\w*\]*)/g))
+            .map(match => ({
+            text: `${functionId}'${match[1]}`,
+            name: new vscode_1.Range(lineIndex, lprl + match.index + (match[1].startsWith('$') ? 1 : 0), lineIndex, lprl + match.index + match[1].length)
+        }));
+        functionId++;
         const endCheck = new RegExp(`^${lineParseResult[1] ?? ""}}$`);
         let endScope = line.range.end;
         for (let endLineIndex = lineIndex + 1; endLineIndex < document.lineCount; endLineIndex++) {
@@ -80,7 +76,7 @@ const getFunctionParameters = (document) => {
             + (lineParseResult[3]?.length ?? 0)
             + (lineParseResult[4]?.length ?? 0)
             + (lineParseResult[5]?.length ?? 0);
-        const text = /\w+/.test(lineParseResult[6]) ? lineParseResult[6] : null;
+        const text = /\w+/.test(lineParseResult[6]) ? (lineParseResult[4] + lineParseResult[6]) : null;
         result.push({
             text,
             name: new vscode_1.Range(lineIndex, nameIndex, lineIndex, nameIndex + lineParseResult[6].length),
@@ -105,12 +101,37 @@ const getFunctionParameterUsages = (document, func) => {
     for (let lineIndex = func.scope.start.line + 1; lineIndex < func.scope.end.line; lineIndex++) {
         const lineText = document.lineAt(lineIndex).text;
         for (const param of func.parameters) {
-            for (const match of lineText.matchAll(new RegExp(`(?<=[^\\w])${param.text}(?=[^\\w])`, 'g'))) {
+            const paramName = param.text.split("'")[1];
+            const onlyParamName = paramName.startsWith('$') ? paramName.slice(1) : paramName;
+            for (const match of lineText.matchAll(new RegExp(`(?<=[^\\w])${onlyParamName}(?=[^\\w])`, 'g'))) {
                 result.push([
                     param.text,
-                    new vscode_1.Range(lineIndex, match.index, lineIndex, match.index + param.text.length)
+                    new vscode_1.Range(lineIndex, match.index, lineIndex, match.index + onlyParamName.length)
                 ]);
             }
+        }
+    }
+    return result;
+};
+const getGlobalVariables = (document) => {
+    const result = [];
+    for (let lineIndex = 0; lineIndex < document.lineCount; lineIndex++) {
+        const lineText = document.lineAt(lineIndex).text;
+        for (const match of lineText.matchAll(/^(const|let|var)(\s+)([A-Z_]+)(\s+)=/g)) {
+            result.push({
+                text: match[3],
+                name: new vscode_1.Range(lineIndex, match.index + match[1].length + match[2].length, lineIndex, match.index + match[1].length + match[2].length + match[3].length)
+            });
+        }
+    }
+    return result;
+};
+const getGlobalVariableUsages = (document, variable) => {
+    const result = [];
+    for (let lineIndex = 0; lineIndex < document.lineCount; lineIndex++) {
+        const lineText = document.lineAt(lineIndex).text;
+        for (const match of lineText.matchAll(new RegExp(`\\b${variable}\\b`, 'g'))) {
+            result.push(new vscode_1.Range(lineIndex, match.index, lineIndex, match.index + variable.length));
         }
     }
     return result;
@@ -120,7 +141,21 @@ const tokenProvider = {
         aliasData.clear();
         functionData.clear();
         parameterData.clear();
+        variableData.clear();
+        const fullDocumentRange = new vscode_1.Range(new vscode_1.Position(0, 0), document.lineAt(document.lineCount - 1).range.end);
         const tokensBuilder = new vscode_1.SemanticTokensBuilder(legend);
+        const variables = getGlobalVariables(document);
+        for (const variable of variables) {
+            tokensBuilder.push(variable.name, 'variable', ['readonly']);
+            variableData.set(variable.text, [[fullDocumentRange, variable.name]]);
+            const variableUsage = getGlobalVariableUsages(document, variable.text);
+            for (const param of variableUsage) {
+                if (param.intersection(variable.name) !== undefined)
+                    continue;
+                variableData.get(variable.text).push([fullDocumentRange, param]);
+                tokensBuilder.push(param, 'variable', ['readonly']);
+            }
+        }
         const typeAliases = getAllAliases(document);
         for (const alias of typeAliases) {
             tokensBuilder.push(alias.name, 'type', ['declaration']);
@@ -161,10 +196,18 @@ const selector = { language: 'si', scheme: 'file' };
 vscode_1.languages.registerDocumentSemanticTokensProvider(selector, tokenProvider, legend);
 const declarationProvider = {
     provideDeclaration(document, position, token) {
-        const renameBase = getRenameBase(document, position);
+        const renameBase = getRenameBase(position);
         if (renameBase == null)
             return;
         switch (renameBase[0]) {
+            case 'variable': {
+                const variable = variableData.get(renameBase[1]);
+                for (const [funcRange, variableRange] of variable) {
+                    if (funcRange.contains(position)) {
+                        return new vscode_1.Location(document.uri, variableRange);
+                    }
+                }
+            }
             case 'alias': {
                 return new vscode_1.Location(document.uri, aliasData.get(renameBase[1])[0]);
             }
@@ -183,25 +226,32 @@ const declarationProvider = {
     },
 };
 vscode_1.languages.registerDeclarationProvider(selector, declarationProvider);
-const getRenameBase = (document, position) => {
+const getRenameBase = (position) => {
+    for (const variable of variableData) {
+        for (const [_, variableRange] of variable[1]) {
+            if (variableRange.contains(position)) {
+                return ['variable', variable[0]];
+            }
+        }
+    }
     for (const alias of aliasData) {
         for (const aliasRange of alias[1]) {
             if (aliasRange.contains(position)) {
-                return ['alias', document.getText(aliasRange)];
+                return ['alias', alias[0]];
             }
         }
     }
     for (const func of functionData) {
         for (const funcRange of func[1]) {
             if (funcRange.contains(position)) {
-                return ['function', document.getText(funcRange)];
+                return ['function', func[0]];
             }
         }
     }
     for (const param of parameterData) {
         for (const [_, paramRange] of param[1]) {
             if (paramRange.contains(position)) {
-                return ['parameter', document.getText(paramRange)];
+                return ['parameter', param[0]];
             }
         }
     }
@@ -209,6 +259,13 @@ const getRenameBase = (document, position) => {
 };
 const renameProvider = {
     prepareRename(document, position, token) {
+        for (const variable of variableData) {
+            for (const [_, variableRange] of variable[1]) {
+                if (variableRange.contains(position)) {
+                    return variableRange;
+                }
+            }
+        }
         for (const alias of aliasData) {
             for (const aliasRange of alias[1]) {
                 if (aliasRange.contains(position)) {
@@ -236,11 +293,20 @@ const renameProvider = {
         if (!/\w+/.test(newName)) {
             return Promise.reject();
         }
-        const renameBase = getRenameBase(document, position);
+        const renameBase = getRenameBase(position);
         if (renameBase == null)
             return;
         const edits = new vscode_1.WorkspaceEdit();
         switch (renameBase[0]) {
+            case 'variable': {
+                const variable = variableData.get(renameBase[1]);
+                for (const [funcRange, variableRange] of variable) {
+                    if (funcRange.contains(position)) {
+                        edits.replace(document.uri, variableRange, newName);
+                    }
+                }
+                break;
+            }
             case 'alias': {
                 const aliasRanges = aliasData.get(renameBase[1]);
                 for (const aliasRange of aliasRanges) {

@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.2.3]
+
+Function parameters are properly resolved between functions, and even if they contains a dollar sign
+Dot and Def functions named the same are resolved separately
+
 ## [0.2.2]
 
 Added support for "Go to Declaration" and "Rename" for type aliases
