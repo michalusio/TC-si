@@ -4,6 +4,7 @@ const vscode_1 = require("vscode");
 const tokenTypes = ['type', 'parameter'];
 const tokenModifiers = ['declaration', 'definition'];
 const legend = new vscode_1.SemanticTokensLegend(tokenTypes, tokenModifiers);
+let aliasData = new Map();
 let functionData = new Map();
 let parameterData = new Map();
 const getAllAliases = (document) => {
@@ -20,9 +21,20 @@ const getAllAliases = (document) => {
         const whitespaceMatch = lineParseResult[3];
         const typeMatch = lineParseResult[4];
         result.push({
+            text: nameMatch,
             name: new vscode_1.Range(lineIndex, keywordMatch.length, lineIndex, keywordMatch.length + nameMatch.length),
             type: new vscode_1.Range(lineIndex, keywordMatch.length + nameMatch.length + whitespaceMatch.length, lineIndex, keywordMatch.length + nameMatch.length + whitespaceMatch.length + typeMatch.length)
         });
+    }
+    return result;
+};
+const getAliasUsages = (document, alias) => {
+    const result = [];
+    for (let lineIndex = 0; lineIndex < document.lineCount; lineIndex++) {
+        const lineText = document.lineAt(lineIndex).text;
+        for (const match of lineText.matchAll(new RegExp(`\\b${alias}\\b`, 'g'))) {
+            result.push(new vscode_1.Range(lineIndex, match.index, lineIndex, match.index + alias.length));
+        }
     }
     return result;
 };
@@ -105,6 +117,7 @@ const getFunctionParameterUsages = (document, func) => {
 };
 const tokenProvider = {
     provideDocumentSemanticTokens(document) {
+        aliasData.clear();
         functionData.clear();
         parameterData.clear();
         const tokensBuilder = new vscode_1.SemanticTokensBuilder(legend);
@@ -112,14 +125,22 @@ const tokenProvider = {
         for (const alias of typeAliases) {
             tokensBuilder.push(alias.name, 'type', ['declaration']);
             tokensBuilder.push(alias.type, 'type', ['definition']);
+            aliasData.set(alias.text, [alias.name]);
+            const aliasUsage = getAliasUsages(document, alias.text);
+            for (const usage of aliasUsage) {
+                if (usage.intersection(alias.name) !== undefined)
+                    continue;
+                aliasData.get(alias.text).push(usage);
+            }
         }
         const functionParams = getFunctionParameters(document);
         for (const func of functionParams) {
             if (func.text != null) {
-                functionData.set(func.text, []);
+                functionData.set(func.text, [func.name]);
                 const functionUsage = getFunctionUsages(document, func.text);
-                //throw `${func.text} - ${functionUsage.length} usages`;
                 for (const usage of functionUsage) {
+                    if (usage.intersection(func.name) !== undefined)
+                        continue;
                     functionData.get(func.text).push(usage);
                 }
             }
@@ -144,6 +165,9 @@ const declarationProvider = {
         if (renameBase == null)
             return;
         switch (renameBase[0]) {
+            case 'alias': {
+                return new vscode_1.Location(document.uri, aliasData.get(renameBase[1])[0]);
+            }
             case 'function': {
                 return new vscode_1.Location(document.uri, functionData.get(renameBase[1])[0]);
             }
@@ -160,6 +184,13 @@ const declarationProvider = {
 };
 vscode_1.languages.registerDeclarationProvider(selector, declarationProvider);
 const getRenameBase = (document, position) => {
+    for (const alias of aliasData) {
+        for (const aliasRange of alias[1]) {
+            if (aliasRange.contains(position)) {
+                return ['alias', document.getText(aliasRange)];
+            }
+        }
+    }
     for (const func of functionData) {
         for (const funcRange of func[1]) {
             if (funcRange.contains(position)) {
@@ -178,6 +209,13 @@ const getRenameBase = (document, position) => {
 };
 const renameProvider = {
     prepareRename(document, position, token) {
+        for (const alias of aliasData) {
+            for (const aliasRange of alias[1]) {
+                if (aliasRange.contains(position)) {
+                    return aliasRange;
+                }
+            }
+        }
         for (const func of functionData) {
             for (const funcRange of func[1]) {
                 if (funcRange.contains(position)) {
@@ -203,11 +241,19 @@ const renameProvider = {
             return;
         const edits = new vscode_1.WorkspaceEdit();
         switch (renameBase[0]) {
+            case 'alias': {
+                const aliasRanges = aliasData.get(renameBase[1]);
+                for (const aliasRange of aliasRanges) {
+                    edits.replace(document.uri, aliasRange, newName);
+                }
+                break;
+            }
             case 'function': {
                 const funcRanges = functionData.get(renameBase[1]);
                 for (const funcRange of funcRanges) {
                     edits.replace(document.uri, funcRange, newName);
                 }
+                break;
             }
             case 'parameter': {
                 const param = parameterData.get(renameBase[1]);
@@ -216,6 +262,7 @@ const renameProvider = {
                         edits.replace(document.uri, paramRange, newName);
                     }
                 }
+                break;
             }
         }
         return edits;

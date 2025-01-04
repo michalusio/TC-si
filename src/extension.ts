@@ -4,10 +4,12 @@ const tokenTypes = ['type', 'parameter'];
 const tokenModifiers = ['declaration', 'definition'];
 const legend = new SemanticTokensLegend(tokenTypes, tokenModifiers);
 
+let aliasData = new Map<string, Range[]>();
 let functionData = new Map<string, Range[]>();
 let parameterData = new Map<string, [Range, Range][]>();
 
 type ITypeAlias = {
+	text: string;
 	name: Range;
 	type: Range;
 }
@@ -27,6 +29,7 @@ const getAllAliases = (document: TextDocument): ITypeAlias[] => {
 		const typeMatch = lineParseResult[4];
 
 		result.push({
+			text: nameMatch,
 			name: new Range(
 				lineIndex,
 				keywordMatch.length,
@@ -40,6 +43,22 @@ const getAllAliases = (document: TextDocument): ITypeAlias[] => {
 				keywordMatch.length + nameMatch.length + whitespaceMatch.length + typeMatch.length
 			)
 		});
+	}
+	return result;
+}
+
+const getAliasUsages = (document: TextDocument, alias: string): Range[] => {
+	const result: Range[] = [];
+	for (let lineIndex = 0; lineIndex < document.lineCount; lineIndex++) {
+		const lineText = document.lineAt(lineIndex).text;
+		for (const match of lineText.matchAll(new RegExp(`\\b${alias}\\b`, 'g'))) {
+			result.push(new Range(
+				lineIndex,
+				match.index,
+				lineIndex,
+				match.index + alias.length
+			));
+		}
 	}
 	return result;
 }
@@ -161,6 +180,7 @@ const tokenProvider: DocumentSemanticTokensProvider = {
   provideDocumentSemanticTokens(
     document: TextDocument
   ): ProviderResult<SemanticTokens> {
+	aliasData.clear();
 	functionData.clear();
 	parameterData.clear();
 
@@ -178,15 +198,21 @@ const tokenProvider: DocumentSemanticTokensProvider = {
 			'type',
 			['definition']
 		);
+		aliasData.set(alias.text, [alias.name]);
+		const aliasUsage = getAliasUsages(document, alias.text);
+		for (const usage of aliasUsage) {
+			if (usage.intersection(alias.name) !== undefined) continue;
+			aliasData.get(alias.text)!.push(usage);
+		}
 	}
 
 	const functionParams = getFunctionParameters(document);
 	for (const func of functionParams) {
 		if (func.text != null) {
-			functionData.set(func.text, []);
+			functionData.set(func.text, [func.name]);
 			const functionUsage = getFunctionUsages(document, func.text);
-			//throw `${func.text} - ${functionUsage.length} usages`;
 			for (const usage of functionUsage) {
+				if (usage.intersection(func.name) !== undefined) continue;
 				functionData.get(func.text)!.push(usage);
 			}
 		}
@@ -221,6 +247,9 @@ const declarationProvider: DeclarationProvider = {
 		const renameBase = getRenameBase(document, position);
 		if (renameBase == null) return;
 		switch (renameBase[0]) {
+			case 'alias': {
+				return new Location(document.uri, aliasData.get(renameBase[1])![0]);
+			}
 			case 'function': {
 				return new Location(document.uri, functionData.get(renameBase[1])![0]);
 			}
@@ -237,9 +266,16 @@ const declarationProvider: DeclarationProvider = {
 }
 languages.registerDeclarationProvider(selector, declarationProvider);
 
-type RenameType = 'function' | 'parameter';
+type RenameType = 'alias' | 'function' | 'parameter';
 
 const getRenameBase = (document: TextDocument, position: Position): [RenameType, string] | null => {
+	for (const alias of aliasData) {
+		for (const aliasRange of alias[1]) {
+			if (aliasRange.contains(position)) {
+				return ['alias', document.getText(aliasRange)];
+			}
+		}
+	}
 	for (const func of functionData) {
 		for (const funcRange of func[1]) {
 			if (funcRange.contains(position)) {
@@ -259,6 +295,13 @@ const getRenameBase = (document: TextDocument, position: Position): [RenameType,
 
 const renameProvider: RenameProvider = {
 	prepareRename(document, position, token): ProviderResult<Range> {
+		for (const alias of aliasData) {
+			for (const aliasRange of alias[1]) {
+				if (aliasRange.contains(position)) {
+					return aliasRange;
+				}
+			}
+		}
 		for (const func of functionData) {
 			for (const funcRange of func[1]) {
 				if (funcRange.contains(position)) {
@@ -284,11 +327,19 @@ const renameProvider: RenameProvider = {
 		if (renameBase == null) return;
 		const edits = new WorkspaceEdit();
 		switch (renameBase[0]) {
+			case 'alias': {
+				const aliasRanges = aliasData.get(renameBase[1])!;
+				for (const aliasRange of aliasRanges) {
+					edits.replace(document.uri, aliasRange, newName);
+				}
+				break;
+			}
 			case 'function': {
 				const funcRanges = functionData.get(renameBase[1])!;
 				for (const funcRange of funcRanges) {
 					edits.replace(document.uri, funcRange, newName);
 				}
+				break;
 			}
 			case 'parameter': {
 				const param = parameterData.get(renameBase[1])!;
@@ -297,6 +348,7 @@ const renameProvider: RenameProvider = {
 						edits.replace(document.uri, paramRange, newName);
 					}
 				}
+				break;
 			}
 		}
 		return edits;

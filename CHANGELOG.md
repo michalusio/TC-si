@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.2.2]
+
+Added support for "Go to Declaration" and "Rename" for type aliases
+
 ## [0.2.1]
 
 Added support for "Go to Declaration" for functions and parameters
