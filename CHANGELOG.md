@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.2.4]
+
+Added base parser for the full language (currently off)
+Changed language's display name as we now know the language is named `Simplex`
+
 ## [0.2.3]
 
 Function parameters are properly resolved between functions, and even if they contains a dollar sign

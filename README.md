@@ -1,8 +1,14 @@
-# TC-si
+# TC Simplex
 
-TC-si is a VSCode language extension that adds basic syntax highlighting for the `.si` format that is used in [Turing Complete](https://store.steampowered.com/app/1444480/Turing_Complete/) for writing level tests.
+TC Simplex is a VSCode language extension that adds basic language support for the Simplex language used in [Turing Complete](https://store.steampowered.com/app/1444480/Turing_Complete/) for writing level tests.
 
 ## Features
+
+- Syntax highlighting (strings, types, etc.)
+- Basic semantic highlighting (parameters, types, global variables)
+- Basic operations (rename, go to definition) for the semantic highlights
+
+## Preview
 
 ![](images/1.png)
 
