@@ -1,162 +1,162 @@
 {
-	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-	"name": "si",
-	"patterns": [
-		{
-			"include": "#comments"
-		},
-		{
-			"include": "#builtInTypes"
-		},
-		{
-			"include": "#methods"
-		},
-		{
-			"include": "#keywords"
-		},
-		{
-			"include": "#constants"
-		},
-		{
-			"include": "#strings"
-		},
-		{
-			"include": "#quotedStrings"
-		},
-		{
-			"include": "#variables"
-		}
-	],
-	"repository": {
-		"builtInTypes": {
-			"patterns": [
-				{
-					"name": "support.type.si",
-					"match": "\\[*(@[A-Z]\\w*)\\]*"
-				},
-				{
-					"name": "support.type.si",
-					"match": "<*(@[A-Z]\\w*)>*"
-				},
-				{
-					"name": "entity.name.type.si",
-					"match": "\\[*([A-Z]\\w*)\\]*"
-				},
-				{
-					"name": "entity.name.type.si",
-					"match": "<*([A-Z]\\w*)>*"
-				}
-			]
-		},
-		"methods": {
-			"patterns": [
-				{
-					"match": "\\b(\\w+)\\(",
-					"captures": {
-						"0": {
-							"name": "entity.name.function.si"
-						}
-					}
-				}
-			]
-		},
-		"keywords": {
-			"patterns": [
-				{
-					"name": "keyword.control.si",
-					"match": "\\b(if|while|return|else)\\b"
-				},
-				{
-					"name": "keyword.other.si",
-					"match": "\\b(pub|def|dot|binary|unary|const|let|var|type|extern|call_conv)\\b"
-				},
-				{
-					"name": "keyword.operator.arithmetic.si",
-					"match": "(\\+|==|=|!=|>|<|-|&|\\||\\^|\\*|\\/|>>|<<)"
-				}
-			]
-		},
-		"constants": {
-			"patterns": [
-				{
-					"name": "constant.numeric.si",
-					"match": "\\b(Z_STATE|TestResult|win|fail|pass)\\b"
-				},
-				{
-					"name": "constant.numeric.si",
-					"match": "(0x[0-9a-fA-F]+)"
-				},
-				{
-					"name": "constant.numeric.si",
-					"match": "(0b[01_]+)"
-				},
-				{
-					"name": "constant.numeric.si",
-					"match": "(\\-?[0-9]+)"
-				},
-				{
-					"name": "constant.language.si",
-					"match": "\\b(true|false)\\b"
-				}
-			]
-		},
-		"comments": {
-			"patterns": [
-				{
-					"name": "comment.line.si",
-					"match": "//.*\\n?"
-				},
-				{
-					"name": "comment.block.si",
-					"begin": "/\\*",
-					"end": "\\*/"
-				}
-			]
-		},
-		"strings": {
-			"name": "string.quoted.double.si",
-			"begin": "\"",
-			"end": "\""
-		},
-		"quotedStrings": {
-			"begin": "(`)",
-			"end": "(`)",
-			"captures": {
-				"0": {
-					"name": "string.interpolated.si"
-				}
-			},
-			"patterns": [
-				{
-					"name": "punctuation.term.si",
-					"begin": "{",
-					"beginCaptures": {
-						"0": {
-						"name": "meta.brace.curly.si"
-						}
-					},
-					"end": "}",
-					"endCaptures": {
-						"0": {
-						"name": "meta.brace.curly.si"
-						}
-					},
-					"patterns": [
-						{
-							"include": "source.si"
-						}
-					]
-				},
-				{
-					"match": "(?<=[}`]).*?(?=[{`])",
-					"name": "string.interpolated.si"
-				}
-			]
-		},
-		"variables": {
-			"name": "variable.name.si",
-			"match": "\\$?\\w+"
-		}
-	},
-	"scopeName": "source.si"
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "si",
+    "patterns": [
+        {
+            "include": "#comments"
+        },
+        {
+            "include": "#builtInTypes"
+        },
+        {
+            "include": "#methods"
+        },
+        {
+            "include": "#keywords"
+        },
+        {
+            "include": "#constants"
+        },
+        {
+            "include": "#strings"
+        },
+        {
+            "include": "#quotedStrings"
+        },
+        {
+            "include": "#variables"
+        }
+    ],
+    "repository": {
+        "builtInTypes": {
+            "patterns": [
+                {
+                    "name": "support.type.si",
+                    "match": "\\[*(@[A-Z]\\w*)\\]*"
+                },
+                {
+                    "name": "support.type.si",
+                    "match": "<*(@[A-Z]\\w*)>*"
+                },
+                {
+                    "name": "entity.name.type.si",
+                    "match": "\\[*([A-Z]\\w*)\\]*"
+                },
+                {
+                    "name": "entity.name.type.si",
+                    "match": "<*([A-Z]\\w*)>*"
+                }
+            ]
+        },
+        "methods": {
+            "patterns": [
+                {
+                    "match": "\\b(\\w+)\\(",
+                    "captures": {
+                        "0": {
+                            "name": "entity.name.function.si"
+                        }
+                    }
+                }
+            ]
+        },
+        "keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.control.si",
+                    "match": "\\b(if|while|return|else)\\b"
+                },
+                {
+                    "name": "keyword.other.si",
+                    "match": "\\b(pub|def|dot|binary|unary|const|let|var|type|extern|call_conv)\\b"
+                },
+                {
+                    "name": "keyword.operator.arithmetic.si",
+                    "match": "(\\+|==|=|!=|>|<|-|&|\\||\\^|\\*|\\/|>>|<<)"
+                }
+            ]
+        },
+        "constants": {
+            "patterns": [
+                {
+                    "name": "constant.numeric.si",
+                    "match": "\\b(Z_STATE|TestResult|win|fail|pass)\\b"
+                },
+                {
+                    "name": "constant.numeric.si",
+                    "match": "(0x[0-9a-fA-F]+)"
+                },
+                {
+                    "name": "constant.numeric.si",
+                    "match": "(0b[01_]+)"
+                },
+                {
+                    "name": "constant.numeric.si",
+                    "match": "(\\-?[0-9]+)"
+                },
+                {
+                    "name": "constant.language.si",
+                    "match": "\\b(true|false)\\b"
+                }
+            ]
+        },
+        "comments": {
+            "patterns": [
+                {
+                    "name": "comment.line.si",
+                    "match": "//.*\\n?"
+                },
+                {
+                    "name": "comment.block.si",
+                    "begin": "/\\*",
+                    "end": "\\*/"
+                }
+            ]
+        },
+        "strings": {
+            "name": "string.quoted.double.si",
+            "begin": "\"",
+            "end": "\""
+        },
+        "quotedStrings": {
+            "begin": "(`)",
+            "end": "(`)",
+            "captures": {
+                "0": {
+                    "name": "string.interpolated.si"
+                }
+            },
+            "patterns": [
+                {
+                    "name": "punctuation.term.si",
+                    "begin": "{",
+                    "beginCaptures": {
+                        "0": {
+                        "name": "meta.brace.curly.si"
+                        }
+                    },
+                    "end": "}",
+                    "endCaptures": {
+                        "0": {
+                        "name": "meta.brace.curly.si"
+                        }
+                    },
+                    "patterns": [
+                        {
+                            "include": "source.si"
+                        }
+                    ]
+                },
+                {
+                    "match": "(?<=[}`]).*?(?=[{`])",
+                    "name": "string.interpolated.si"
+                }
+            ]
+        },
+        "variables": {
+            "name": "variable.name.si",
+            "match": "\\$?\\w+"
+        }
+    },
+    "scopeName": "source.si"
 }
