@@ -7,6 +7,7 @@ TC Simplex is a VSCode language extension that adds basic language support for t
 - Syntax highlighting (strings, types, etc.)
 - Basic semantic highlighting (parameters, types, global variables)
 - Basic operations (rename, go to definition) for the semantic highlights
+- Basic semantic error checking (missing parenthesis, etc.)
 
 ## Preview
 

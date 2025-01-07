@@ -1,6 +1,7 @@
-import { any, between, exhaust, expect, expectErase, intP, many, map, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
-import { lab, rab, lbr, rbr, variableName, typeDefinition, functionName, lpr, rpr, unaryOperator, binaryOperator, newline } from "./base";
-import { ArrayRValue, BinaryRValue, CastedRValue, FunctionRValue, IndexRValue, NumberRValue, RValue, StringRValue, UnaryRValue, VariableRValue } from "./ast";
+import { any, between, exhaust, expect, intP, map, opt, Parser, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
+import { lab, rab, lbr, rbr, variableName, typeDefinition, functionName, lpr, rpr, unaryOperator, binaryOperator, lcb, rcb } from "./base";
+import { ArrayRValue, BinaryRValue, CastedRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./ast";
+import { recoverByAddingChars, rstr } from "./utils";
 
 const variableKind = any(
     str('const'),
@@ -15,6 +16,46 @@ const stringLiteral = map(
         value
     })
 );
+
+const stringInterpolatedLiteral = map(
+between(
+    str('`'),
+    exhaust(
+        any(
+            between(
+                lcb,
+                rValue(),
+                rstr('}')
+            ),
+            regex(/[^\n\r{`]+/, 'String character')
+        ),
+        rstr('`', false)
+    ),
+    str('`')
+),
+    (value) => {
+        let totalValue = '';
+        const inserts: {
+            index: number;
+            value: RValue;
+        }[] = []
+        for (const v of value) {
+            if (typeof v === 'string') {
+                totalValue += v;
+            } else {
+                inserts.push({
+                    index: totalValue.length,
+                    value: v
+                })
+            }
+        }
+        return (<InterpolatedRValue> {
+            type: 'interpolated',
+            value: totalValue,
+            inserts
+        });
+    }
+)
 
 const numericBase2Literal = map(
     regex(/0b[01][_01]*/, 'Numeric literal'),
@@ -57,10 +98,10 @@ const arrayLiteral = map(
                     str(',')
                 ))
             ),
-            seq(wspaces, rbr)
+            seq(wspaces, rstr(']', false))
         )),
         wspaces,
-        rbr
+        rstr(']')
     ), ([_, values, __, ___]) =>  (<ArrayRValue>{
         type: 'array',
         values: values.map(v => v[1])
@@ -81,10 +122,10 @@ export const functionCall = map(seq(
                     wspaces,
                     rValue()
                 ),
-                rpr
+                seq(spaces, rstr(')', false))
             )
         ))),
-        rpr
+        seq(spaces, rstr(')'))
     )
 ), ([name, rest]) => {
     const parameters = rest == null
@@ -104,32 +145,14 @@ export const variableIndex = map(seq(
     variableName,
     between(
         lbr,
-        surely(opt(seq(
-            wspaces,
-            rValue(),
-            exhaust(
-                seq(
-                    wspaces,
-                    str(','),
-                    wspaces,
-                    rValue()
-                ),
-                rbr
-            )
-        ))),
-        rbr
+        recoverByAddingChars('0', rValue(), true, 'index'),
+        rstr(']')
     )
-), ([name, rest]) => {
-    const parameters = rest == null
-        ? []
-        : [
-            rest[1],
-            ...rest[2].map(r => r[3])
-        ]
+), ([name, parameter]) => {
     return <IndexRValue>{
         type: 'index',
         value: name,
-        parameters 
+        parameter 
     };
 });
 
@@ -161,15 +184,23 @@ const unaryRValue = map(seq(
         operator,
         value
     }
-})
+});
 
-function rValue(): Parser<RValue> {
+const parenthesisedRValue = between(
+    seq(lpr, spaces),
+    rValue(),
+    seq(spaces, rstr(')'))
+);
+
+export function rValue(): Parser<RValue> {
     return (ctx) => map(
         seq(
             any(
+                parenthesisedRValue,
                 unaryRValue,
                 castedRValue,
                 stringLiteral,
+                stringInterpolatedLiteral,
                 numericBase16Literal,
                 numericBase2Literal,
                 numericBase10Literal,
@@ -179,22 +210,58 @@ function rValue(): Parser<RValue> {
                 variableLiteral
             ),
             opt(
-                seq(
-                    spaces,
-                    binaryOperator,
-                    spaces,
-                    rValue()
+                any(
+                    seq(
+                        spaces,
+                        str('?'),
+                        surely(seq(
+                            spaces,
+                            recoverByAddingChars('0', rValue(), true, 'on-true value'),
+                            spaces,
+                            str(':'),
+                            spaces,
+                            recoverByAddingChars('0', rValue(), true, 'on-false value')
+                        ))
+                    ),
+                    seq(
+                        str('.'),
+                        surely(functionCall)
+                    ),
+                    seq(
+                        spaces,
+                        binaryOperator,
+                        spaces,
+                        recoverByAddingChars('0', rValue(), true, 'second operand')
+                    )
                 )
             )
         ),
         ([value, operation]) =>
             operation
-            ? (<BinaryRValue>{
-                type: 'binary',
-                operator: operation[1],
-                left: value,
-                right: operation[3]
-            })
+            ? (
+                operation[0] === '.'
+                ? (<DotMethodRValue>{
+                    type: 'dotMethod',
+                    object: value,
+                    value: (operation[1] as FunctionRValue).value,
+                    parameters: (operation[1] as FunctionRValue).parameters
+                })
+                : (
+                    operation[1] === '?'
+                    ? (<TernaryRValue>{
+                        type: 'ternary',
+                        condition: value,
+                        ifTrue: operation[2][1],
+                        ifFalse: operation[2][5]
+                    })
+                    : (<BinaryRValue>{
+                        type: 'binary',
+                        operator: operation[1],
+                        left: value,
+                        right: operation[3]
+                    })
+                )
+            )
             : value
     )(ctx);
 }
@@ -202,16 +269,23 @@ function rValue(): Parser<RValue> {
 export const variableModification = expect(seq(
     any(variableIndex, variableName),
     surely(seq(
-        spacesPlus,
-        str('='),
-        spacesPlus,
-        rValue(),
-        newline
+        spaces,
+        opt(binaryOperator),
+        rstr('='),
+        spaces,
+        recoverByAddingChars('0', rValue(), true, 'value'),
     ))
 ), 'Variable modification statement');
 
 export const variableDeclaration = expect(seq(
     variableKind,
     spacesPlus,
-    surely(variableModification)
+    surely(seq(
+        recoverByAddingChars('variable', any(variableIndex, variableName), true, 'variable name'),
+        spaces,
+        opt(binaryOperator),
+        rstr('='),
+        spaces,
+        recoverByAddingChars('0', rValue(), true, 'value'),
+    ))
 ), 'Variable declaration statement');

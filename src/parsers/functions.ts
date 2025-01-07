@@ -1,20 +1,21 @@
-import { any, between, exhaust, many, map, opt, ref, seq, spaces, spacesPlus, str, surely } from "parser-combinators";
-import { binaryOperator, functionKind, functionName, lcb, lpr, rpr, typeDefinition, unaryOperator, variableName } from "./base";
+import { any, between, exhaust, map, opt, seq, spaces, spacesPlus, str, surely } from "parser-combinators";
+import { binaryOperator, functionKind, functionName, lpr, typeDefinition, unaryOperator, variableName } from "./base";
 import { FunctionDefinition } from "./ast";
+import { recoverByAddingChars, rstr } from "./utils";
 
 const parameter = map(seq(
 	variableName,
 	spaces,
-	str(':'),
+	rstr(':'),
 	spaces,
-	typeDefinition()
+	recoverByAddingChars('Int', typeDefinition(), true, 'parameter type')
 ), ([name, _, __, ___, type]) => ({ name, type, typeOffset: name.length + _.length + __.length + ___.length }));
 
 const parameterList = between(
 	lpr,
 	opt(map(seq(
 		parameter,
-		exhaust(seq(spaces, str(','), spaces, parameter), rpr)
+		exhaust(seq(spaces, str(','), spaces, parameter), seq(spaces, rstr(')', false)))
 	), ([param, params]) => {
 		const paramOffset = param.typeOffset + 1 + param.type.length;
 		return [
@@ -45,7 +46,7 @@ const parameterList = between(
 			})
 		];
 	})),
-	rpr
+	rstr(')')
 );
 
 export const functionDeclaration = map(seq(
@@ -89,7 +90,7 @@ export const functionDeclaration = map(seq(
 						unaryOperator,
 						parameterList,
 						spaces,
-						typeDefinition()
+						recoverByAddingChars('Int', typeDefinition(), true, 'return type')
 					))
 				),
 				seq(
@@ -99,7 +100,7 @@ export const functionDeclaration = map(seq(
 						binaryOperator,
 						parameterList,
 						spaces,
-						typeDefinition()
+						recoverByAddingChars('Int', typeDefinition(), true, 'return type')
 					))
 				)
 			)
@@ -121,7 +122,7 @@ export const functionDeclaration = map(seq(
 		})
 	),
 	spaces,
-	lcb
+	rstr('{')
 ), ([pub, func, _, __]) => {
 	const pl = pub?.length ?? 0;
 	return <FunctionDefinition>{

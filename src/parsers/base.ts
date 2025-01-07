@@ -1,4 +1,16 @@
-import { any, between, map, Parser, regex, str } from "parser-combinators";
+import { any, between, map, Parser, ref, regex, str } from "parser-combinators";
+import { rstr } from "./utils";
+
+export type ParseReturnType<T> = T extends Parser<infer R> ? R : never;
+
+const recoveryIssues: {
+    type: 'added' | 'skipped',
+    kind?: 'warning',
+    text: string,
+    index: number
+}[] = [];
+
+export const getRecoveryIssues = () => recoveryIssues;
 
 export const lbr = str('[');
 export const rbr = str(']');
@@ -12,29 +24,51 @@ export const rcb = str('}');
 export const lab = str('<');
 export const rab = str('>');
 
-export const variableName = regex(/\$?\w+/, 'Variable name');
+const disallowedNames = [
+    'def',
+    'dot',
+    'switch',
+    'while',
+    'if',
+    'return',
+    'var',
+    'const',
+    'let',
+    'type',
+    'else',
+    'elif'
+]
+
+export const variableName = ref(regex(/[\$\.]?\w+/, 'Variable name'), p => !disallowedNames.includes(p));
 export const typeName = regex(/[A-Z]\w*/, 'Type name');
-export const functionName = regex(/\w+/, 'Function name');
+export const functionName = ref(regex(/\w+/, 'Function name'), p => !disallowedNames.includes(p));
 
 export const unaryOperator = any(
-    str('-')
+    str('-'),
+    str('~')
 );
 
 export const binaryOperator = any(
     str('+'),
     str('-'),
+    str('&&'),
     str('&'),
+    str('||'),
     str('|'),
     str('^'),
+    str('<='),
+    str('>='),
+    str('=='),
+    str('!='),
     str('<<'),
     str('>>'),
     str('<'),
     str('>'),
     str('*'),
-    str('/')
+    regex('/(?!/)', '/')
 );
 
-export const newline = regex(/ *\r?\n/, 'End of line');
+export const newline = regex(/[ \t]*\r?\n/, 'End of line');
 
 export const functionKind = any(
     str('def'),
@@ -42,5 +76,8 @@ export const functionKind = any(
 );
 
 export function typeDefinition(): Parser<string> {
-    return (ctx) => any(typeName, map(between(lbr, typeDefinition(), rbr), (t) => `[${t}]`))(ctx);
+    return (ctx) => any(typeName, map(between(lbr, typeDefinition(), rstr(']')), (t) => `[${t}]`))(ctx);
 }
+
+export const lineComment = regex(/ *\/\/.*?\r?\n/, 'Line comment');
+export const blockComment = regex(/ *\/\*.*?\*\//, 'Block comment');

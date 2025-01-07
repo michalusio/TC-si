@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.3.0]
+
+Added basic parsing and semantic error checking
+
 ## [0.2.4]
 
 Added base parser for the full language (currently off)

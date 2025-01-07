@@ -68,6 +68,15 @@ export type StringRValue = {
     value: string
 }
 
+export type InterpolatedRValue = {
+    type: 'interpolated',
+    value: string,
+    inserts: {
+        index: number,
+        value: RValue
+    }[]
+}
+
 export type NumberRValue = {
     type: 'number',
     value: number
@@ -84,10 +93,17 @@ export type FunctionRValue = {
     parameters: RValue[]
 }
 
+export type DotMethodRValue = {
+    type: 'dotMethod',
+    object: RValue,
+    value: string,
+    parameters: RValue[]
+}
+
 export type IndexRValue = {
     type: 'index',
     value: string,
-    parameters: RValue[]
+    parameter: RValue
 }
 
 export type VariableRValue = {
@@ -102,4 +118,11 @@ export type BinaryRValue = {
     right: RValue
 }
 
-export type RValue = CastedRValue | UnaryRValue | StringRValue | NumberRValue | ArrayRValue | FunctionRValue | IndexRValue | VariableRValue | BinaryRValue;
+export type TernaryRValue = {
+    type: 'ternary',
+    condition: RValue,
+    ifTrue: RValue,
+    ifFalse: RValue
+}
+
+export type RValue = CastedRValue | UnaryRValue | StringRValue | InterpolatedRValue | NumberRValue | ArrayRValue | FunctionRValue | DotMethodRValue | IndexRValue | VariableRValue | BinaryRValue | TernaryRValue;

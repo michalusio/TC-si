@@ -64,7 +64,7 @@
             "patterns": [
                 {
                     "name": "keyword.control.si",
-                    "match": "\\b(if|while|return|else)\\b"
+                    "match": "\\b(if|while|return|else|elif|switch|_reg_alloc_use)\\b"
                 },
                 {
                     "name": "keyword.other.si",
