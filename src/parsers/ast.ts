@@ -1,30 +1,30 @@
-export type XRange = {
-    start: number;
-    end: number;
+import { FunctionRValue, IndexRValue, NumberRValue, RValue, StringRValue, VariableRValue } from "./rvalue";
+
+export type TokenRange = {
+    start: number, 
+    end: number
 }
 
+export type Token<T> = TokenRange & {
+    value: T
+};
+
 export type Parameter = {
-    name: {
-        text: string;
-        range: XRange;
-    },
-    type: {
-        text: string;
-        range: XRange;
-    }
+    name: Token<VariableName>,
+    type: Token<string>
 }
 
 export type TypeDefinition = {
-    name: {
-        text: string;
-        range: XRange;
-    },
-    definition: {
-        text: string;
-        range: XRange;
-    }
+    type: 'type-definition',
+    public: boolean,
+    name: Token<string>,
+    definition: Token<string>
 }
 
+export type VariableName = {
+    front: '$' | '.' | null,
+    name: string
+}
 export type VariableKind = 'const' | 'let' | 'var';
 export type FunctionKind = 'dot' | 'def';
 export type OperatorKind = 'binary' | 'unary';
@@ -33,96 +33,82 @@ export type FunctionDefinition = {
     type: 'function',
     kind: FunctionKind,
     public: boolean,
-    name: {
-        text: string;
-        range: XRange;
-    },
+    name: Token<string>,
     parameters: Parameter[],
-    returnType?: string
+    returnType?: Token<string>
 } | {
     type: 'operator',
     kind: OperatorKind,
     public: boolean,
-    name: {
-        text: string;
-        range: XRange;
-    },
+    name: Token<string>,
     parameters: Parameter[],
-    returnType: string
+    returnType: Token<string | null>
 }
 
-export type CastedRValue = {
-    type: 'cast',
-    to: string,
+export type FunctionDeclaration = {
+    type: 'function-declaration',
+    definition: FunctionDefinition,
+    statements: StatementsBlock
+}
+
+export type VariableDeclaration = {
+    type: 'declaration',
+    public: boolean,
+    name: Token<VariableName>,
+    kind: Token<VariableKind>,
     value: RValue
 }
 
-export type UnaryRValue = {
-    type: 'unary',
+export type VariableModification = {
+    type: 'modification',
+    name: IndexRValue | VariableRValue,
     operator: string,
     value: RValue
 }
 
-export type StringRValue = {
-    type: 'string',
-    value: string
+export type StatementsBlock = Statement[];
+
+export type Statement = FunctionDeclaration | StatementsStatement | VariableDeclaration | VariableModification | RegAllocUseStatement | ReturnStatement | SwitchStatement | WhileStatement | IfStatement | FunctionRValue;
+
+export type StatementsStatement = {
+    type: 'statements',
+    statements: StatementsBlock
 }
 
-export type InterpolatedRValue = {
-    type: 'interpolated',
-    value: string,
-    inserts: {
-        index: number,
-        value: RValue
+export type RegAllocUseStatement = {
+    type: '_reg_alloc_use',
+    value: Token<VariableName>
+};
+
+export type ReturnStatement = {
+    type: 'return',
+    value?: RValue
+};
+
+export type SwitchStatement = {
+    type: 'switch',
+    value: RValue,
+    cases: {
+        caseName: 'default' | NumberRValue | StringRValue | Token<VariableName>,
+        statements: StatementsBlock
     }[]
-}
+};
 
-export type NumberRValue = {
-    type: 'number',
-    value: number
-}
+export type WhileStatement = {
+    type: 'while',
+    value: RValue,
+    statements: StatementsBlock
+};
 
-export type ArrayRValue = {
-    type: 'array',
-    values: RValue[]
-}
+export type IfStatement = {
+    type: 'if',
+    value: RValue,
+    ifBlock: StatementsBlock,
+    elifBlocks: {
+        value: RValue,
+        statements: StatementsBlock
+    }[],
+    elseBlock: StatementsBlock
+};
 
-export type FunctionRValue = {
-    type: 'function',
-    value: string,
-    parameters: RValue[]
-}
-
-export type DotMethodRValue = {
-    type: 'dotMethod',
-    object: RValue,
-    value: string,
-    parameters: RValue[]
-}
-
-export type IndexRValue = {
-    type: 'index',
-    value: string,
-    parameter: RValue
-}
-
-export type VariableRValue = {
-    type: 'variable',
-    value: string
-}
-
-export type BinaryRValue = {
-    type: 'binary',
-    operator: string,
-    left: RValue,
-    right: RValue
-}
-
-export type TernaryRValue = {
-    type: 'ternary',
-    condition: RValue,
-    ifTrue: RValue,
-    ifFalse: RValue
-}
-
-export type RValue = CastedRValue | UnaryRValue | StringRValue | InterpolatedRValue | NumberRValue | ArrayRValue | FunctionRValue | DotMethodRValue | IndexRValue | VariableRValue | BinaryRValue | TernaryRValue;
+export type ParserOutput = (VariableDeclaration | TypeDefinition | FunctionDeclaration)[];

@@ -11,6 +11,7 @@ import {
 } from "parser-combinators";
 import { getRecoveryIssues } from "./base";
 import { log } from "../storage";
+import { Token } from "./ast";
 
 export function recoverBySkippingChars<T>(
   chars: number,
@@ -151,12 +152,29 @@ export function manyForSure<T>(parser: Parser<T>): Parser<T[]> {
   };
 }
 
-export function reff<T>(parser: Parser<T>, check: (before: Context, after: Context) => void): Parser<T> {
+export function token<T>(parser: Parser<T>): Parser<Token<T>> {
   return (ctx) => {
     const result = parser(ctx);
     if (result.success) {
-      check(ctx, result.ctx);
+      return {
+        ...result,
+        value: {
+          value: result.value,
+          start: ctx.index,
+          end: result.ctx.index
+        }
+      }
     }
     return result;
+  }
+}
+
+export function lookaround<T>(parser: Parser<T>): Parser<void> {
+  return (ctx) => {
+    const result = parser(ctx);
+    if (result.success) {
+      return success(ctx, void 0);
+    }
+    return failure(ctx, result.expected, ['lookaround', ...result.history]);
   }
 }

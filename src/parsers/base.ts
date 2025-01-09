@@ -1,5 +1,6 @@
-import { any, between, map, Parser, ref, regex, str } from "parser-combinators";
-import { rstr } from "./utils";
+import { any, between, map, opt, Parser, ref, regex, seq, str } from "parser-combinators";
+import { rstr, token } from "./utils";
+import { Token, VariableName } from "./ast";
 
 export type ParseReturnType<T> = T extends Parser<infer R> ? R : never;
 
@@ -36,16 +37,65 @@ const disallowedNames = [
     'let',
     'type',
     'else',
-    'elif'
+    'elif',
+    'default'
 ]
 
-export const variableName = ref(regex(/[\$\.]?\w+/, 'Variable name'), p => !disallowedNames.includes(p));
-export const typeName = regex(/[A-Z]\w*/, 'Type name');
-export const functionName = ref(regex(/\w+/, 'Function name'), p => !disallowedNames.includes(p));
+export const variableName = token(
+    map(
+        seq(
+            opt(str('$')),
+            opt(str('.')),
+            ref(
+                regex(/\w+/, 'Variable name'),
+                p => !disallowedNames.includes(p)
+            ),
+        ),
+        ([dollar, dot, name]) => (<VariableName>{ front: dollar ?? dot, name })
+    )
+);
+export const typeName = token(regex(/@?[A-Z]\w*/, 'Type name'));
+export const functionName = token(
+    ref(
+        regex(/\w+/, 'Function name'),
+        p => !disallowedNames.includes(p)
+    )
+);
 
 export const unaryOperator = any(
     str('-'),
-    str('~')
+    str('~'),
+    str('!')
+);
+
+export const functionBinaryOperator = any(
+    str('+='),
+    str('-='),
+    str('&&='),
+    str('&='),
+    str('||='),
+    str('|='),
+    str('^='),
+    str('*='),
+    str('%='),
+    str('+'),
+    str('-'),
+    str('&&'),
+    str('&'),
+    str('||'),
+    str('|'),
+    str('^'),
+    str('*'),
+    str('%'),
+    str('<='),
+    str('>='),
+    str('!='),
+    str('=='),
+    str('<<'),
+    str('>>'),
+    str('<'),
+    str('>'),
+    regex(/\/(?!\/)/, '/')
 );
 
 export const binaryOperator = any(
@@ -56,16 +106,17 @@ export const binaryOperator = any(
     str('||'),
     str('|'),
     str('^'),
+    str('*'),
+    str('%'),
     str('<='),
     str('>='),
-    str('=='),
     str('!='),
+    str('=='),
     str('<<'),
     str('>>'),
     str('<'),
     str('>'),
-    str('*'),
-    regex('/(?!/)', '/')
+    regex(/\/(?!\/)/, '/')
 );
 
 export const newline = regex(/[ \t]*\r?\n/, 'End of line');
@@ -75,9 +126,14 @@ export const functionKind = any(
     str('dot')
 );
 
-export function typeDefinition(): Parser<string> {
-    return (ctx) => any(typeName, map(between(lbr, typeDefinition(), rstr(']')), (t) => `[${t}]`))(ctx);
+export function typeDefinition(): Parser<Token<string>> {
+    return (ctx) => token(
+        any(
+            map(typeName, t => t.value),
+            map(between(lbr, typeDefinition(), rstr(']')), (t) => `[${t.value}]`)
+        )
+    )(ctx);
 }
 
-export const lineComment = regex(/ *\/\/.*?\r?\n/, 'Line comment');
-export const blockComment = regex(/ *\/\*.*?\*\//, 'Block comment');
+export const lineComment = regex(/\s*\/\/.*?\r?\n/s, 'Line comment');
+export const blockComment = regex(/\s*\/\*.*?\*\//s, 'Block comment');

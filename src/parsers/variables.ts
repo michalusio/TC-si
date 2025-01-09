@@ -1,15 +1,16 @@
-import { any, between, exhaust, expect, intP, map, opt, Parser, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
-import { lab, rab, lbr, rbr, variableName, typeDefinition, functionName, lpr, rpr, unaryOperator, binaryOperator, lcb, rcb } from "./base";
-import { ArrayRValue, BinaryRValue, CastedRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./ast";
-import { recoverByAddingChars, rstr } from "./utils";
+import { any, between, exhaust, expect, intP, many, map, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
+import { lab, rab, lbr, variableName, typeDefinition, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment } from "./base";
+import { ArrayRValue, BinaryRValue, CastedRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./rvalue";
+import { recoverByAddingChars, rstr, token } from "./utils";
+import { VariableDeclaration, VariableModification } from "./ast";
 
-const variableKind = any(
+const variableKind = token(any(
     str('const'),
     str('let'),
     str('var')
-);
+));
 
-const stringLiteral = map(
+export const stringLiteral = map(
     regex(/"(?:\.|(\\\")|[^\""\n])*"/, 'String literal'),
     (value) =>  (<StringRValue>{
         type: 'string',
@@ -79,6 +80,12 @@ const numericBase16Literal = map(
     })
 );
 
+export const anyNumericLiteral = any(
+    numericBase16Literal,
+    numericBase2Literal,
+    numericBase10Literal
+);
+
 const variableLiteral = map(
     expect(variableName, 'Variable literal'),
     (value) => (<VariableRValue>{
@@ -95,11 +102,13 @@ const arrayLiteral = map(
                 rValue(),
                 opt(seq(
                     wspaces,
-                    str(',')
+                    str(','),
+                    opt(any(lineComment, blockComment))
                 ))
             ),
-            seq(wspaces, rstr(']', false))
+            seq(opt(any(lineComment, blockComment)), wspaces, rstr(']', false))
         )),
+        opt(any(lineComment, blockComment)),
         wspaces,
         rstr(']')
     ), ([_, values, __, ___]) =>  (<ArrayRValue>{
@@ -112,19 +121,23 @@ export const functionCall = map(seq(
     functionName,
     between(
         lpr,
-        surely(opt(seq(
-            wspaces,
-            rValue(),
-            exhaust(
+        surely(
+            opt(
                 seq(
                     wspaces,
-                    str(','),
-                    wspaces,
-                    rValue()
-                ),
-                seq(spaces, rstr(')', false))
+                    rValue(),
+                    exhaust(
+                        seq(
+                            wspaces,
+                            str(','),
+                            wspaces,
+                            rValue()
+                        ),
+                        seq(spaces, rstr(')', false))
+                    )
+                )
             )
-        ))),
+        ),
         seq(spaces, rstr(')'))
     )
 ), ([name, rest]) => {
@@ -138,21 +151,6 @@ export const functionCall = map(seq(
         type: 'function',
         value: name,
         parameters 
-    };
-});
-
-export const variableIndex = map(seq(
-    variableName,
-    between(
-        lbr,
-        recoverByAddingChars('0', rValue(), true, 'index'),
-        rstr(']')
-    )
-), ([name, parameter]) => {
-    return <IndexRValue>{
-        type: 'index',
-        value: name,
-        parameter 
     };
 });
 
@@ -196,7 +194,6 @@ export function rValue(): Parser<RValue> {
     return (ctx) => map(
         seq(
             any(
-                parenthesisedRValue,
                 unaryRValue,
                 castedRValue,
                 stringLiteral,
@@ -204,88 +201,184 @@ export function rValue(): Parser<RValue> {
                 numericBase16Literal,
                 numericBase2Literal,
                 numericBase10Literal,
+                parenthesisedRValue,
                 arrayLiteral,
                 functionCall,
-                variableIndex,
                 variableLiteral
             ),
-            opt(
-                any(
-                    seq(
-                        spaces,
-                        str('?'),
-                        surely(seq(
+            many(between(
+                lbr,
+                recoverByAddingChars('0', rValue(), true, 'index'),
+                rstr(']')
+            )),
+            opt(seq(spaces, blockComment)),
+            any(
+                seq(
+                    spaces,
+                    str('?'),
+                    surely(seq(
+                        between(
                             spaces,
                             recoverByAddingChars('0', rValue(), true, 'on-true value'),
-                            spaces,
-                            str(':'),
-                            spaces,
-                            recoverByAddingChars('0', rValue(), true, 'on-false value')
-                        ))
-                    ),
-                    seq(
-                        str('.'),
-                        surely(functionCall)
-                    ),
-                    seq(
+                            spaces
+                        ),
+                        str(':'),
                         spaces,
-                        binaryOperator,
-                        spaces,
-                        recoverByAddingChars('0', rValue(), true, 'second operand')
+                        recoverByAddingChars('0', rValue(), true, 'on-false value')
+                    ))
+                ),
+                seq(
+                    opt(
+                        seq(
+                            str('.'),
+                            surely(functionCall)
+                        )
+                    ),
+                    opt(
+                        seq(
+                            between(
+                                spaces,
+                                binaryOperator,
+                                spaces
+                            ),
+                            surely(recoverByAddingChars('0', rValue(), true, 'second operand'))
+                        )
                     )
                 )
             )
         ),
-        ([value, operation]) =>
-            operation
-            ? (
-                operation[0] === '.'
-                ? (<DotMethodRValue>{
-                    type: 'dotMethod',
-                    object: value,
-                    value: (operation[1] as FunctionRValue).value,
-                    parameters: (operation[1] as FunctionRValue).parameters
-                })
-                : (
-                    operation[1] === '?'
-                    ? (<TernaryRValue>{
-                        type: 'ternary',
-                        condition: value,
-                        ifTrue: operation[2][1],
-                        ifFalse: operation[2][5]
-                    })
-                    : (<BinaryRValue>{
+        ([value, indexes, _, operation]) => {
+            let actualValue: RValue = value;
+            indexes.forEach(index => {
+                actualValue = <IndexRValue>{
+                    type: 'index',
+                    value: actualValue,
+                    parameter: index 
+                }
+            });
+
+            if (typeof operation[0] === 'string') {
+                const op = operation as [string, "?", [RValue, ":", string, RValue]];
+                return <TernaryRValue>{
+                    type: 'ternary',
+                    condition: actualValue,
+                    ifTrue: op[2][0],
+                    ifFalse: op[2][3]
+                }
+            } else {
+                const op = operation as [[".", FunctionRValue] | null, [string, RValue] | null];
+                const functionCall = op[0];
+                if (functionCall) {
+                    actualValue = <DotMethodRValue>{
+                        type: 'dotMethod',
+                        object: actualValue,
+                        value: functionCall[1].value,
+                        parameters: functionCall[1].parameters
+                    };
+                }
+
+                const binaryOperator = op[1];
+                if (binaryOperator) {
+                    actualValue = <BinaryRValue>{
                         type: 'binary',
-                        operator: operation[1],
-                        left: value,
-                        right: operation[3]
-                    })
-                )
-            )
-            : value
+                        operator: binaryOperator[0],
+                        left: actualValue,
+                        right: binaryOperator[1]
+                    };
+                }
+
+                return actualValue;
+            }
+        }
     )(ctx);
 }
 
-export const variableModification = expect(seq(
-    any(variableIndex, variableName),
-    surely(seq(
-        spaces,
-        opt(binaryOperator),
-        rstr('='),
-        spaces,
-        recoverByAddingChars('0', rValue(), true, 'value'),
-    ))
-), 'Variable modification statement');
+export const variableModification = map(
+    expect(
+        seq(
+            variableLiteral,
+            many(between(
+                lbr,
+                recoverByAddingChars('0', rValue(), true, 'index'),
+                rstr(']')
+            )),
+            surely(seq(
+                spaces,
+                opt(binaryOperator),
+                rstr('='),
+                spaces,
+                recoverByAddingChars('0', rValue(), true, 'value'),
+            ))
+        ),
+        'Variable modification statement'
+    ),
+    ([name, indexes, [_, operator, __, ___, value]]) => {
+        let actualName: RValue = name;
+        indexes.forEach(index => {
+            actualName = <IndexRValue>{
+                type: 'index',
+                value: actualName,
+                parameter: index 
+            }
+        });
+        return (<VariableModification>{
+            type: 'modification',
+            name: actualName,
+            operator,
+            value
+        });
+    }
+);
 
-export const variableDeclaration = expect(seq(
-    variableKind,
-    spacesPlus,
-    surely(seq(
-        recoverByAddingChars('variable', any(variableIndex, variableName), true, 'variable name'),
-        spaces,
-        opt(binaryOperator),
-        rstr('='),
-        spaces,
-        recoverByAddingChars('0', rValue(), true, 'value'),
-    ))
-), 'Variable declaration statement');
+export const topmostVariableDeclaration = map(
+    expect(
+        seq(
+            opt(str('pub ')),
+            variableKind,
+            spacesPlus,
+            surely(
+                seq(
+                    recoverByAddingChars('variable', variableName, true, 'variable name'),
+                    spaces,
+                    rstr('='),
+                    spaces,
+                    recoverByAddingChars('0', rValue(), true, 'value'),
+                )
+            )
+        ),
+        'Variable declaration statement'
+    ),
+    ([pub, kind, _, [name, __, ___, ____, value]]) => (<VariableDeclaration>{
+        type: 'declaration',
+        public: !!pub,
+        kind,
+        name,
+        value
+    })
+);
+
+export const variableDeclaration = map(
+    expect(
+        seq(
+            variableKind,
+            spacesPlus,
+            surely(
+                seq(
+                    recoverByAddingChars('variable', variableName, true, 'variable name'),
+                    spaces,
+                    rstr('='),
+                    spaces,
+                    recoverByAddingChars('0', rValue(), true, 'value'),
+                )
+            )
+        ),
+        'Variable declaration statement'
+    ),
+    ([kind, _, [name, __, ___, ____, value]]) => (<VariableDeclaration>{
+        type: 'declaration',
+        public: false,
+        kind,
+        name,
+        value
+    })
+);

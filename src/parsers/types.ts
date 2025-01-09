@@ -1,8 +1,9 @@
-import { map, seq, spacesPlus, str, surely } from "parser-combinators";
+import { map, opt, seq, spacesPlus, str, surely } from "parser-combinators";
 import { typeDefinition, typeName } from "./base";
 import { TypeDefinition } from "./ast";
 
 export const typeDeclaration = map(seq(
+    opt(str('pub ')),
     str('type'),
     surely(
         seq(
@@ -12,19 +13,9 @@ export const typeDeclaration = map(seq(
             typeDefinition()
         )
     )
-), ([_, [__, name, ___, definition]]) => (<TypeDefinition>{
-    name: {
-        text: name,
-        range: {
-            start: _.length + __.length,
-            end: _.length + __.length + name.length
-        }
-    },
-    definition: {
-        text: definition,
-        range: {
-            start: _.length + __.length + name.length + ___.length,
-            end: _.length + __.length + name.length + ___.length + definition.length
-        }
-    }
+), ([pub, _, [__, name, ___, definition]]) => (<TypeDefinition>{
+    type: 'type-definition',
+    public: !!pub,
+    name,
+    definition
 }));
