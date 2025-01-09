@@ -253,6 +253,18 @@ export const checkVariableExistence = (
           const kind = scope.definition.kind === 'def'
             ? tryGetDefFunction(environments, scope.definition.name.value)
             : tryGetDotFunction(environments, scope.definition.name.value);
+          if (scope.definition.kind === 'dot') {
+            if (scope.definition.parameters.length === 0) {
+              diagnostics.push(new Diagnostic(
+                new Range(
+                  document.positionAt(scope.definition.name.end),
+                  document.positionAt(scope.definition.returnType.start)
+                ),
+                `Dot function should have at least one parameter`,
+                DiagnosticSeverity.Error
+              ));
+            }
+          }
           if (kind !== null) {
             diagnostics.push(new Diagnostic(
               new Range(

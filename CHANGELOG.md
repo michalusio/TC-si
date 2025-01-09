@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.3.3]
+
+- Fixed variable modifications being parsed sooner than they should
+- Added check for dot method having no parameters
+
 ## [0.3.2]
 
 - Allowed all r-values to be used as separate statements to allow chaining function calls and casts in one statement

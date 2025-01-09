@@ -35,7 +35,7 @@ export type FunctionDefinition = {
     public: boolean,
     name: Token<string>,
     parameters: Parameter[],
-    returnType?: Token<string>
+    returnType: Token<string | null>
 } | {
     type: 'operator',
     kind: OperatorKind,
@@ -62,7 +62,7 @@ export type VariableDeclaration = {
 export type VariableModification = {
     type: 'modification',
     name: IndexRValue | VariableRValue,
-    operator: string,
+    operator?: string,
     value: RValue
 }
 

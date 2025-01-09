@@ -302,17 +302,17 @@ export const variableModification = map(
                 recoverByAddingChars('0', rValue(), true, 'index'),
                 rstr(']')
             )),
+            spaces,
+            opt(binaryOperator),
+            str('='),
             surely(seq(
-                spaces,
-                opt(binaryOperator),
-                rstr('='),
                 spaces,
                 recoverByAddingChars('0', rValue(), true, 'value'),
             ))
         ),
         'Variable modification statement'
     ),
-    ([name, indexes, [_, operator, __, ___, value]]) => {
+    ([name, indexes, _, operator, __, [___, value]]) => {
         let actualName: RValue = name;
         indexes.forEach(index => {
             actualName = <IndexRValue>{
@@ -324,7 +324,7 @@ export const variableModification = map(
         return (<VariableModification>{
             type: 'modification',
             name: actualName,
-            operator,
+            operator: operator ?? undefined,
             value
         });
     }

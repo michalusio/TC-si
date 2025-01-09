@@ -2,7 +2,6 @@ import { any, between, exhaust, map, opt, seq, spaces, spacesPlus, str, surely }
 import { functionBinaryOperator, functionKind, functionName, lpr, typeDefinition, unaryOperator, variableName } from "./base";
 import { FunctionDefinition, Parameter } from "./ast";
 import { recoverByAddingChars, rstr, token } from "./utils";
-import { log } from "../storage";
 
 const parameter = map(seq(
 	variableName,

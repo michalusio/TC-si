@@ -65,7 +65,8 @@ export const functionName = token(
 export const unaryOperator = any(
     str('-'),
     str('~'),
-    str('!')
+    str('!'),
+    str('+')
 );
 
 export const functionBinaryOperator = any(
