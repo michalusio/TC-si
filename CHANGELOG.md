@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.3.2]
+
+- Allowed all r-values to be used as separate statements to allow chaining function calls and casts in one statement
+
 ## [0.3.1]
 
 - Added advanced parsing

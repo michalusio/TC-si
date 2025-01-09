@@ -477,6 +477,13 @@ export const checkVariableExistence = (
         );
         break;
       }
+      case 'type-definition': {
+        break;
+      }
+      default: {
+        diagnostics.push(...processRValue(document, environments, scope));
+        break;
+      }
     }
   });
 };

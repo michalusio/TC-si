@@ -109,6 +109,7 @@ function statementsBlock(): Parser<StatementsBlock> {
 								switchBlock(),
 								map(seq(functionCall, any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v),
 								map(seq(variableModification, any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v),
+								map(seq(rValue(), any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v)
 							),
 							(s) => typeof s === 'string' ? null : s
 						),

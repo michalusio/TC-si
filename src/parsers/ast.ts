@@ -68,7 +68,7 @@ export type VariableModification = {
 
 export type StatementsBlock = Statement[];
 
-export type Statement = FunctionDeclaration | StatementsStatement | VariableDeclaration | VariableModification | RegAllocUseStatement | ReturnStatement | SwitchStatement | WhileStatement | IfStatement | FunctionRValue;
+export type Statement = FunctionDeclaration | StatementsStatement | VariableDeclaration | VariableModification | RegAllocUseStatement | ReturnStatement | SwitchStatement | WhileStatement | IfStatement | RValue;
 
 export type StatementsStatement = {
     type: 'statements',
