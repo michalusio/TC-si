@@ -20,6 +20,16 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "TC Simplex",
+      "properties": {
+        "tcsi.warnOnMissingExplicitReturn": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show warnings when a function with return type is missing an explicit return"
+        }
+      }
+    },
     "languages": [
       {
         "id": "si",

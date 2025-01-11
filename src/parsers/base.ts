@@ -1,4 +1,4 @@
-import { any, between, map, opt, Parser, ref, regex, seq, str } from "parser-combinators";
+import { any, between, many, map, opt, Parser, ref, regex, seq, str } from "parser-combinators";
 import { rstr, token } from "./utils";
 import { Token, VariableName } from "./ast";
 
@@ -44,14 +44,13 @@ const disallowedNames = [
 export const variableName = token(
     map(
         seq(
-            opt(str('$')),
-            opt(str('.')),
+            many(any(str('$'), str('.'))),
             ref(
                 regex(/\w+/, 'Variable name'),
                 p => !disallowedNames.includes(p)
             ),
         ),
-        ([dollar, dot, name]) => (<VariableName>{ front: dollar ?? dot, name })
+        ([front, name]) => (<VariableName>{ front: front.join(''), name })
     )
 );
 export const typeName = token(regex(/@?[A-Z]\w*/, 'Type name'));

@@ -6,18 +6,18 @@ import { isFailure, ParseError, Parser } from "parser-combinators";
 import {
   FunctionDeclaration,
   FunctionKind,
-  IfStatement,
   ParserOutput,
   Statement,
-  SwitchStatement,
+  StatementsBlock,
+  Token,
   TokenRange,
   TypeDefinition,
-  VariableDeclaration,
   VariableKind,
-  VariableModification,
-  WhileStatement,
+  VariableName,
 } from "./parsers/ast";
 import { IndexRValue, RValue } from "./parsers/rvalue";
+import { workspace } from 'vscode';
+import { once } from "events";
 
 const useParser = <T>(
   text: string,
@@ -107,7 +107,7 @@ export const performParsing = (
   return [parseResult, diags];
 };
 
-export type Environment = Map<string, ['user-defined', VariableKind | FunctionKind, TokenRange] | ['built-in', VariableKind | FunctionKind, string]>;
+export type Environment = ['function' | 'scope', Map<string, ['user-defined', VariableKind | FunctionKind, TokenRange] | ['built-in', VariableKind | FunctionKind, string]>];
 
 export const checkVariableExistence = (
   document: TextDocument,
@@ -117,9 +117,41 @@ export const checkVariableExistence = (
 ) => {
   result.forEach(scope => {
     switch (scope.type) {
+      case 'function-declaration': {
+        if (scope.definition.type === 'function') {
+          const kind = scope.definition.kind === 'def'
+            ? tryGetDefFunction(environments, scope.definition.name.value)
+            : tryGetDotFunction(environments, scope.definition.name.value);
+          if (kind !== null) {
+            diagnostics.push(new Diagnostic(
+              new Range(
+                document.positionAt(scope.definition.name.start),
+                document.positionAt(scope.definition.name.end)
+              ),
+              `You should not redeclare functions: '${scope.definition.name.value}'`,
+              DiagnosticSeverity.Warning
+            ));
+          } else {
+            const currentEnv = environments[environments.length - 1];
+            currentEnv[1].set(scope.definition.name.value, ['user-defined', scope.definition.kind, scope.definition.name]);
+            tokensData.push({
+              definition: scope.definition.name,
+              position: scope.definition.name,
+              info: {
+                range: scope.definition.name
+              }
+            });
+          }
+        }
+        break;
+      }
+    }
+  })
+  result.forEach(scope => {
+    switch (scope.type) {
       case 'declaration': {
         diagnostics.push(...processRValue(document, environments, scope.value));
-        const kind = tryGetVariable(environments, scope.name.value.name);
+        const kind = tryGetVariable(true, environments, scope.name.value.name);
         if (kind !== null) {
           diagnostics.push(new Diagnostic(
             new Range(
@@ -130,7 +162,7 @@ export const checkVariableExistence = (
             DiagnosticSeverity.Warning
           ));
         } else {
-          environments[environments.length - 1].set(scope.name.value.name, [
+          environments[environments.length - 1][1].set(scope.name.value.name, [
             'user-defined',
             scope.kind.value,
             scope.name,
@@ -151,15 +183,30 @@ export const checkVariableExistence = (
       case 'modification': {
         diagnostics.push(...processRValue(document, environments, scope.value));
         if (scope.name.type === 'variable') {
-          const kind = tryGetVariable(environments, scope.name.value.value.name);
+          const kind = tryGetVariable(!scope.name.value.value.front.includes('.'), environments, scope.name.value.value.name);
           if (kind === null) {
-            diagnostics.push(new Diagnostic(
-              new Range(
-                document.positionAt(scope.name.value.start),
-                document.positionAt(scope.name.value.end)
-              ),
-              `Cannot find name '${scope.name.value.value.name}'`
-            ));
+            const secondKind = tryGetVariable(false, environments, scope.name.value.value.name);
+            if (secondKind != null) {
+              return [
+                new Diagnostic(
+                  new Range(
+                    document.positionAt(scope.name.value.start),
+                    document.positionAt(scope.name.value.end)
+                  ),
+                  `Cannot find name '${scope.name.value.value.name}' - maybe you should access it using '.'?`
+                )
+              ];
+            } else {
+              return [
+                new Diagnostic(
+                  new Range(
+                    document.positionAt(scope.name.value.start),
+                    document.positionAt(scope.name.value.end)
+                  ),
+                  `Cannot find name '${scope.name.value.value.name}'`
+                )
+              ];
+            }
           } else {
             tokensData.push({
               definition: kind[2],
@@ -207,15 +254,15 @@ export const checkVariableExistence = (
         break;
       }
       case 'return': {
-        if (scope.value) {
-          diagnostics.push(...processRValue(document, environments, scope.value));
+        if (scope.value.value) {
+          diagnostics.push(...processRValue(document, environments, scope.value.value));
         }
         break;
       }
       case 'statements': {
         const nextEnvironments: Environment[] = [
           ...environments,
-          new Map(),
+          ['scope', new Map()],
         ];
         checkVariableExistence(
           document,
@@ -226,33 +273,11 @@ export const checkVariableExistence = (
         break;
       }
       case '_reg_alloc_use': {
-        const kind = tryGetVariable(
-          environments,
-          scope.value.value.name
-        );
-        if (kind === null) {
-          diagnostics.push(
-            new Diagnostic(
-              new Range(
-                document.positionAt(scope.value.start),
-                document.positionAt(scope.value.end)
-              ),
-              `Cannot find name '${scope.value.value.name}'`
-            )
-          );
-        } else {
-          tokensData.push({
-            definition: kind[2],
-            position: scope.value
-          });
-        }
+        diagnostics.push(...checkVariable(scope.value, document, environments));
         break;
       }
       case "function-declaration": {
         if (scope.definition.type === 'function') {
-          const kind = scope.definition.kind === 'def'
-            ? tryGetDefFunction(environments, scope.definition.name.value)
-            : tryGetDotFunction(environments, scope.definition.name.value);
           if (scope.definition.kind === 'dot') {
             if (scope.definition.parameters.length === 0) {
               diagnostics.push(new Diagnostic(
@@ -265,25 +290,17 @@ export const checkVariableExistence = (
               ));
             }
           }
-          if (kind !== null) {
-            diagnostics.push(new Diagnostic(
-              new Range(
-                document.positionAt(scope.definition.name.start),
-                document.positionAt(scope.definition.name.end)
-              ),
-              `You should not redeclare functions: '${scope.definition.name.value}'`,
-              DiagnosticSeverity.Warning
-            ));
-          } else {
-            const currentEnv = environments[environments.length - 1];
-            currentEnv.set(scope.definition.name.value, ['user-defined', scope.definition.kind, scope.definition.name]);
-            tokensData.push({
-              definition: scope.definition.name,
-              position: scope.definition.name,
-              info: {
-                range: scope.definition.name
-              }
-            });
+          if (workspace.getConfiguration('tcsi').get('warnOnMissingExplicitReturn') && scope.definition.returnType.value) {
+            if (!doesReturn(document, scope.statements, diagnostics)) {
+              diagnostics.push(new Diagnostic(
+                new Range(
+                  document.positionAt(scope.definition.returnType.start),
+                  document.positionAt(scope.definition.returnType.end)
+                ),
+                `A function with return type has to return a value`,
+                DiagnosticSeverity.Warning
+              ));
+            }
           }
         } else {
           if (scope.definition.kind === 'binary') {
@@ -367,12 +384,12 @@ export const checkVariableExistence = (
             }
           }
         }
-        const nextEnvironments: Environment[] = [...environments, new Map()];
+        const nextEnvironments: Environment[] = [...environments, ['function', new Map()]];
         scope.definition.parameters.forEach((parameter) => {
           const env = nextEnvironments[nextEnvironments.length - 1];
           const variableName = parameter.name.value;
           if (variableName.front === "$") {
-            env.set(variableName.name, ['user-defined', "var", parameter.name]);
+            env[1].set(variableName.name, ['user-defined', "var", parameter.name]);
             tokensData.push({
               definition: parameter.name,
               position: parameter.name,
@@ -384,7 +401,7 @@ export const checkVariableExistence = (
               }
             });
           } else {
-            env.set(variableName.name, ['user-defined', "const", parameter.name]);
+            env[1].set(variableName.name, ['user-defined', "const", parameter.name]);
             tokensData.push({
               definition: parameter.name,
               position: parameter.name,
@@ -407,7 +424,7 @@ export const checkVariableExistence = (
       }
       case "if": {
         diagnostics.push(...processRValue(document, environments, scope.value));
-        const nextIfEnvironments: Environment[] = [...environments, new Map()];
+        const nextIfEnvironments: Environment[] = [...environments, ['scope', new Map()]];
         checkVariableExistence(
           document,
           scope.ifBlock,
@@ -418,7 +435,7 @@ export const checkVariableExistence = (
           diagnostics.push(...processRValue(document, environments, elif.value));
           const nextElifEnvironments: Environment[] = [
             ...environments,
-            new Map(),
+            ['scope', new Map()]
           ];
           checkVariableExistence(
             document,
@@ -429,7 +446,7 @@ export const checkVariableExistence = (
         });
         const nextElseEnvironments: Environment[] = [
           ...environments,
-          new Map(),
+          ['scope', new Map()]
         ];
         checkVariableExistence(
           document,
@@ -443,31 +460,12 @@ export const checkVariableExistence = (
         scope.cases.forEach((oneCase) => {
           if (typeof oneCase.caseName !== 'string') {
             if (!("type" in oneCase.caseName)) {
-              const kind = tryGetVariable(
-                environments,
-                oneCase.caseName.value.name
-              );
-              if (kind === null) {
-                diagnostics.push(
-                  new Diagnostic(
-                    new Range(
-                      document.positionAt(oneCase.caseName.start),
-                      document.positionAt(oneCase.caseName.end)
-                    ),
-                    `Cannot find name '${oneCase.caseName.value.name}'`
-                  )
-                );
-              } else {
-                tokensData.push({
-                  definition: kind[2],
-                  position: oneCase.caseName
-                });
-              }
+              diagnostics.push(...checkVariable(oneCase.caseName, document, environments));
             }
           }
           const nextCaseEnvironments: Environment[] = [
             ...environments,
-            new Map(),
+            ['scope', new Map()]
           ];
           checkVariableExistence(
             document,
@@ -480,7 +478,7 @@ export const checkVariableExistence = (
       }
       case "while": {
         diagnostics.push(...processRValue(document, environments, scope.value));
-        const nextEnvironments: Environment[] = [...environments, new Map()];
+        const nextEnvironments: Environment[] = [...environments, ['scope', new Map()]];
         checkVariableExistence(
           document,
           scope.statements,
@@ -519,21 +517,7 @@ const processRValue = (
       break;
     }
     case 'variable': {
-      const kind = tryGetVariable(environments, rValue.value.value.name);
-      if (kind === null) {
-        results.push(new Diagnostic(
-          new Range(
-            document.positionAt(rValue.value.start),
-            document.positionAt(rValue.value.end)
-          ),
-          `Cannot find name '${rValue.value.value.name}'`
-        ));
-      } else {
-        tokensData.push({
-          definition: kind[2],
-          position: rValue.value,
-        });
-      }
+      results.push(...checkVariable(rValue.value, document, environments));
       break;
     }
     case 'cast': {
@@ -624,13 +608,31 @@ const processRValue = (
 };
 
 const tryGetVariable = (
+  inScope: boolean,
   environments: Environment[],
   name: string
 ): ['user-defined', VariableKind, TokenRange] | ['built-in', VariableKind, string] | null => {
+  for (let index = environments.length - 1; index >= 1; index--) {
+    const type = environments[index][0];
+    const kind = environments[index][1].get(name);
+    if (kind === undefined) {
+      if (inScope && type === 'function') {
+        break;
+      }
+      continue;
+    }
+    if (kind[1] === 'def' || kind[1] === 'dot') {
+      continue;
+    }
+    return kind as ['user-defined', VariableKind, TokenRange];
+  }
   for (let index = environments.length - 1; index >= 0; index--) {
-    const kind = environments[index].get(name);
-    if (kind !== undefined && kind[1] !== 'def' && kind[1] !== 'dot') {
-      return kind as ['user-defined', VariableKind, TokenRange] | ['built-in', VariableKind, string];
+    const kind = environments[index][1].get(name);
+    if (kind === undefined || kind[1] === 'def' || kind[1] === 'dot') {
+      continue;
+    }
+    if (kind[0] === 'built-in' || kind[1] === 'const') {
+      return kind as ["user-defined", VariableKind, TokenRange] | ["built-in", VariableKind, string];
     }
   }
   return null;
@@ -641,7 +643,7 @@ const tryGetDotFunction = (
   name: string
 ): ['user-defined', TokenRange] | ['built-in', string] | null => {
   for (let index = environments.length - 1; index >= 0; index--) {
-    const kind = environments[index].get(name);
+    const kind = environments[index][1].get(name);
     if (kind !== undefined && kind[1] === 'dot') {
       return [kind[0], kind[2]] as ['user-defined', TokenRange] | ['built-in', string];
     }
@@ -654,10 +656,86 @@ const tryGetDefFunction = (
   name: string
 ): ['user-defined', TokenRange] | ['built-in', string] | null => {
   for (let index = environments.length - 1; index >= 0; index--) {
-    const kind = environments[index].get(name);
+    const kind = environments[index][1].get(name);
     if (kind !== undefined && kind[1] === 'def') {
       return [kind[0], kind[2]] as ['user-defined', TokenRange] | ['built-in', string];
     }
   }
   return null;
 };
+
+const checkVariable = (nameToken: Token<VariableName>, document: TextDocument, environments: Environment[]) : Diagnostic[] => {
+  const kind = tryGetVariable(
+    !nameToken.value.front.includes('.'),
+    environments,
+    nameToken.value.name
+  );
+  if (kind === null) {
+    const secondKind = tryGetVariable(false, environments, nameToken.value.name);
+    if (secondKind != null) {
+      return [
+        new Diagnostic(
+          new Range(
+            document.positionAt(nameToken.start),
+            document.positionAt(nameToken.end)
+          ),
+          `Cannot find name '${nameToken.value.name}' - maybe you should access it using '.'?`
+        )
+      ];
+    } else {
+      return [
+        new Diagnostic(
+          new Range(
+            document.positionAt(nameToken.start),
+            document.positionAt(nameToken.end)
+          ),
+          `Cannot find name '${nameToken.value.name}'`
+        )
+      ];
+    }
+  } else {
+    tokensData.push({
+      definition: kind[2],
+      position: nameToken
+    });
+  }
+  return [];
+}
+
+const doesReturn = (document: TextDocument, statements: StatementsBlock, diagnostics: Diagnostic[]): boolean => {
+  for (let index = statements.length - 1; index >= 0; index--) {
+    const statement = statements[index];
+    switch (statement.type) {
+      case 'return': {
+        if (statement.value.value) {
+          return true;
+        } else {
+          diagnostics.push(new Diagnostic(
+            new Range(
+              document.positionAt(statement.value.start),
+              document.positionAt(statement.value.end)
+            ),
+            `A return in a function with specified return type must return a value`,
+            DiagnosticSeverity.Warning
+          ));
+        }
+        break;
+      }
+      case 'if': {
+        if (doesReturn(document, statement.ifBlock, diagnostics)
+          && doesReturn(document, statement.elseBlock, diagnostics)
+          && statement.elifBlocks.every(b => doesReturn(document, b.statements, diagnostics))) {
+          return true;
+        }
+        break;
+      }
+      case 'switch': {
+        if (statement.cases.some(c => c.caseName === 'default')
+          && statement.cases.every(c => doesReturn(document, c.statements, diagnostics))) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}

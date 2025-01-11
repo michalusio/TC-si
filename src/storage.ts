@@ -23,18 +23,18 @@ export const str = (r: Range): string => {
 }
 
 const addDef = (name: string, description: string) => {
-	baseEnvironment.set(name, ['built-in', 'def', description]);
+	baseEnvironment[1].set(name, ['built-in', 'def', description]);
 }
 
 const addDot = (name: string, description: string) => {
-	baseEnvironment.set(name, ['built-in', 'dot', description]);
+	baseEnvironment[1].set(name, ['built-in', 'dot', description]);
 }
 
 const addConst = (name: string, description: string) => {
-	baseEnvironment.set(name, ['built-in', 'const', description]);
+	baseEnvironment[1].set(name, ['built-in', 'const', description]);
 }
 
-export const baseEnvironment: Environment = new Map();
+export const baseEnvironment: Environment = ['scope', new Map()];
 
 addDef('array', 						'pub def array(length: Int, value: @Any) [@Any] {');
 addDef('random', 						'pub def random(max: Int) Int {');

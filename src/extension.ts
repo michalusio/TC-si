@@ -124,7 +124,7 @@ const tokenProvider: DocumentSemanticTokensProvider = {
       const [parseResult, diags] = performParsing(document);
   
       if (parseResult) {
-        checkVariableExistence(document, parseResult, [baseEnvironment, new Map()], diags);
+        checkVariableExistence(document, parseResult, [baseEnvironment, ['function', new Map()]], diags);
       }
       log.appendLine(`Tokens: ${tokensData.length}`);
       diagnostics.set(document.uri, diags);

@@ -22,7 +22,7 @@ export type TypeDefinition = {
 }
 
 export type VariableName = {
-    front: '$' | '.' | null,
+    front: '$' | '.' | '$.' | '.$',
     name: string
 }
 export type VariableKind = 'const' | 'let' | 'var';
@@ -82,7 +82,7 @@ export type RegAllocUseStatement = {
 
 export type ReturnStatement = {
     type: 'return',
-    value?: RValue
+    value: Token<RValue | null>
 };
 
 export type SwitchStatement = {

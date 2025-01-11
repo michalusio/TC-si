@@ -4,7 +4,7 @@ import { functionDeclaration as functionDefinition } from "./parsers/functions";
 import { blockComment, lcb, lineComment, newline, variableName } from "./parsers/base";
 import { anyNumericLiteral, functionCall, rValue, stringLiteral, topmostVariableDeclaration, variableDeclaration, variableModification } from "./parsers/variables";
 import { typeDeclaration } from "./parsers/types";
-import { eof, lookaround, manyForSure, recoverByAddingChars, recoverBySkipping, rstr } from "./parsers/utils";
+import { eof, lookaround, manyForSure, recoverByAddingChars, recoverBySkipping, rstr, token } from "./parsers/utils";
 import { FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, TokenRange, TypeDefinition, VariableDeclaration, VariableKind, WhileStatement } from "./parsers/ast";
 import { tokensData } from "./storage";
 
@@ -37,17 +37,17 @@ export const getPositionInfo = (document: TextDocument, position: Position): {
 const returnStatement = map(
 	seq(
 		str('return'),
-		opt(
-			seq(
+		token(opt(
+			between(
 				spacesPlus,
 				recoverByAddingChars('0', rValue(), true, 'return value'),
 				any(newline, lineComment, spacesPlus)
 			)
-		)
+		))
 	),
 	([_, value]) => (<ReturnStatement>{
 		type: 'return',
-		value: value?.[1]
+		value
 	})
 );
 

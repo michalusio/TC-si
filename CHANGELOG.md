@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.3.4]
+
+- Functions declared below the current functions are still regarded as in-scope
+- `var` and `let` variables defined outside the current function have to be accessed with `.` in front of them
+- Added an option to check for explicit returns in functions with return type
+
 ## [0.3.3]
 
 - Fixed variable modifications being parsed sooner than they should
