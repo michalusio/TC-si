@@ -6,6 +6,7 @@ import { isFailure, ParseError, Parser } from "parser-combinators";
 import {
   FunctionDeclaration,
   FunctionKind,
+  OperatorKind,
   ParserOutput,
   Statement,
   StatementsBlock,
@@ -17,7 +18,6 @@ import {
 } from "./parsers/ast";
 import { IndexRValue, RValue } from "./parsers/rvalue";
 import { workspace } from 'vscode';
-import { once } from "events";
 
 const useParser = <T>(
   text: string,
@@ -107,21 +107,148 @@ export const performParsing = (
   return [parseResult, diags];
 };
 
-export type Environment = ['function' | 'scope', Map<string, ['user-defined', VariableKind | FunctionKind, TokenRange] | ['built-in', VariableKind | FunctionKind, string]>];
+const typeCheck = () => workspace.getConfiguration('tcsi').get('showTypeCheckingErrors') as boolean;
+const explicitReturn = () => workspace.getConfiguration('tcsi').get('warnOnMissingExplicitReturn') as boolean;
+
+let logging = false;
+
+const logg = (v: string) => logging && log.appendLine(v);
+
+export type EnvironmentVariable = {
+  type: 'user-defined';
+  kind: VariableKind;
+  data: TokenRange;
+  varType: string | null;
+} | {
+  type: 'built-in';
+  kind: VariableKind;
+  data: string;
+  varType: string;
+};
+
+export type EnvironmentFunction = {
+  type: 'user-defined';
+  kind: FunctionKind;
+  name: string;
+  data: TokenRange;
+  parameterTypes: string[];
+  returnType: string | null;
+} | {
+  type: 'built-in';
+  kind: FunctionKind;
+  name: string;
+  data: string;
+  parameterTypes: string[];
+  returnType: string | null;
+};
+
+export type EnvironmentOperator = {
+  type: 'user-defined';
+  kind: OperatorKind;
+  name: string;
+  data: TokenRange;
+  parameterTypes: string[];
+  returnType: string;
+} | {
+  type: 'built-in';
+  kind: OperatorKind;
+  name: string;
+  data: string;
+  parameterTypes: string[];
+  returnType: string;
+};
+
+export type EnvironmentType = {
+  type: 'user-defined';
+  data: TypeDefinition;
+} | {
+  type: 'built-in';
+  data: string;
+}
+
+export type Environment = {
+  type: 'function';
+  returnType: string | null;
+  variables: Map<string, EnvironmentVariable>;
+  functions: EnvironmentFunction[];
+  operators: EnvironmentOperator[];
+  types: Map<string, EnvironmentType>;
+} | {
+  type: 'scope';
+  variables: Map<string, EnvironmentVariable>;
+  functions: EnvironmentFunction[];
+  operators: EnvironmentOperator[];
+  types: Map<string, EnvironmentType>;
+};
+
+export const typeStringToTypeToken = (value: string): string => {
+  let numberOfArrays = 0;
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    if (char === '[') {
+      numberOfArrays++;
+    } else break;
+  }
+  return `${'*'.repeat(numberOfArrays)}${value.slice(numberOfArrays, value.length - numberOfArrays)}`;
+}
+
+export const typeTokenToTypeString = (value: string): string => {
+  let numberOfArrays = 0;
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    if (char === '*') {
+      numberOfArrays++;
+    } else break;
+  }
+  return `${'['.repeat(numberOfArrays)}${value.slice(numberOfArrays)}${']'.repeat(numberOfArrays)}`;
+}
 
 export const checkVariableExistence = (
   document: TextDocument,
-  result: (Statement | FunctionDeclaration | TypeDefinition)[],
+  result: Statement[],
   environments: Environment[],
   diagnostics: Diagnostic[]
 ) => {
   result.forEach(scope => {
     switch (scope.type) {
+      case 'type-definition': {
+        const kind = tryGetType(environments, scope.name.value);
+          if (kind !== null) {
+            diagnostics.push(new Diagnostic(
+              new Range(
+                document.positionAt(scope.name.start),
+                document.positionAt(scope.name.end)
+              ),
+              `You should not redeclare types: '${scope.name.value}'`,
+              DiagnosticSeverity.Warning
+            ));
+          } else {
+            const currentEnv = environments[environments.length - 1];
+            currentEnv.types.set(scope.name.value, {
+              type: 'user-defined',
+              data: scope
+            });
+            tokensData.push({
+              definition: scope.definition,
+              position: scope.name,
+              info: {
+                range: scope.definition
+              }
+            });
+          }
+        break;
+      }
+    }
+  })
+  result.forEach(scope => {
+    switch (scope.type) {
       case 'function-declaration': {
         if (scope.definition.type === 'function') {
+          const paramTypes = scope.definition.parameters
+              .map(param => checkType(param.type, document, environments, diagnostics) ?? '?');
           const kind = scope.definition.kind === 'def'
-            ? tryGetDefFunction(environments, scope.definition.name.value)
-            : tryGetDotFunction(environments, scope.definition.name.value);
+            ? tryGetDefFunction(environments, scope.definition.name.value, paramTypes)
+            : tryGetDotFunction(environments, scope.definition.name.value, paramTypes);
           if (kind !== null) {
             diagnostics.push(new Diagnostic(
               new Range(
@@ -133,7 +260,50 @@ export const checkVariableExistence = (
             ));
           } else {
             const currentEnv = environments[environments.length - 1];
-            currentEnv[1].set(scope.definition.name.value, ['user-defined', scope.definition.kind, scope.definition.name]);
+            
+            const returnType = checkType(scope.definition.returnType, document, environments, diagnostics);
+            currentEnv.functions.push({
+              type: 'user-defined',
+              kind: scope.definition.kind,
+              name: scope.definition.name.value,
+              data: scope.definition.name,
+              parameterTypes: paramTypes,
+              returnType
+            });
+            tokensData.push({
+              definition: scope.definition.name,
+              position: scope.definition.name,
+              info: {
+                range: scope.definition.name
+              }
+            });
+          }
+        } else {
+          const paramTypes = scope.definition.parameters
+              .map(param => checkType(param.type, document, environments, diagnostics) ?? '?');
+          const kind = scope.definition.kind === 'binary'
+            ? tryGetBinaryOperator(environments, scope.definition.name.value, paramTypes)
+            : tryGetUnaryOperator(environments, scope.definition.name.value, paramTypes);
+          if (kind !== null) {
+            diagnostics.push(new Diagnostic(
+              new Range(
+                document.positionAt(scope.definition.name.start),
+                document.positionAt(scope.definition.name.end)
+              ),
+              `You should not redeclare operators: '${scope.definition.name.value}'`,
+              DiagnosticSeverity.Warning
+            ));
+          } else {
+            const currentEnv = environments[environments.length - 1];
+            const returnType = checkType(scope.definition.returnType, document, environments, diagnostics);
+            currentEnv.operators.push({
+              type: 'user-defined',
+              kind: scope.definition.kind,
+              name: scope.definition.name.value,
+              data: scope.definition.name,
+              parameterTypes: paramTypes,
+              returnType: returnType ?? '?'
+            });
             tokensData.push({
               definition: scope.definition.name,
               position: scope.definition.name,
@@ -150,9 +320,9 @@ export const checkVariableExistence = (
   result.forEach(scope => {
     switch (scope.type) {
       case 'declaration': {
-        diagnostics.push(...processRValue(document, environments, scope.value));
-        const kind = tryGetVariable(true, environments, scope.name.value.name);
-        if (kind !== null) {
+        diagnostics.push(...processRValue(document, environments, scope.value.value));
+        const variable = tryGetVariable(true, environments, scope.name.value.name);
+        if (variable !== null) {
           diagnostics.push(new Diagnostic(
             new Range(
               document.positionAt(scope.name.start),
@@ -162,11 +332,15 @@ export const checkVariableExistence = (
             DiagnosticSeverity.Warning
           ));
         } else {
-          environments[environments.length - 1][1].set(scope.name.value.name, [
-            'user-defined',
-            scope.kind.value,
-            scope.name,
-          ]);
+          const varType = getType(scope.value, document, environments, diagnostics);
+          environments[environments.length - 1]
+            .variables
+            .set(scope.name.value.name, {
+              type: 'user-defined',
+              kind: scope.kind.value,
+              data: scope.name,
+              varType
+            });
           tokensData.push({
             definition: scope.name,
             position: scope.name,
@@ -174,95 +348,103 @@ export const checkVariableExistence = (
               range: {
                 start: scope.kind.start,
                 end: scope.name.end
-              }
+              },
+              type: varType
             }
           });
         }
         break;
       }
       case 'modification': {
-        diagnostics.push(...processRValue(document, environments, scope.value));
-        if (scope.name.type === 'variable') {
-          const kind = tryGetVariable(!scope.name.value.value.front.includes('.'), environments, scope.name.value.value.name);
-          if (kind === null) {
-            const secondKind = tryGetVariable(false, environments, scope.name.value.value.name);
-            if (secondKind != null) {
+        diagnostics.push(...processRValue(document, environments, scope.value.value));
+        const left = getType(scope.name, document, environments, diagnostics);
+        const right = getType(scope.value, document, environments, diagnostics);
+        if (typeCheck() && left !== right) {
+          diagnostics.push(new Diagnostic(
+            new Range(
+              document.positionAt(scope.value.start),
+              document.positionAt(scope.value.end)
+            ),
+            `Cannot assign a value of type ${typeTokenToTypeString(right)} to a variable of type ${typeTokenToTypeString(left)}`
+          ));
+        }
+        if (scope.name.value.type === 'variable') {
+          const variable = tryGetVariable(!scope.name.value.value.value.front.includes('.'), environments, scope.name.value.value.value.name);
+          if (variable === null) {
+            const variableSecondTry = tryGetVariable(false, environments, scope.name.value.value.value.name);
+            if (variableSecondTry != null) {
               return [
                 new Diagnostic(
                   new Range(
-                    document.positionAt(scope.name.value.start),
-                    document.positionAt(scope.name.value.end)
+                    document.positionAt(scope.name.start),
+                    document.positionAt(scope.name.end)
                   ),
-                  `Cannot find name '${scope.name.value.value.name}' - maybe you should access it using '.'?`
+                  `Cannot find name '${scope.name.value.value.value.name}' - maybe you should access it using '.'?`
                 )
               ];
             } else {
               return [
                 new Diagnostic(
                   new Range(
-                    document.positionAt(scope.name.value.start),
-                    document.positionAt(scope.name.value.end)
+                    document.positionAt(scope.name.start),
+                    document.positionAt(scope.name.end)
                   ),
-                  `Cannot find name '${scope.name.value.value.name}'`
+                  `Cannot find name '${scope.name.value.value.value.name}'`
                 )
               ];
             }
           } else {
             tokensData.push({
-              definition: kind[2],
-              position: scope.name.value,
+              definition: variable.data,
+              position: scope.name,
+              info: {}
             });
-            if (kind[1] !== "var") {
+            if (variable.kind !== "var") {
               diagnostics.push(new Diagnostic(
                 new Range(
-                  document.positionAt(scope.name.value.start),
-                  document.positionAt(scope.name.value.end)
+                  document.positionAt(scope.name.start),
+                  document.positionAt(scope.name.end)
                 ),
-                `Cannot assign to '${scope.name.value.value.name}' because it is a constant`
+                `Cannot assign to '${scope.name.value.value.value.name}' because it is a constant`
               ));
             }
           }
         } else {
-          const index = scope.name as IndexRValue;
-          diagnostics.push(...processRValue(document, environments, index.parameter));
-          diagnostics.push(...processRValue(document, environments, index.value));
+          const index = scope.name.value as IndexRValue;
+          diagnostics.push(...processRValue(document, environments, index.parameter.value));
+          diagnostics.push(...processRValue(document, environments, index.value.value));
         }
-        break;
-      }
-      case "function": {
-        const kind = tryGetDefFunction(
-          environments,
-          scope.value.value
-        );
-        if (kind === null) {
-          diagnostics.push(
-            new Diagnostic(
-              new Range(
-                document.positionAt(scope.value.start),
-                document.positionAt(scope.value.end)
-              ),
-              `Cannot find name '${scope.value.value}'`
-            )
-          );
-        } else {
-          tokensData.push({
-            definition: kind[1],
-            position: scope.value
-          });
-        }
-        diagnostics.push(...processRValue(document, environments, scope));
         break;
       }
       case 'return': {
         if (scope.value.value) {
           diagnostics.push(...processRValue(document, environments, scope.value.value));
+          const varType = getType(scope.value as Token<RValue>, document, environments, diagnostics);
+          const funcType = tryGetReturnType(environments);
+          if (typeCheck() && varType !== funcType) {
+            diagnostics.push(new Diagnostic(
+              new Range(
+                document.positionAt(scope.value.start),
+                document.positionAt(scope.value.end)
+              ),
+              funcType
+                ? `Returned type is not the function's declared return type - was ${typeTokenToTypeString(varType)} - should be ${typeTokenToTypeString(funcType)}`
+                : `Returned ${typeTokenToTypeString(varType)}, but the function was declared to not return anything`
+            ));
+          }
         }
         break;
       }
       case 'statements': {
         const nextEnvironments: Environment[] = [
           ...environments,
-          ['scope', new Map()],
+          {
+            type: 'scope',
+            functions: [],
+            operators: [],
+            types: new Map(),
+            variables: new Map()
+          }
         ];
         checkVariableExistence(
           document,
@@ -290,7 +472,7 @@ export const checkVariableExistence = (
               ));
             }
           }
-          if (workspace.getConfiguration('tcsi').get('warnOnMissingExplicitReturn') && scope.definition.returnType.value) {
+          if (explicitReturn() && scope.definition.returnType.value) {
             if (!doesReturn(document, scope.statements, diagnostics)) {
               diagnostics.push(new Diagnostic(
                 new Range(
@@ -384,12 +566,34 @@ export const checkVariableExistence = (
             }
           }
         }
-        const nextEnvironments: Environment[] = [...environments, ['function', new Map()]];
+        const nextEnvironments: Environment[] = [...environments, {
+          type: 'function',
+          functions: [],
+          operators: [],
+          types: new Map(),
+          variables: new Map(),
+          returnType: scope.definition.returnType.value
+        }];
         scope.definition.parameters.forEach((parameter) => {
           const env = nextEnvironments[nextEnvironments.length - 1];
           const variableName = parameter.name.value;
+          const varType = checkType(parameter.type, document, environments, diagnostics);
+          if (typeCheck() && !varType) {
+            diagnostics.push(new Diagnostic(
+              new Range(
+                document.positionAt(parameter.type.start),
+                document.positionAt(parameter.type.end)
+              ),
+              `Missing type: '${parameter.type.value}'`
+            ));
+          }
           if (variableName.front === "$") {
-            env[1].set(variableName.name, ['user-defined', "var", parameter.name]);
+            env.variables.set(variableName.name, {
+              type: 'user-defined',
+              kind: 'var',
+              data: parameter.name,
+              varType
+            });
             tokensData.push({
               definition: parameter.name,
               position: parameter.name,
@@ -397,11 +601,17 @@ export const checkVariableExistence = (
                 range: {
                   start: parameter.name.start,
                   end: parameter.type.end
-                }
+                },
+                type: varType ?? undefined
               }
             });
           } else {
-            env[1].set(variableName.name, ['user-defined', "const", parameter.name]);
+            env.variables.set(variableName.name, {
+              type: 'user-defined',
+              kind: 'const',
+              data: parameter.name,
+              varType
+            });
             tokensData.push({
               definition: parameter.name,
               position: parameter.name,
@@ -409,7 +619,8 @@ export const checkVariableExistence = (
                 range: {
                   start: parameter.name.start,
                   end: parameter.type.end
-                }
+                },
+                type: varType ?? undefined
               }
             });
           }
@@ -423,19 +634,41 @@ export const checkVariableExistence = (
         break;
       }
       case "if": {
-        diagnostics.push(...processRValue(document, environments, scope.value));
-        const nextIfEnvironments: Environment[] = [...environments, ['scope', new Map()]];
+        diagnostics.push(...processRValue(document, environments, scope.value.value));
+        const nextIfEnvironments: Environment[] = [...environments, {
+          type: 'scope',
+          functions: [],
+          operators: [],
+          types: new Map(),
+          variables: new Map()
+        }];
         checkVariableExistence(
           document,
           scope.ifBlock,
           nextIfEnvironments,
           diagnostics
         );
+        const varType = getType(scope.value, document, environments, diagnostics);
+        if (typeCheck() && varType !== 'Bool') {
+          diagnostics.push(new Diagnostic(
+            new Range(
+              document.positionAt(scope.value.start),
+              document.positionAt(scope.value.end)
+            ),
+            `An if block condition has to be a boolean type - was ${typeTokenToTypeString(varType)}`
+          ));
+        }
         scope.elifBlocks.forEach((elif) => {
-          diagnostics.push(...processRValue(document, environments, elif.value));
+          diagnostics.push(...processRValue(document, environments, elif.value.value));
           const nextElifEnvironments: Environment[] = [
             ...environments,
-            ['scope', new Map()]
+            {
+              type: 'scope',
+              functions: [],
+              operators: [],
+              types: new Map(),
+              variables: new Map()
+            }
           ];
           checkVariableExistence(
             document,
@@ -443,10 +676,26 @@ export const checkVariableExistence = (
             nextElifEnvironments,
             diagnostics
           );
+          const varType = getType(elif.value, document, environments, diagnostics);
+          if (typeCheck() && varType !== 'Bool') {
+            diagnostics.push(new Diagnostic(
+              new Range(
+                document.positionAt(scope.value.start),
+                document.positionAt(scope.value.end)
+              ),
+              `An elif block condition has to be a boolean type - was ${typeTokenToTypeString(varType)}`
+            ));
+          }
         });
         const nextElseEnvironments: Environment[] = [
           ...environments,
-          ['scope', new Map()]
+          {
+            type: 'scope',
+            functions: [],
+            operators: [],
+            types: new Map(),
+            variables: new Map()
+          }
         ];
         checkVariableExistence(
           document,
@@ -465,7 +714,13 @@ export const checkVariableExistence = (
           }
           const nextCaseEnvironments: Environment[] = [
             ...environments,
-            ['scope', new Map()]
+            {
+              type: 'scope',
+              functions: [],
+              operators: [],
+              types: new Map(),
+              variables: new Map()
+            }
           ];
           checkVariableExistence(
             document,
@@ -477,17 +732,34 @@ export const checkVariableExistence = (
         break;
       }
       case "while": {
-        diagnostics.push(...processRValue(document, environments, scope.value));
-        const nextEnvironments: Environment[] = [...environments, ['scope', new Map()]];
+        diagnostics.push(...processRValue(document, environments, scope.value.value));
+        const nextEnvironments: Environment[] = [...environments, {
+          type: 'scope',
+          functions: [],
+          operators: [],
+          types: new Map(),
+          variables: new Map()
+        }];
         checkVariableExistence(
           document,
           scope.statements,
           nextEnvironments,
           diagnostics
         );
+        const varType = getType(scope.value, document, environments, diagnostics);
+        if (typeCheck() && varType !== 'Bool') {
+          diagnostics.push(new Diagnostic(
+            new Range(
+              document.positionAt(scope.value.start),
+              document.positionAt(scope.value.end)
+            ),
+            `A while block condition has to be a boolean type - was ${typeTokenToTypeString(varType)}`
+          ));
+        }
         break;
       }
       case 'type-definition': {
+        
         break;
       }
       default: {
@@ -512,7 +784,7 @@ const processRValue = (
     }
     case 'interpolated': {
       rValue.inserts.forEach(i => {
-        results.push(...processRValue(document, environments, i.value));
+        results.push(...processRValue(document, environments, i.value.value));
       });
       break;
     }
@@ -521,43 +793,44 @@ const processRValue = (
       break;
     }
     case 'cast': {
-      results.push(...processRValue(document, environments, rValue.value));
+      results.push(...processRValue(document, environments, rValue.value.value));
       break;
     }
     case 'array': {
       rValue.values.forEach(v => {
-        results.push(...processRValue(document, environments, v));
+        results.push(...processRValue(document, environments, v.value));
       });
       break;
     }
     case 'index': {
-      results.push(...processRValue(document, environments, rValue.value));
-      results.push(...processRValue(document, environments, rValue.parameter));
+      results.push(...processRValue(document, environments, rValue.value.value));
+      results.push(...processRValue(document, environments, rValue.parameter.value));
       break;
     }
     case 'unary': {
-      results.push(...processRValue(document, environments, rValue.value));
+      results.push(...processRValue(document, environments, rValue.value.value));
       break;
     }
     case 'binary': {
-      results.push(...processRValue(document, environments, rValue.left));
-      results.push(...processRValue(document, environments, rValue.right));
+      results.push(...processRValue(document, environments, rValue.left.value));
+      results.push(...processRValue(document, environments, rValue.right.value));
       break;
     }
     case 'ternary': {
-      results.push(...processRValue(document, environments, rValue.condition));
-      results.push(...processRValue(document, environments, rValue.ifTrue));
-      results.push(...processRValue(document, environments, rValue.ifFalse));
+      results.push(...processRValue(document, environments, rValue.condition.value));
+      results.push(...processRValue(document, environments, rValue.ifTrue.value));
+      results.push(...processRValue(document, environments, rValue.ifFalse.value));
       break;
     }
     case 'dotMethod': {
-      results.push(...processRValue(document, environments, rValue.object));
+      results.push(...processRValue(document, environments, rValue.object.value));
       rValue.parameters.forEach(p => {
-        results.push(...processRValue(document, environments, p));
+        results.push(...processRValue(document, environments, p.value));
       });
       const kind = tryGetDotFunction(
         environments,
-        rValue.value.value
+        rValue.value.value,
+        [rValue.object, ...rValue.parameters].map(p => getType(p, document, environments, results))
       );
       if (kind === null) {
         results.push(
@@ -571,34 +844,34 @@ const processRValue = (
         );
       } else {
         tokensData.push({
-          definition: kind[1],
-          position: rValue.value
+          definition: kind.data,
+          position: rValue.value,
+          info: {}
         });
       }
       break;
     }
     case 'function': {
       rValue.parameters.forEach(p => {
-        results.push(...processRValue(document, environments, p));
+        results.push(...processRValue(document, environments, p.value));
       });
+      getType({
+        start: rValue.value.start,
+        end: (rValue.parameters[rValue.parameters.length - 1]?.end ?? (rValue.value.end + 1)) + 1,
+        value: rValue
+      }, document, environments, results);
       const kind = tryGetDefFunction(
         environments,
-        rValue.value.value
+        rValue.value.value,
+        rValue.parameters.map(p => getType(p, document, environments, results))
       );
-      if (kind === null) {
-        results.push(
-          new Diagnostic(
-            new Range(
-              document.positionAt(rValue.value.start),
-              document.positionAt(rValue.value.end)
-            ),
-            `Cannot find name '${rValue.value.value}'`
-          )
-        );
-      } else {
+      if (kind !== null) {
         tokensData.push({
-          definition: kind[1],
-          position: rValue.value
+          definition: kind.data,
+          position: rValue.value,
+          info: {
+            type: kind.returnType ?? undefined
+          }
         });
       }
       break;
@@ -611,28 +884,25 @@ const tryGetVariable = (
   inScope: boolean,
   environments: Environment[],
   name: string
-): ['user-defined', VariableKind, TokenRange] | ['built-in', VariableKind, string] | null => {
+): EnvironmentVariable | null => {
   for (let index = environments.length - 1; index >= 1; index--) {
-    const type = environments[index][0];
-    const kind = environments[index][1].get(name);
-    if (kind === undefined) {
+    const type = environments[index].type;
+    const variable = environments[index].variables.get(name);
+    if (variable === undefined) {
       if (inScope && type === 'function') {
         break;
       }
       continue;
     }
-    if (kind[1] === 'def' || kind[1] === 'dot') {
-      continue;
-    }
-    return kind as ['user-defined', VariableKind, TokenRange];
+    return variable;
   }
   for (let index = environments.length - 1; index >= 0; index--) {
-    const kind = environments[index][1].get(name);
-    if (kind === undefined || kind[1] === 'def' || kind[1] === 'dot') {
+    const variable = environments[index].variables.get(name);
+    if (variable === undefined) {
       continue;
     }
-    if (kind[0] === 'built-in' || kind[1] === 'const') {
-      return kind as ["user-defined", VariableKind, TokenRange] | ["built-in", VariableKind, string];
+    if (variable.type === 'built-in' || variable.kind === 'const') {
+      return variable;
     }
   }
   return null;
@@ -640,12 +910,17 @@ const tryGetVariable = (
 
 const tryGetDotFunction = (
   environments: Environment[],
-  name: string
-): ['user-defined', TokenRange] | ['built-in', string] | null => {
+  name: string,
+  params: string[]
+): EnvironmentFunction | null => {
   for (let index = environments.length - 1; index >= 0; index--) {
-    const kind = environments[index][1].get(name);
-    if (kind !== undefined && kind[1] === 'dot') {
-      return [kind[0], kind[2]] as ['user-defined', TokenRange] | ['built-in', string];
+    for (let func of environments[index].functions.filter(f => f.name === name && f.kind === 'dot')) {
+      if (params.length === func.parameterTypes.length && func.parameterTypes.every((toMatch, i) => {
+        const type = params[i];
+        return doesTypeMatch(type, toMatch);
+      })) {
+        return func;
+      }
     }
   }
   return null;
@@ -653,16 +928,104 @@ const tryGetDotFunction = (
 
 const tryGetDefFunction = (
   environments: Environment[],
-  name: string
-): ['user-defined', TokenRange] | ['built-in', string] | null => {
+  name: string,
+  params: string[]
+): EnvironmentFunction | null => {
   for (let index = environments.length - 1; index >= 0; index--) {
-    const kind = environments[index][1].get(name);
-    if (kind !== undefined && kind[1] === 'def') {
-      return [kind[0], kind[2]] as ['user-defined', TokenRange] | ['built-in', string];
+    for (let func of environments[index].functions.filter(f => f.name === name && f.kind === 'def')) {
+      if (params.length === func.parameterTypes.length && func.parameterTypes.every((toMatch, i) => {
+        const type = params[i];
+        return doesTypeMatch(type, toMatch);
+      })) {
+        return func;
+      }
     }
   }
   return null;
 };
+
+const tryGetBinaryOperator = (
+  environments: Environment[],
+  name: string,
+  params: string[]
+): EnvironmentOperator | null => {
+  for (let index = environments.length - 1; index >= 0; index--) {
+    for (let func of environments[index].operators.filter(f => f.name === name && f.kind === 'binary')) {
+      if (params.length === func.parameterTypes.length && func.parameterTypes.every((toMatch, i) => {
+        const type = params[i];
+        return doesTypeMatch(type, toMatch);
+      })) {
+        return func;
+      }
+    }
+  }
+  return null;
+};
+
+const tryGetUnaryOperator = (
+  environments: Environment[],
+  name: string,
+  params: string[]
+): EnvironmentOperator | null => {
+  for (let index = environments.length - 1; index >= 0; index--) {
+    for (let func of environments[index].operators.filter(f => f.name === name && f.kind === 'unary')) {
+      if (params.length === func.parameterTypes.length && func.parameterTypes.every((toMatch, i) => {
+        const type = params[i];
+        return doesTypeMatch(type, toMatch);
+      })) {
+        return func;
+      }
+    }
+  }
+  return null;
+};
+
+const tryGetType = (
+  environments: Environment[],
+  name: string
+): EnvironmentType | null => {
+  if (name.startsWith('@')) return environments[0].types.get('@') ?? null;
+  for (let index = environments.length - 1; index >= 0; index--) {
+    const type = environments[index].types.get(name);
+    if (type !== undefined) {
+      return type;
+    }
+  }
+  if (name.startsWith('*')) {
+    return environments[0].types.get(getArrayType(environments, name.slice(1))) ?? null;
+  }
+  return null;
+};
+
+const tryGetReturnType = (environments: Environment[]): string | null => {
+  for (let index = environments.length - 1; index >= 0; index--) {
+    const env = environments[index];
+    if (env.type === 'function') {
+      return env.returnType;
+    }
+  }
+  return null;
+}
+
+export const getArrayType = (environments: Environment[], typeName: string): string => {
+  const type = tryGetType(environments, typeName) ?? {
+    type: 'built-in',
+    data: typeName
+  };
+  const arrayTypeName = `*${typeName}`;
+  const arrayType = environments[0].types.get(arrayTypeName);
+  if (!arrayType) {
+    const typeString = type.type === 'user-defined'
+      ? type.data.definition.value
+      : type.data;
+    const arrayType: EnvironmentType = {
+      type: 'built-in',
+      data: `[${typeString}]`
+    };
+    environments[0].types.set(arrayTypeName, arrayType);
+  }
+  return arrayTypeName;
+}
 
 const checkVariable = (nameToken: Token<VariableName>, document: TextDocument, environments: Environment[]) : Diagnostic[] => {
   const kind = tryGetVariable(
@@ -695,11 +1058,30 @@ const checkVariable = (nameToken: Token<VariableName>, document: TextDocument, e
     }
   } else {
     tokensData.push({
-      definition: kind[2],
-      position: nameToken
+      definition: kind.data,
+      position: nameToken,
+      info: {
+        type: kind.varType ?? '?'
+      }
     });
   }
   return [];
+}
+
+const checkType = (typeToken: Token<string | null>, document: TextDocument, environments: Environment[], diagnostics: Diagnostic[]): string | null => {
+  if (!typeToken.value) return null;
+  const typeName = typeStringToTypeToken(typeToken.value);
+  const envType = tryGetType(environments, typeName);
+  if (!envType) {
+    diagnostics.push(new Diagnostic(
+      new Range(
+        document.positionAt(typeToken.start),
+        document.positionAt(typeToken.end)
+      ),
+      `Cannot find type: '${typeToken.value}'`
+    ));
+  }
+  return typeName;
 }
 
 const doesReturn = (document: TextDocument, statements: StatementsBlock, diagnostics: Diagnostic[]): boolean => {
@@ -738,4 +1120,267 @@ const doesReturn = (document: TextDocument, statements: StatementsBlock, diagnos
     }
   }
   return false;
+}
+
+const getType = (value: Token<RValue>, document: TextDocument, environments: Environment[], diagnostics: Diagnostic[]): string => {
+  const rValue = value.value;
+  switch (rValue.type) {
+    case 'number':
+      logg(`Number: Int`);
+      return 'Int';
+    case 'string':
+    case 'interpolated':
+      logg(`String: String`);
+      return 'String';
+    case 'unary': {
+      const type = getType(rValue.value, document, environments, diagnostics);
+      const operator = tryGetUnaryOperator(environments, rValue.operator, [type]);
+      if (typeCheck() && !operator) {
+        diagnostics.push(new Diagnostic(
+          new Range(
+            document.positionAt(rValue.value.start - 1),
+            document.positionAt(rValue.value.start)
+          ),
+          `Cannot find unary operator ${rValue.operator} for type ${typeTokenToTypeString(type)}`
+        ));
+      }
+      logg(`Unary: ${operator?.returnType ?? '?'}`);
+      return operator?.returnType ?? '?';
+    }
+    case 'binary': {
+      const leftType = getType(rValue.left, document, environments, diagnostics);
+      const rightType = getType(rValue.right, document, environments, diagnostics);
+      const operator = tryGetBinaryOperator(environments, rValue.operator, [leftType, rightType]);
+      if (typeCheck() && !operator) {
+        diagnostics.push(new Diagnostic(
+          new Range(
+            document.positionAt(rValue.left.end),
+            document.positionAt(rValue.right.start)
+          ),
+          `Cannot find binary operator ${rValue.operator} for types ${typeTokenToTypeString(leftType)} and ${typeTokenToTypeString(rightType)}`
+        ));
+      }
+      logg(`Binary: ${operator?.returnType ?? '?'}`);
+      return operator?.returnType ?? '?';
+    }
+    case 'ternary': {
+      const conditionType = getType(rValue.condition, document, environments, diagnostics);
+      const ifTrueType = getType(rValue.ifTrue, document, environments, diagnostics);
+      const ifFalseType = getType(rValue.ifFalse, document, environments, diagnostics);
+      if (typeCheck() && conditionType !== 'Bool') {
+        diagnostics.push(new Diagnostic(
+          new Range(
+            document.positionAt(rValue.condition.start),
+            document.positionAt(rValue.condition.end)
+          ),
+          `A ternary condition has to be a boolean type - was ${typeTokenToTypeString(conditionType)}`
+        ));
+      }
+      if (typeCheck() && ifTrueType !== ifFalseType) {
+        diagnostics.push(new Diagnostic(
+          new Range(
+            document.positionAt(rValue.ifFalse.start),
+            document.positionAt(rValue.ifFalse.end)
+          ),
+          `Both ternary branches must have the same type - was ${typeTokenToTypeString(ifTrueType)} and ${typeTokenToTypeString(ifFalseType)}`
+        ));
+      }
+      logg(`Ternary: ${ifTrueType}`);
+      return ifTrueType;
+    }
+    case 'dotMethod': {
+      const paramTypes = [
+        getType(rValue.object, document, environments, diagnostics),
+        ...rValue.parameters.map(param => getType(param, document, environments, diagnostics))
+      ];
+      const dotFunction = tryGetDotFunction(environments, rValue.value.value, paramTypes);
+      dotFunction?.parameterTypes.forEach((type, index) => {
+        const actualType = paramTypes[index];
+        const pos = index === 0
+          ? rValue.object
+          : rValue.parameters[index - 1];
+        if (!actualType) {
+          if (typeCheck()) {
+            diagnostics.push(new Diagnostic(
+              new Range(
+                document.positionAt(pos.start),
+                document.positionAt(pos.end)
+              ),
+              `Too many parameters - Function takes ${dotFunction.parameterTypes.length - 1} parameters`
+            ));
+          }
+        } else {
+          if (typeCheck() && !doesTypeMatch(actualType, type)) {
+            diagnostics.push(new Diagnostic(
+              new Range(
+                document.positionAt(pos.start),
+                document.positionAt(pos.end)
+              ),
+              `Invalid function parameter type - was ${typeTokenToTypeString(actualType)} - should be ${typeTokenToTypeString(type)}`
+            ));
+          }
+        }
+      });
+      logg(`Dot Method: ${dotFunction?.returnType ?? '?'}`);
+      return dotFunction?.returnType ?? '?';
+    }
+    case 'function': {
+      const paramTypes = rValue.parameters.map(param => getType(param, document, environments, diagnostics));
+      const func = tryGetDefFunction(environments, rValue.value.value, paramTypes);
+      if (typeCheck() && !func) {
+        diagnostics.push(
+          new Diagnostic(
+            new Range(
+              document.positionAt(rValue.value.start),
+              document.positionAt(rValue.value.end)
+            ),
+            `Cannot find function '${rValue.value.value}(${paramTypes.map(typeTokenToTypeString).join(", ")})'`
+          )
+        );
+      }
+      func?.parameterTypes.forEach((type, index) => {
+        const actualType = paramTypes[index];
+        const pos = rValue.parameters[index];
+        if (!actualType) {
+          if (typeCheck()) {
+            diagnostics.push(new Diagnostic(
+              new Range(
+                document.positionAt(pos.start),
+                document.positionAt(pos.end)
+              ),
+              `Too many parameters - Function takes ${func.parameterTypes.length} parameters`
+            ));
+          }
+        } else {
+          if (typeCheck() && !doesTypeMatch(actualType, type)) {
+            diagnostics.push(new Diagnostic(
+              new Range(
+                document.positionAt(pos.start),
+                document.positionAt(pos.end)
+              ),
+              `Invalid function parameter type - was ${typeTokenToTypeString(actualType)} - should be ${typeTokenToTypeString(type)}`
+            ));
+          }
+        }
+      });
+      logg(`Def Method: ${func?.returnType ?? '?'}`);
+      return func?.returnType ?? '?';
+    }
+    case 'cast': {
+      // Should I do anything with the inner type?
+      getType(rValue.value, document, environments, diagnostics);
+      logg(`Cast: ${rValue.to.value}`);
+      return typeStringToTypeToken(rValue.to.value);
+    }
+    case 'array': {
+      const valuesTypes = rValue.values.map(v => [v, getType(v, document, environments, diagnostics)] as const);
+      const type = valuesTypes[0];
+      if (typeCheck() && !type) {
+        diagnostics.push(new Diagnostic(
+          new Range(
+            document.positionAt(value.start),
+            document.positionAt(value.end)
+          ),
+          `Cannot infer the array type because it has no values`
+        ));
+      }
+      const typeName = type?.[1] ?? '?';
+      if (valuesTypes.some(([token, t]) => {
+          if (t !== typeName) {
+            if (typeCheck()) {
+              diagnostics.push(new Diagnostic(
+                new Range(
+                  document.positionAt(token.start),
+                  document.positionAt(token.end)
+                ),
+                `Array type inferred as ${typeTokenToTypeString(typeName)}, but encountered value of type ${typeTokenToTypeString(t)}`
+              ));
+            }
+            return true;
+          }
+          return false;
+        })) {
+        logg(`Array: *?`);
+        return '*?';
+      }
+      logg(`Array: *${typeName}`);
+      return `*${typeName}`;
+    }
+    case 'variable': {
+      const variableData = tryGetVariable(false, environments, rValue.value.value.name);
+      if (typeCheck() && (!variableData?.varType || variableData.varType.endsWith('?'))) {
+        diagnostics.push(new Diagnostic(
+          new Range(
+            document.positionAt(rValue.value.start),
+            document.positionAt(rValue.value.end)
+          ),
+          `Unknown variable type`
+        ));
+      }
+      logg(`Variable: *${variableData?.varType ?? '?'}`);
+      return variableData?.varType ?? '?';
+    }
+    case 'index': {
+      const parameterType = getType(rValue.parameter, document, environments, diagnostics);
+      const variableType = getType(rValue.value, document, environments, diagnostics);
+      if (typeCheck() && !isIntegerType(parameterType)) {
+        diagnostics.push(new Diagnostic(
+          new Range(
+            document.positionAt(rValue.parameter.start),
+            document.positionAt(rValue.parameter.end)
+          ),
+          `An index parameter has to be an integer type - was ${typeTokenToTypeString(parameterType)}`
+        ));
+      }
+      const afterIndexType = getAfterIndexType(variableType, environments);
+      if (typeCheck() && !afterIndexType) {
+        diagnostics.push(new Diagnostic(
+          new Range(
+            document.positionAt(rValue.value.start),
+            document.positionAt(rValue.value.end)
+          ),
+          `An indexed value has to be an array type - was ${typeTokenToTypeString(variableType)}`
+        ));
+      }
+      logg(`Index: ${afterIndexType ?? '?'}`);
+      return afterIndexType ?? '?';
+    }
+  }
+}
+
+const getAfterIndexType = (type: string, environments: Environment[]): string | null => {
+  if (type.startsWith('*')) return type.slice(1);
+  if (type === 'String') return 'Char';
+  const typeInfo = tryGetType(environments, type);
+  if (!typeInfo || typeInfo.type === 'built-in') return null;
+  return getAfterIndexType(typeInfo.data.definition.value, environments);
+}
+
+const isIntegerType = (type: string): boolean => {
+  return isUnsignedIntegerType(type) || isSignedIntegerType(type);
+}
+
+const isUnsignedIntegerType = (type: string): boolean => {
+  return ['Int', 'UInt'].includes(type) || /^U\d+$/.test(type);
+}
+
+const isSignedIntegerType = (type: string): boolean => {
+  return ['Int', 'SInt'].includes(type) || /^S\d+$/.test(type);
+}
+
+const doesArrayTypeMatch = (type: string, toMatch: string): boolean => {
+  if (!type.startsWith('*') || !toMatch.startsWith('*')) return false;
+  return doesTypeMatch(type.slice(1), toMatch.slice(1));
+}
+
+const doesTypeMatch = (type: string, toMatch: string): boolean => {
+  if (type === toMatch) return true;
+  if (toMatch.startsWith('@')) return true;
+  if ((toMatch === 'Int' || toMatch === 'UInt') && isUnsignedIntegerType(type)) {
+    return true;
+  }
+  if ((toMatch === 'Int' || toMatch === 'SInt') && isSignedIntegerType(type)) {
+    return true;
+  }
+  return doesArrayTypeMatch(type, toMatch);
 }

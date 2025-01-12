@@ -1,4 +1,4 @@
-import { FunctionRValue, IndexRValue, NumberRValue, RValue, StringRValue, VariableRValue } from "./rvalue";
+import { IndexRValue, NumberRValue, RValue, StringRValue, VariableRValue } from "./rvalue";
 
 export type TokenRange = {
     start: number, 
@@ -56,19 +56,19 @@ export type VariableDeclaration = {
     public: boolean,
     name: Token<VariableName>,
     kind: Token<VariableKind>,
-    value: RValue
+    value: Token<RValue>
 }
 
 export type VariableModification = {
     type: 'modification',
-    name: IndexRValue | VariableRValue,
+    name: Token<IndexRValue | VariableRValue>,
     operator?: string,
-    value: RValue
+    value: Token<RValue>
 }
 
 export type StatementsBlock = Statement[];
 
-export type Statement = FunctionDeclaration | StatementsStatement | VariableDeclaration | VariableModification | RegAllocUseStatement | ReturnStatement | SwitchStatement | WhileStatement | IfStatement | RValue;
+export type Statement = TypeDefinition | FunctionDeclaration | StatementsStatement | VariableDeclaration | VariableModification | RegAllocUseStatement | ReturnStatement | SwitchStatement | WhileStatement | IfStatement | RValue;
 
 export type StatementsStatement = {
     type: 'statements',
@@ -87,7 +87,7 @@ export type ReturnStatement = {
 
 export type SwitchStatement = {
     type: 'switch',
-    value: RValue,
+    value: Token<RValue>,
     cases: {
         caseName: 'default' | NumberRValue | StringRValue | Token<VariableName>,
         statements: StatementsBlock
@@ -96,16 +96,16 @@ export type SwitchStatement = {
 
 export type WhileStatement = {
     type: 'while',
-    value: RValue,
+    value: Token<RValue>,
     statements: StatementsBlock
 };
 
 export type IfStatement = {
     type: 'if',
-    value: RValue,
+    value: Token<RValue>,
     ifBlock: StatementsBlock,
     elifBlocks: {
-        value: RValue,
+        value: Token<RValue>,
         statements: StatementsBlock
     }[],
     elseBlock: StatementsBlock

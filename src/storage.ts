@@ -1,6 +1,7 @@
 import { window, Range, SemanticTokensLegend, languages } from 'vscode';
 import { TokenRange } from './parsers/ast';
-import { Environment } from './checks';
+import { Environment, EnvironmentType, getArrayType } from './checks';
+import { binaryOperator, ParseReturnType } from './parsers/base';
 
 export const log = window.createOutputChannel("TC-si");
 
@@ -11,8 +12,9 @@ export const legend = new SemanticTokensLegend(tokenTypes, tokenModifiers);
 export const tokensData: {
 	position: TokenRange,
 	definition: TokenRange | string,
-	info?: {
-		range: TokenRange
+	info: {
+		range?: TokenRange,
+		type?: string;
 	}
 }[] = [];
 
@@ -22,75 +24,192 @@ export const str = (r: Range): string => {
 	return `${r.start.line}:${r.start.character} - ${r.end.line}:${r.end.character}`;
 }
 
-const addDef = (name: string, description: string) => {
-	baseEnvironment[1].set(name, ['built-in', 'def', description]);
+const addDef = (name: string, description: string, returnType: string | null, parameterTypes: string[]) => {
+	baseEnvironment.functions.push({
+		type: 'built-in',
+		kind: 'def',
+		name,
+		data: description,
+		parameterTypes,
+		returnType
+	});
 }
 
-const addDot = (name: string, description: string) => {
-	baseEnvironment[1].set(name, ['built-in', 'dot', description]);
+const addDot = (name: string, description: string, returnType: string | null, parameterTypes: string[]) => {
+	baseEnvironment.functions.push({
+		type: 'built-in',
+		kind: 'dot',
+		name,
+		data: description,
+		parameterTypes,
+		returnType
+	});
 }
 
-const addConst = (name: string, description: string) => {
-	baseEnvironment[1].set(name, ['built-in', 'const', description]);
+const addUnary = (name: string, description: string, returnType: string, parameterType: string) => {
+	baseEnvironment.operators.push({
+		type: 'built-in',
+		kind: 'unary',
+		name,
+		data: description,
+		parameterTypes: [parameterType],
+		returnType
+	})
 }
 
-export const baseEnvironment: Environment = ['scope', new Map()];
+const addBinary = (name: string, description: string, returnType: string, parameterTypes: [string, string]) => {
+	baseEnvironment.operators.push({
+		type: 'built-in',
+		kind: 'binary',
+		name,
+		data: description,
+		parameterTypes,
+		returnType
+	})
+}
 
-addDef('array', 						'pub def array(length: Int, value: @Any) [@Any] {');
-addDef('random', 						'pub def random(max: Int) Int {');
-addDef('min', 							'pub def min(a: Int, b: Int) Int {');
-addDef('max', 							'pub def max(a: Int, b: Int) Int {');
-addDef('log10', 						'pub def log10(a: Int) Int {');
-addDef('int', 							'pub def int(value: String) Int {');
-addDef('str', 							'pub def str(value: @Any) String {');
-addDef('exit', 							'pub def exit() {');
-addDef('get_tick', 						'pub def get_tick() Int {');
-addDef('get_last_time', 				'pub def get_last_time() Int {');
-addDef('get_register_value', 			'pub def get_register_value(register: Int) Int {');
-addDef('has_ram', 						'pub def has_ram() Bool {');
-addDef('get_ram_value', 				'pub def get_ram_value(address: Int) Int {');
-addDef('get_ram_size', 					'pub def get_ram_size() Int {');
-addDef('get_delay_score', 				'pub def get_delay_score() Int {');
-addDef('get_component_count', 			'pub def get_component_count() Int {');
-addDef('get_program_address', 			'pub def get_program_address() Int {');
-addDef('get_program_output', 			'pub def get_program_output() Int {');
-addDef('get_level_memory', 				'pub def get_level_memory(id: String) Int {');
-addDef('set_custom_input_text', 		'pub def set_custom_input_text(text: String) {');
-addDef('ui_set_hidden', 				'pub def ui_set_hidden(id: String, hidden: Bool) {');
-addDef('ui_set_text', 					'pub def ui_set_text(id: String, text: String) {');
-addDef('ui_set_position', 				'pub def ui_set_position(id: String, x: Int, y: Int) {');
-addDef('set_error', 					'pub def set_error(text: String) {');
-addDef('output', 						'pub def output(text: String) {');
-addDef('add_keyboard_value', 			'pub def add_keyboard_value(value: Int) {');
-addDef('has_time_component', 			'pub def has_time_component() Bool {');
-addDef('has_keyboard_component', 		'pub def has_keyboard_component() Bool {');
-addDef('has_console_component', 		'pub def has_console_component() Bool {');
-addDef('get_assembler_register_count', 	'pub def get_assembler_register_count() Int {');
-addDef('get_console_offset', 			'pub def get_console_offset() Int {');
-addDef('get_assembler_width', 			'pub def get_assembler_width() Int {');
-addDef('get_latency_ram_is_busy', 		'pub def get_latency_ram_is_busy() Bool {');
-addDef('set_address_text', 				'pub def set_address_text(text: String) {');
-addDef('set_value_text', 				'pub def set_value_text(text: String) {');
-addDef('get_cycle_count', 				'pub def get_cycle_count() Int {');
-addDef('get_probe_value', 				'pub def get_probe_value() Int {');
-addDef('get_gate_score', 				'pub def get_gate_score() Int {');
-addDef('quick_sort', 					'pub def quick_sort($arr: [@Any]) {');
-addDef('print', 						'pub def print(input: @Any) {');
+const addConst = (name: string, description: string, varType: string) => {
+	baseEnvironment.variables.set(name, {
+		type: 'built-in',
+		kind: 'const',
+		data: description,
+		varType
+	});
+}
 
-addDot('find', 							'pub dot find(array: [@Any], value: @Any) Int {');
-addDot('len', 							'pub dot len(array: [@Any]) Int {');
-addDot('contains',						'pub dot contains(array: [@Type], value: @Type) Bool {');
-addDot('in',							'pub dot in(value: @Type, array: [@Type]) Bool {');
-addDef('high', 							'pub dot high(a: [@Any]) Int {');
-addDef('sort',							'pub def sort($arr: [@Any]) {');
-addDef('get_random_seed',				'pub def get_random_seed() Seed {');
-addDef('next',							'pub dot next($s: Seed) Int {');
-addDef('random',						'pub def random(max: Int) Int {');
-addDef('sample',						'pub def sample(array: [@Any]) @Any {');
+const addType = (name: string, description: string): string => {
+	const type: EnvironmentType = {
+		type: 'built-in',
+		data: description
+	};
+	baseEnvironment.types.set(name, type);
+	return name;
+}
 
-addConst('true', 'A `true` value');
-addConst('false', 'A `false` value');
-addConst('pass', 'Returning this value will pass the ongoing level test');
-addConst('fail', 'Returning this value will fail the ongoing level test');
-addConst('win', 'Returning this value will win the level');
-addConst('Z_STATE', 'Constant denoting the `Hi-Z` state of the wire.\n\nEquivalent to `0x8000_0000_0000_0000`.');
+export const baseEnvironment: Environment = {
+	type: 'scope',
+	functions: [],
+	operators: [],
+	types: new Map(),
+	variables: new Map()
+};
+
+export const precedence: Record<ParseReturnType<typeof binaryOperator>, number> = {
+	'||': 3,
+	'&&': 4,
+	'==': 5,
+	'!=': 5,
+	'<=': 5,
+	'>=': 5,
+	'<': 5,
+	'<s': 5,
+	'<u': 5,
+	'>': 5,
+	'+': 6,
+	'-': 6,
+	'&': 6,
+	'|': 6,
+	'^': 6,
+	'*': 7,
+	'/': 7,
+	'%': 7,
+	'ror': 7,
+	'rol': 7,
+	'<<': 7,
+	'>>': 7,
+	'asr': 7
+}
+
+const arr = getArrayType.bind(null, [baseEnvironment]);
+
+const testResultType = addType('TestResult', '<pass, fail, win>');
+const anyType = addType('@', 'Any type');
+const boolType = addType('Bool', 'A boolean value');
+addUnary('!', 'Negates the boolean', boolType, boolType);
+addBinary('||', 'ORs two booleans', boolType, [boolType, boolType]);
+addBinary('&&', 'ANDs two booleans', boolType, [boolType, boolType]);
+const intType = addType('Int', 'A type allowing any integer to be passed in');
+addUnary('~', 'Inverts the bits of the integer', intType, intType);
+addBinary('+', 'Adds two integers together', intType, [intType, intType]);
+addBinary('-', 'Subtracts two integers together', intType, [intType, intType]);
+addBinary('&', 'ANDs bits of two integers together', intType, [intType, intType]);
+addBinary('|', 'ORs bits of two integers together', intType, [intType, intType]);
+addBinary('^', 'XORs bits of two integers together', intType, [intType, intType]);
+addBinary('>', 'Checks if the first integer is larger than the second', boolType, [intType, intType]);
+addBinary('>>', 'Shifts the first integer right by the second integers value', intType, [intType, intType]);
+addBinary('<', 'Checks if the first integer is smaller than the second', boolType, [intType, intType]);
+addBinary('<<', 'Ahifts the first integer left by the second integers value', intType, [intType, intType]);
+addBinary('asr', 'Arithmetically shifts the first integer right by the second integers value', intType, [intType, intType]);
+addBinary('>=', 'Checks if the first integer is larger or equal to the second', boolType, [intType, intType]);
+addBinary('<=', 'Checks if the first integer is smaller or equal to the second', boolType, [intType, intType]);
+addBinary('!=', 'Checks if the first integer is not equal to the second', boolType, [intType, intType]);
+addBinary('==', 'Checks if the first integer is equal to the second', boolType, [intType, intType]);
+const stringType = addType('String', 'A string type');
+addBinary('+', 'Adds two strings together', stringType, [stringType, stringType]);
+const seedType = addType('Seed', 'A type used for seeding the random generator');
+addType('SInt', 'A type allowing any signed integer to be passed in');
+addType('UInt', 'A type allowing any unsigned integer to be passed in');
+for (let width = 1; width <= 2048; width++) {
+	addType('S' + width, `A signed integer of width ${width}`);
+	addType('U' + width, `An unsigned integer of width ${width}`);
+}
+
+addDef('array', 						'pub def array(length: Int, value: @Any) [@Any] {', arr(anyType), [intType, anyType]);
+addDef('random', 						'pub def random(max: Int) Int {', intType, [intType]);
+addDef('min', 							'pub def min(a: Int, b: Int) Int {', intType, [intType, intType]);
+addDef('max', 							'pub def max(a: Int, b: Int) Int {', intType, [intType, intType]);
+addDef('log10', 						'pub def log10(a: Int) Int {', intType, [intType]);
+addDef('int', 							'pub def int(value: String) Int {', intType, [stringType]);
+addDef('str', 							'pub def str(value: @Any) String {', stringType, [anyType]);
+addDef('exit', 							'pub def exit() {', null, []);
+addDef('get_tick', 						'pub def get_tick() Int {', intType, []);
+addDef('get_last_time', 				'pub def get_last_time() Int {', intType, []);
+addDef('get_register_value', 			'pub def get_register_value(register: Int) Int {', intType, [intType]);
+addDef('has_ram', 						'pub def has_ram() Bool {', boolType, []);
+addDef('get_ram_value', 				'pub def get_ram_value(address: Int) Int {', intType, [intType]);
+addDef('get_ram_size', 					'pub def get_ram_size() Int {', intType, []);
+addDef('get_delay_score', 				'pub def get_delay_score() Int {', intType, []);
+addDef('get_component_count', 			'pub def get_component_count() Int {', intType, []);
+addDef('get_program_address', 			'pub def get_program_address() Int {', intType, []);
+addDef('get_program_output', 			'pub def get_program_output() Int {', intType, []);
+addDef('get_level_memory', 				'pub def get_level_memory(id: String) Int {', intType, [stringType]);
+addDef('set_custom_input_text', 		'pub def set_custom_input_text(text: String) {', null, [stringType]);
+addDef('ui_set_hidden', 				'pub def ui_set_hidden(id: String, hidden: Bool) {', null, [stringType, boolType]);
+addDef('ui_set_text', 					'pub def ui_set_text(id: String, text: String) {', null, [stringType, stringType]);
+addDef('ui_set_position', 				'pub def ui_set_position(id: String, x: Int, y: Int) {', null, [stringType, intType, intType]);
+addDef('set_error', 					'pub def set_error(text: String) {', null, [stringType]);
+addDef('output', 						'pub def output(text: String) {', null, [stringType]);
+addDef('add_keyboard_value', 			'pub def add_keyboard_value(value: Int) {', null, [intType]);
+addDef('has_time_component', 			'pub def has_time_component() Bool {', boolType, []);
+addDef('has_keyboard_component', 		'pub def has_keyboard_component() Bool {', boolType, []);
+addDef('has_console_component', 		'pub def has_console_component() Bool {', boolType, []);
+addDef('get_assembler_register_count', 	'pub def get_assembler_register_count() Int {', intType, []);
+addDef('get_console_offset', 			'pub def get_console_offset() Int {', intType, []);
+addDef('get_assembler_width', 			'pub def get_assembler_width() Int {', intType, []);
+addDef('get_latency_ram_is_busy', 		'pub def get_latency_ram_is_busy() Bool {', boolType, []);
+addDef('set_address_text', 				'pub def set_address_text(text: String) {', null, [stringType]);
+addDef('set_value_text', 				'pub def set_value_text(text: String) {', null, [stringType]);
+addDef('get_cycle_count', 				'pub def get_cycle_count() Int {', intType, []);
+addDef('get_probe_value', 				'pub def get_probe_value() Int {', intType, []);
+addDef('get_gate_score', 				'pub def get_gate_score() Int {', intType, []);
+addDef('quick_sort', 					'pub def quick_sort($arr: [@Any]) {', null, [arr(anyType)]);
+addDef('print', 						'pub def print(input: @Any) {', null, [anyType]);
+
+addDot('find', 							'pub dot find(array: [@Any], value: @Any) Int {', intType, [arr(anyType), anyType]);
+addDot('len', 							'pub dot len(string: String) Int {', intType, [stringType]);
+addDot('len', 							'pub dot len(array: [@Any]) Int {', intType, [arr(anyType)]);
+addDot('contains',						'pub dot contains(array: [@Type], value: @Type) Bool {', boolType, [arr(anyType), anyType]);
+addDot('in',							'pub dot in(value: @Type, array: [@Type]) Bool {', boolType, [anyType, arr(anyType)]);
+addDef('high', 							'pub dot high(a: [@Any]) Int {', intType, [arr(anyType)]);
+addDef('sort',							'pub def sort($arr: [@Any]) {', null, [arr(anyType)]);
+addDef('get_random_seed',				'pub def get_random_seed() Seed {', seedType, []);
+addDef('next',							'pub dot next($s: Seed) Int {', intType, [seedType]);
+addDef('random',						'pub def random(max: Int) Int {', intType, [intType]);
+addDef('sample',						'pub def sample(array: [@Any]) @Any {', anyType, [arr(anyType)]);
+
+addConst('true', 'A `true` value', boolType);
+addConst('false', 'A `false` value', boolType);
+addConst('pass', 'Returning this value will pass the ongoing level test', testResultType);
+addConst('fail', 'Returning this value will fail the ongoing level test', testResultType);
+addConst('win', 'Returning this value will win the level', testResultType);
+addConst('Z_STATE', 'Constant denoting the `Hi-Z` state of the wire.\n\nEquivalent to `0x8000_0000_0000_0000`.', intType);

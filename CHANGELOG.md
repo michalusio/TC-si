@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.4.0]
+
+- Added type-checking on most things (toggleable by an option, on by default)
+- Missing type-checking for switch cases
+- Added basic generic engine
+
 ## [0.3.4]
 
 - Functions declared below the current functions are still regarded as in-scope

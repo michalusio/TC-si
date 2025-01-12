@@ -1,8 +1,9 @@
 import { any, between, exhaust, expect, intP, many, map, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
-import { lab, rab, lbr, variableName, typeDefinition, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment } from "./base";
+import { lab, rab, lbr, variableName, typeDefinition, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators } from "./base";
 import { ArrayRValue, BinaryRValue, CastedRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./rvalue";
 import { recoverByAddingChars, rstr, token } from "./utils";
-import { VariableDeclaration, VariableModification } from "./ast";
+import { Token, VariableDeclaration, VariableModification } from "./ast";
+import { log, precedence } from "../storage";
 
 const variableKind = token(any(
     str('const'),
@@ -38,7 +39,7 @@ between(
         let totalValue = '';
         const inserts: {
             index: number;
-            value: RValue;
+            value: Token<RValue>;
         }[] = []
         for (const v of value) {
             if (typeof v === 'string') {
@@ -186,14 +187,14 @@ const unaryRValue = map(seq(
 
 const parenthesisedRValue = between(
     seq(lpr, spaces),
-    rValue(),
+    map(rValue(), r => r.value),
     seq(spaces, rstr(')'))
 );
 
-export function rValue(): Parser<RValue> {
+export function rValue(): Parser<Token<RValue>> {
     return (ctx) => map(
         seq(
-            any(
+            token(any(
                 unaryRValue,
                 castedRValue,
                 stringLiteral,
@@ -205,7 +206,7 @@ export function rValue(): Parser<RValue> {
                 arrayLiteral,
                 functionCall,
                 variableLiteral
-            ),
+            )),
             many(between(
                 lbr,
                 recoverByAddingChars('0', rValue(), true, 'index'),
@@ -248,43 +249,104 @@ export function rValue(): Parser<RValue> {
             )
         ),
         ([value, indexes, _, operation]) => {
-            let actualValue: RValue = value;
+            let actualValue: Token<RValue> = value;
             indexes.forEach(index => {
-                actualValue = <IndexRValue>{
-                    type: 'index',
-                    value: actualValue,
-                    parameter: index 
-                }
+                actualValue = <Token<RValue>>{
+                    start: actualValue.start,
+                    end: actualValue.end + 1,
+                    value: <IndexRValue>{
+                        type: 'index',
+                        value: actualValue,
+                        parameter: index 
+                    }
+                };
             });
 
             if (typeof operation[0] === 'string') {
-                const op = operation as [string, "?", [RValue, ":", string, RValue]];
-                return <TernaryRValue>{
-                    type: 'ternary',
-                    condition: actualValue,
-                    ifTrue: op[2][0],
-                    ifFalse: op[2][3]
-                }
+                const op = operation as [string, "?", [Token<RValue>, ":", string, Token<RValue>]];
+                const data = <Token<RValue>>{
+                    start: actualValue.start,
+                    end: op[2][3].end,
+                    value: <TernaryRValue>{
+                        type: 'ternary',
+                        condition: actualValue,
+                        ifTrue: op[2][0],
+                        ifFalse: op[2][3]
+                    }
+                };
+                return data;
             } else {
-                const op = operation as [[".", FunctionRValue] | null, [string, RValue] | null];
+                const op = operation as [[".", FunctionRValue] | null, [BinaryOperators, Token<RValue>] | null];
                 const functionCall = op[0];
                 if (functionCall) {
-                    actualValue = <DotMethodRValue>{
-                        type: 'dotMethod',
-                        object: actualValue,
-                        value: functionCall[1].value,
-                        parameters: functionCall[1].parameters
+                    actualValue = <Token<RValue>>{
+                        start: actualValue.start,
+                        end: (functionCall[1].parameters[functionCall[1].parameters.length - 1]?.end ?? (actualValue.end + 1)) + 1,
+                        value: <DotMethodRValue>{
+                            type: 'dotMethod',
+                            object: actualValue,
+                            value: functionCall[1].value,
+                            parameters: functionCall[1].parameters
+                        }
                     };
                 }
 
                 const binaryOperator = op[1];
                 if (binaryOperator) {
-                    actualValue = <BinaryRValue>{
-                        type: 'binary',
-                        operator: binaryOperator[0],
-                        left: actualValue,
-                        right: binaryOperator[1]
-                    };
+                    const right = binaryOperator[1];
+                    const left = actualValue;
+                    if (right.value.type === 'binary' && precedence[right.value.operator] < precedence[binaryOperator[0]]) {
+                        actualValue = <Token<RValue>>{
+                            start: actualValue.start,
+                            end: right.end + 1,
+                            value: <BinaryRValue>{
+                                type: 'binary',
+                                operator: right.value.operator,
+                                left: <Token<RValue>>{
+                                    start: actualValue.start,
+                                    end: right.start + 1,
+                                    value: <BinaryRValue>{
+                                        type: 'binary',
+                                        operator: binaryOperator[0],
+                                        left,
+                                        right: right.value.left
+                                    }
+                                },
+                                right: right.value.right
+                            }
+                        }
+                    } else if (right.value.type === 'ternary') {
+                        actualValue = <Token<RValue>>{
+                            start: actualValue.start,
+                            end: right.end,
+                            value: <TernaryRValue>{
+                                type: 'ternary',
+                                condition: <Token<RValue>>{
+                                    start: left.start,
+                                    end: right.value.condition.end,
+                                    value: <BinaryRValue>{
+                                        type: 'binary',
+                                        operator: binaryOperator[0],
+                                        left,
+                                        right: right.value.condition
+                                    }
+                                },
+                                ifTrue: right.value.ifTrue,
+                                ifFalse: right.value.ifFalse
+                            }
+                        };
+                    } else {
+                        actualValue = <Token<RValue>>{
+                            start: actualValue.start,
+                            end: right.end + 1,
+                            value: <BinaryRValue>{
+                                type: 'binary',
+                                operator: binaryOperator[0],
+                                left,
+                                right
+                            }
+                        };
+                    }
                 }
 
                 return actualValue;
@@ -296,10 +358,10 @@ export function rValue(): Parser<RValue> {
 export const variableModification = map(
     expect(
         seq(
-            variableLiteral,
+            token(variableLiteral),
             many(between(
                 lbr,
-                recoverByAddingChars('0', rValue(), true, 'index'),
+                recoverByAddingChars('0', rValue(), true, 'value'),
                 rstr(']')
             )),
             spaces,
@@ -307,26 +369,34 @@ export const variableModification = map(
             str('='),
             surely(seq(
                 spaces,
-                recoverByAddingChars('0', rValue(), true, 'value'),
+                recoverByAddingChars('0', rValue(), true, 'value')
             ))
         ),
         'Variable modification statement'
     ),
     ([name, indexes, _, operator, __, [___, value]]) => {
-        let actualName: RValue = name;
+        let actualName: Token<VariableRValue | IndexRValue> = name;
         indexes.forEach(index => {
-            actualName = <IndexRValue>{
-                type: 'index',
-                value: actualName,
-                parameter: index 
+            actualName = <Token<IndexRValue>>{
+                start: actualName.start,
+                end: index.end + 1,
+                value: <IndexRValue>{
+                    type: 'index',
+                    value: actualName,
+                    parameter: index 
+                }
+            };
+        });
+        return <Token<VariableModification>>{
+            start: actualName.start,
+            end: value.end + 1,
+            value: <VariableModification>{
+                type: 'modification',
+                name: actualName,
+                operator: operator ?? undefined,
+                value
             }
-        });
-        return (<VariableModification>{
-            type: 'modification',
-            name: actualName,
-            operator: operator ?? undefined,
-            value
-        });
+        };
     }
 );
 
@@ -342,18 +412,22 @@ export const topmostVariableDeclaration = map(
                     spaces,
                     rstr('='),
                     spaces,
-                    recoverByAddingChars('0', rValue(), true, 'value'),
+                    recoverByAddingChars('0', rValue(), true, 'value')
                 )
             )
         ),
         'Variable declaration statement'
     ),
-    ([pub, kind, _, [name, __, ___, ____, value]]) => (<VariableDeclaration>{
-        type: 'declaration',
-        public: !!pub,
-        kind,
-        name,
-        value
+    ([pub, kind, _, [name, __, ___, ____, value]]) => (<Token<VariableDeclaration>>{
+        start: kind.start,
+        end: value.end,
+        value: <VariableDeclaration> {
+            type: 'declaration',
+            public: !!pub,
+            kind,
+            name,
+            value
+        }
     })
 );
 
@@ -368,17 +442,21 @@ export const variableDeclaration = map(
                     spaces,
                     rstr('='),
                     spaces,
-                    recoverByAddingChars('0', rValue(), true, 'value'),
+                    recoverByAddingChars('0', rValue(), true, 'value')
                 )
             )
         ),
         'Variable declaration statement'
     ),
-    ([kind, _, [name, __, ___, ____, value]]) => (<VariableDeclaration>{
-        type: 'declaration',
-        public: false,
-        kind,
-        name,
-        value
+    ([kind, _, [name, __, ___, ____, value]]) => (<Token<VariableDeclaration>>{
+        start: kind.start,
+        end: value.end,
+        value: <VariableDeclaration> {
+            type: 'declaration',
+            public: false,
+            kind,
+            name,
+            value
+        }
     })
 );

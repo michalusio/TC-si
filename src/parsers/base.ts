@@ -109,6 +109,8 @@ export const binaryOperator = any(
     str('*'),
     str('%'),
     str('<='),
+    str('<u'),
+    str('<s'),
     str('>='),
     str('!='),
     str('=='),
@@ -116,8 +118,13 @@ export const binaryOperator = any(
     str('>>'),
     str('<'),
     str('>'),
-    regex(/\/(?!\/)/, '/')
+    str('rol'),
+    str('ror'),
+    str('asr'),
+    map<string, '/'>(regex(/\/(?!\/)/, '/'), r => r as '/')
 );
+
+export type BinaryOperators = ParseReturnType<typeof binaryOperator>;
 
 export const newline = regex(/[ \t]*\r?\n/, 'End of line');
 

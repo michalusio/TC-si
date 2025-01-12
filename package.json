@@ -27,6 +27,11 @@
           "type": "boolean",
           "default": false,
           "description": "Show warnings when a function with return type is missing an explicit return"
+        },
+        "tcsi.showTypeCheckingErrors": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show type-checking errors"
         }
       }
     },

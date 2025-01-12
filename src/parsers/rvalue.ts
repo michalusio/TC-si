@@ -1,15 +1,16 @@
 import { Token, VariableName } from "./ast"
+import { binaryOperator, BinaryOperators, ParseReturnType } from "./base"
 
 export type CastedRValue = {
     type: 'cast',
     to: Token<string>,
-    value: RValue
+    value: Token<RValue>
 }
 
 export type UnaryRValue = {
     type: 'unary',
     operator: string,
-    value: RValue
+    value: Token<RValue>
 }
 
 export type StringRValue = {
@@ -22,7 +23,7 @@ export type InterpolatedRValue = {
     value: string,
     inserts: {
         index: number,
-        value: RValue
+        value: Token<RValue>
     }[]
 }
 
@@ -33,26 +34,26 @@ export type NumberRValue = {
 
 export type ArrayRValue = {
     type: 'array',
-    values: RValue[]
+    values: Token<RValue>[]
 }
 
 export type FunctionRValue = {
     type: 'function',
     value: Token<string>,
-    parameters: RValue[]
+    parameters: Token<RValue>[]
 }
 
 export type DotMethodRValue = {
     type: 'dotMethod',
-    object: RValue,
+    object: Token<RValue>,
     value: Token<string>,
-    parameters: RValue[]
+    parameters: Token<RValue>[]
 }
 
 export type IndexRValue = {
     type: 'index',
-    value: RValue,
-    parameter: RValue
+    value: Token<RValue>,
+    parameter: Token<RValue>
 }
 
 export type VariableRValue = {
@@ -62,16 +63,16 @@ export type VariableRValue = {
 
 export type BinaryRValue = {
     type: 'binary',
-    operator: string,
-    left: RValue,
-    right: RValue
+    operator: BinaryOperators,
+    left: Token<RValue>,
+    right: Token<RValue>
 }
 
 export type TernaryRValue = {
     type: 'ternary',
-    condition: RValue,
-    ifTrue: RValue,
-    ifFalse: RValue
+    condition: Token<RValue>,
+    ifTrue: Token<RValue>,
+    ifFalse: Token<RValue>
 }
 
 export type RValue = CastedRValue | UnaryRValue | StringRValue | InterpolatedRValue | NumberRValue | ArrayRValue | FunctionRValue | DotMethodRValue | IndexRValue | VariableRValue | BinaryRValue | TernaryRValue;

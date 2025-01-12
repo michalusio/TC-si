@@ -2,7 +2,7 @@ import { Declaration, DeclarationProvider, DocumentLink, DocumentLinkProvider, D
 import { baseEnvironment, diagnostics, legend, log, tokensData } from "./storage";
 import { getPositionInfo } from "./parser";
 import { getRecoveryIssues } from "./parsers/base";
-import { checkVariableExistence, performParsing } from "./checks";
+import { checkVariableExistence, performParsing, typeTokenToTypeString } from "./checks";
 
 const selector = { language: 'si', scheme: 'file' };
 
@@ -73,24 +73,27 @@ const hoverProvider: HoverProvider = {
 			document.positionAt(data.current.end)
 		);
 		const label = new MarkdownString();
-		label.appendMarkdown(`### ${document.getText(range)}\n---`);
+		if (data.info.type) {
+			label.appendCodeblock(`${document.getText(range)}: ${typeTokenToTypeString(data.info.type ?? '?')}`);
+		} else {
+			label.appendCodeblock(document.getText(range));
+		}
+		label.appendMarkdown('---');
         if (typeof data.definition === 'string') {
-            const text = new MarkdownString();
-            text.appendMarkdown(data.definition);
+            label.appendCodeblock('\n' + data.definition, 'si');
             return new Hover(
-                [label, text],
+                label,
                 new Range(
                     document.positionAt(data.current.start),
                     document.positionAt(data.current.end)
                 ));
         }
-        if (!data.info) return;
+        if (!data.info.range) return;
         const startPosition = document.positionAt(data.info.range.start);
         const line = document.lineAt(startPosition.line);
-        const text = new MarkdownString();
-        text.appendText(line.text.trim());
+        label.appendCodeblock('\n' + line.text.trim(), 'si');
         return new Hover(
-            [label, text],
+            label,
             range
 		);
     }
@@ -124,7 +127,13 @@ const tokenProvider: DocumentSemanticTokensProvider = {
       const [parseResult, diags] = performParsing(document);
   
       if (parseResult) {
-        checkVariableExistence(document, parseResult, [baseEnvironment, ['function', new Map()]], diags);
+        checkVariableExistence(document, parseResult, [baseEnvironment, {
+			type: 'scope',
+			functions: [],
+            operators: [],
+			types: new Map(),
+			variables: new Map()
+		}], diags);
       }
       log.appendLine(`Tokens: ${tokensData.length}`);
       diagnostics.set(document.uri, diags);

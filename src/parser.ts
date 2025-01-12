@@ -6,13 +6,14 @@ import { anyNumericLiteral, functionCall, rValue, stringLiteral, topmostVariable
 import { typeDeclaration } from "./parsers/types";
 import { eof, lookaround, manyForSure, recoverByAddingChars, recoverBySkipping, rstr, token } from "./parsers/utils";
 import { FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, TokenRange, TypeDefinition, VariableDeclaration, VariableKind, WhileStatement } from "./parsers/ast";
-import { tokensData } from "./storage";
+import { log, tokensData } from "./storage";
 
 export const getPositionInfo = (document: TextDocument, position: Position): {
 	current: TokenRange,
 	definition: TokenRange | string,
-	info?: {
-		range: TokenRange;
+	info: {
+		range?: TokenRange;
+		type?: string;
 	},
 	all: TokenRange[]
  } | null => {
@@ -29,7 +30,7 @@ export const getPositionInfo = (document: TextDocument, position: Position): {
 	return {
 		current: token.position,
 		definition: token.definition,
-		info: definitionToken?.info,
+		info: definitionToken?.info ?? {},
 		all: allTokens.map(t => t.position)
 	};
 }
@@ -40,7 +41,7 @@ const returnStatement = map(
 		token(opt(
 			between(
 				spacesPlus,
-				recoverByAddingChars('0', rValue(), true, 'return value'),
+				recoverByAddingChars('0', map(rValue(), v => v.value), true, 'return value'),
 				any(newline, lineComment, spacesPlus)
 			)
 		))
@@ -75,8 +76,12 @@ function statementsBlock(): Parser<StatementsBlock> {
 								lineComment,
 								blockComment,
 								newline,
+								typeDeclaration,
 								regAllocUse,
 								returnStatement,
+								whileBlock(),
+								ifBlock(),
+								switchBlock(),
 								map(
 									between(
 										lcb,
@@ -103,13 +108,9 @@ function statementsBlock(): Parser<StatementsBlock> {
 										statements
 									})
 								),
-								map(seq(variableDeclaration, any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v),
-								whileBlock(),
-								ifBlock(),
-								switchBlock(),
-								map(seq(functionCall, any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v),
-								map(seq(variableModification, any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v),
-								map(seq(rValue(), any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v)
+								map(seq(variableDeclaration, any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v.value),
+								map(seq(variableModification, any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v.value),
+								map(seq(rValue(), any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v.value)
 							),
 							(s) => typeof s === 'string' ? null : s
 						),
@@ -274,7 +275,7 @@ export const languageParser = map(
 				lineComment,
 				blockComment,
 				newline,
-				map(seq(topmostVariableDeclaration, any(newline, lineComment, spacesPlus, eof)), ([v]) => v),
+				map(seq(topmostVariableDeclaration, any(newline, lineComment, spacesPlus, eof)), ([v]) => v.value),
 				map(
 					seq(
 						functionDefinition,
