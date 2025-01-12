@@ -110,6 +110,12 @@ export const performParsing = (
 const typeCheck = () => workspace.getConfiguration('tcsi').get('showTypeCheckingErrors') as boolean;
 const explicitReturn = () => workspace.getConfiguration('tcsi').get('warnOnMissingExplicitReturn') as boolean;
 
+if (typeCheck() == null) {
+  try {
+    workspace.getConfiguration('tcsi').update('showTypeCheckingErrors', true);
+  } catch (e) {}
+}
+
 let logging = false;
 
 const logg = (v: string) => logging && log.appendLine(v);
@@ -1001,7 +1007,9 @@ const tryGetReturnType = (environments: Environment[]): string | null => {
   for (let index = environments.length - 1; index >= 0; index--) {
     const env = environments[index];
     if (env.type === 'function') {
-      return env.returnType;
+      if (env.returnType) {
+        return typeStringToTypeToken(env.returnType);
+      } else return null;
     }
   }
   return null;
@@ -1145,7 +1153,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         ));
       }
       logg(`Unary: ${operator?.returnType ?? '?'}`);
-      return operator?.returnType ?? '?';
+      return transformGenericType(operator, [type]);
     }
     case 'binary': {
       const leftType = getType(rValue.left, document, environments, diagnostics);
@@ -1161,7 +1169,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         ));
       }
       logg(`Binary: ${operator?.returnType ?? '?'}`);
-      return operator?.returnType ?? '?';
+      return transformGenericType(operator, [leftType, rightType]);
     }
     case 'ternary': {
       const conditionType = getType(rValue.condition, document, environments, diagnostics);
@@ -1222,7 +1230,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         }
       });
       logg(`Dot Method: ${dotFunction?.returnType ?? '?'}`);
-      return dotFunction?.returnType ?? '?';
+      return transformGenericType(dotFunction, paramTypes);
     }
     case 'function': {
       const paramTypes = rValue.parameters.map(param => getType(param, document, environments, diagnostics));
@@ -1264,7 +1272,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         }
       });
       logg(`Def Method: ${func?.returnType ?? '?'}`);
-      return func?.returnType ?? '?';
+      return transformGenericType(func, paramTypes);
     }
     case 'cast': {
       // Should I do anything with the inner type?
@@ -1346,6 +1354,35 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       return afterIndexType ?? '?';
     }
   }
+}
+
+const transformGenericType = (func: EnvironmentOperator | EnvironmentFunction | null, types: string[]): string => {
+  if (!func?.returnType) return '?';
+  if (!func.returnType.includes('@')) return func.returnType;
+  for (let index = 0; index < func.parameterTypes.length; index++) {
+    const matchCount = howBaseTypeMatches(func.parameterTypes[index], func.returnType);
+    if (matchCount == null) continue;
+    if (matchCount == 0) return types[index];
+    if (matchCount > 0) {
+      return '*'.repeat(matchCount) + types[index];
+    } else {
+      return types[index].slice(-matchCount);
+    }
+  }
+  return '?';
+}
+
+const howBaseTypeMatches = (t1: string, t2: string): number | null => {
+  if (t1 === t2) return 0;
+  if (t1.startsWith('*')) {
+    const r = howBaseTypeMatches(t1.slice(1), t2);
+    return r != null ? (r - 1) : r;
+  }
+  if (t2.startsWith('*')) {
+    const r = howBaseTypeMatches(t1, t2.slice(1));
+    return r != null ? (r + 1) : r;
+  }
+  return null;
 }
 
 const getAfterIndexType = (type: string, environments: Environment[]): string | null => {

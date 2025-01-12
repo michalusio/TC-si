@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.4.1]
+
+- Added a few missing operations to integers and arrays
+- Fixed generic type inference for functions and operations
+- Probable fix to missing type-checking setting
+
 ## [0.4.0]
 
 - Added type-checking on most things (toggleable by an option, on by default)
