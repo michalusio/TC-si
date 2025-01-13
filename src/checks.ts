@@ -424,6 +424,7 @@ export const checkVariableExistence = (
       }
       case 'return': {
         if (scope.value.value) {
+          log.appendLine(JSON.stringify(scope.value.value, null, 3))
           diagnostics.push(...processRValue(document, environments, scope.value.value));
           const varType = getType(scope.value as Token<RValue>, document, environments, diagnostics);
           const funcType = tryGetReturnType(environments);
@@ -765,7 +766,6 @@ export const checkVariableExistence = (
         break;
       }
       case 'type-definition': {
-        
         break;
       }
       default: {
@@ -881,6 +881,14 @@ const processRValue = (
         });
       }
       break;
+    }
+    case "parenthesis": {
+      results.push(...processRValue(document, environments, rValue.value.value));
+      break;
+    }
+    default: {
+      const x: never = rValue;
+      throw x;
     }
   }
   return results;
@@ -1140,6 +1148,11 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
     case 'interpolated':
       logg(`String: String`);
       return 'String';
+    case 'parenthesis': {
+      const type = getType(rValue.value, document, environments, diagnostics);
+      logg(`Parenthesis: ${type}`);
+      return type;
+    }
     case 'unary': {
       const type = getType(rValue.value, document, environments, diagnostics);
       const operator = tryGetUnaryOperator(environments, rValue.operator, [type]);
@@ -1352,6 +1365,10 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       }
       logg(`Index: ${afterIndexType ?? '?'}`);
       return afterIndexType ?? '?';
+    }
+    default: {
+      const x: never = rValue;
+      throw x;
     }
   }
 }

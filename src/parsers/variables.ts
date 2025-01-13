@@ -1,6 +1,6 @@
 import { any, between, exhaust, expect, intP, many, map, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
 import { lab, rab, lbr, variableName, typeDefinition, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators } from "./base";
-import { ArrayRValue, BinaryRValue, CastedRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./rvalue";
+import { ArrayRValue, BinaryRValue, CastedRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./rvalue";
 import { recoverByAddingChars, rstr, token } from "./utils";
 import { Token, VariableDeclaration, VariableModification } from "./ast";
 import { log, precedence } from "../storage";
@@ -185,11 +185,14 @@ const unaryRValue = map(seq(
     }
 });
 
-const parenthesisedRValue = between(
+const parenthesisedRValue = map(between(
     seq(lpr, spaces),
-    map(rValue(), r => r.value),
+    rValue(),
     seq(spaces, rstr(')'))
-);
+), (value) => (<ParenthesisedRValue>{
+    type: 'parenthesis',
+    value
+}));
 
 export function rValue(): Parser<Token<RValue>> {
     return (ctx) => map(

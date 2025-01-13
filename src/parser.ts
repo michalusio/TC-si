@@ -100,7 +100,7 @@ function statementsBlock(): Parser<StatementsBlock> {
 										statementsBlock(),
 										wspaces,
 										rstr('}'),
-										any(newline, lineComment, spacesPlus, lookaround(str('}')))
+										any(newline, lineComment, lookaround(seq(spaces, str('}'))))
 									),
 									([definition, _, statements]) => (<FunctionDeclaration>{
 										type: 'function-declaration',
@@ -108,9 +108,9 @@ function statementsBlock(): Parser<StatementsBlock> {
 										statements
 									})
 								),
-								map(seq(variableDeclaration, any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v.value),
-								map(seq(variableModification, any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v.value),
-								map(seq(rValue(), any(newline, lineComment, spacesPlus, lookaround(str('}')))), ([v]) => v.value)
+								map(seq(variableDeclaration, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
+								map(seq(variableModification, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
+								map(seq(rValue(), any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value)
 							),
 							(s) => typeof s === 'string' ? null : s
 						),
