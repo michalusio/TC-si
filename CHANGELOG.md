@@ -1,5 +1,14 @@
 # Change Log
 
+## [0.4.3]
+
+- Better handling of liquid numeric constants
+- Named the source of the diagnostic errors and warnings
+- Added operators for various integer types
+- Added `_size` built-in function
+- Improved cross-integer-type matching mechanics
+- The extension now remembers diagnostics for previously-opened files
+
 ## [0.4.2]
 
 - Fixed parsing order for operators-between-ternaries scenario

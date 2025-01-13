@@ -120,51 +120,64 @@ export const precedence: Record<ParseReturnType<typeof binaryOperator>, number> 
 	'asr': 7
 }
 
-const arr = getArrayType.bind(null, [baseEnvironment]);
-
 const testResultType = addType('TestResult', '<pass, fail, win>');
 const anyType = addType('@', 'Any type');
-addBinary('+', 'Concatenates two arrays together', arr(anyType), [arr(anyType), arr(anyType)]);
 const boolType = addType('Bool', 'A boolean value');
+const intType = addType('Int', 'A type allowing any integer to be passed in');
+const stringType = addType('String', 'A string type');
+const addIntOperations = (iType: string) => {
+	addUnary('~', 'Inverts the bits of the integer', iType, iType);
+	addUnary('-', 'Negates the integer', iType, iType);
+	addBinary('+', 'Adds two integers together', iType, [iType, iType]);
+	addBinary('-', 'Subtracts two integers together', iType, [iType, iType]);
+	addBinary('*', 'Multiplies two integers together', iType, [iType, iType]);
+	addBinary('/', 'Divides two integers together', iType, [iType, iType]);
+	addBinary('%', 'Calculates the modulo of the first integer by the second one', iType, [iType, iType]);
+	addBinary('&', 'ANDs bits of two integers together', iType, [iType, iType]);
+	addBinary('|', 'ORs bits of two integers together', iType, [iType, iType]);
+	addBinary('^', 'XORs bits of two integers together', iType, [iType, iType]);
+	addBinary('>', 'Checks if the first integer is larger than the second', boolType, [iType, iType]);
+	addBinary('>>', 'Shifts the first integer right by the second integers value', iType, [iType, iType]);
+	addBinary('<', 'Checks if the first integer is smaller than the second', boolType, [iType, iType]);
+	addBinary('<s', 'Checks if the first integer is smaller (signed) than the second', boolType, [iType, iType]);
+	addBinary('<u', 'Checks if the first integer is smaller (unsigned) than the second', boolType, [iType, iType]);
+	addBinary('<<', 'Shifts the first integer left by the second integers value', iType, [iType, iType]);
+	addBinary('rol', 'Rotates the first integer left by the second integers value', iType, [iType, iType]);
+	addBinary('ror', 'Rotates the first integer right by the second integers value', iType, [iType, iType]);
+	addBinary('asr', 'Arithmetically shifts the first integer right by the second integers value', iType, [iType, iType]);
+	addBinary('>=', 'Checks if the first integer is larger or equal to the second', boolType, [iType, iType]);
+	addBinary('<=', 'Checks if the first integer is smaller or equal to the second', boolType, [iType, iType]);
+	addBinary('!=', 'Checks if the first integer is not equal to the second', boolType, [iType, iType]);
+	addBinary('==', 'Checks if the first integer is equal to the second', boolType, [iType, iType]);
+}
+
+const arr = getArrayType.bind(null, [baseEnvironment]);
+
+addBinary('+', 'Concatenates two arrays together', arr(anyType), [arr(anyType), arr(anyType)]);
+
 addUnary('!', 'Negates the boolean', boolType, boolType);
 addBinary('||', 'ORs two booleans', boolType, [boolType, boolType]);
 addBinary('&&', 'ANDs two booleans', boolType, [boolType, boolType]);
 addBinary('==', 'Checks if the first boolean is equal to the second', boolType, [boolType, boolType]);
 addBinary('!=', 'Checks if the first boolean is not equal to the second', boolType, [boolType, boolType]);
-const intType = addType('Int', 'A type allowing any integer to be passed in');
-addUnary('~', 'Inverts the bits of the integer', intType, intType);
-addUnary('-', 'Negates the integer', intType, intType);
-addBinary('+', 'Adds two integers together', intType, [intType, intType]);
-addBinary('-', 'Subtracts two integers together', intType, [intType, intType]);
-addBinary('*', 'Multiplies two integers together', intType, [intType, intType]);
-addBinary('/', 'Divides two integers together', intType, [intType, intType]);
-addBinary('%', 'Calculates the modulo of the first integer by the second one', intType, [intType, intType]);
-addBinary('&', 'ANDs bits of two integers together', intType, [intType, intType]);
-addBinary('|', 'ORs bits of two integers together', intType, [intType, intType]);
-addBinary('^', 'XORs bits of two integers together', intType, [intType, intType]);
-addBinary('>', 'Checks if the first integer is larger than the second', boolType, [intType, intType]);
-addBinary('>>', 'Shifts the first integer right by the second integers value', intType, [intType, intType]);
-addBinary('<', 'Checks if the first integer is smaller than the second', boolType, [intType, intType]);
-addBinary('<s', 'Checks if the first integer is smaller (signed) than the second', boolType, [intType, intType]);
-addBinary('<u', 'Checks if the first integer is smaller (unsigned) than the second', boolType, [intType, intType]);
-addBinary('<<', 'Shifts the first integer left by the second integers value', intType, [intType, intType]);
-addBinary('rol', 'Rotates the first integer left by the second integers value', intType, [intType, intType]);
-addBinary('ror', 'Rotates the first integer right by the second integers value', intType, [intType, intType]);
-addBinary('asr', 'Arithmetically shifts the first integer right by the second integers value', intType, [intType, intType]);
-addBinary('>=', 'Checks if the first integer is larger or equal to the second', boolType, [intType, intType]);
-addBinary('<=', 'Checks if the first integer is smaller or equal to the second', boolType, [intType, intType]);
-addBinary('!=', 'Checks if the first integer is not equal to the second', boolType, [intType, intType]);
-addBinary('==', 'Checks if the first integer is equal to the second', boolType, [intType, intType]);
-const stringType = addType('String', 'A string type');
-addBinary('+', 'Adds two strings together', stringType, [stringType, stringType]);
-const seedType = addType('Seed', 'A type used for seeding the random generator');
-addType('SInt', 'A type allowing any signed integer to be passed in');
-addType('UInt', 'A type allowing any unsigned integer to be passed in');
-for (let width = 1; width <= 2048; width++) {
-	addType('S' + width, `A signed integer of width ${width}`);
-	addType('U' + width, `An unsigned integer of width ${width}`);
-}
 
+addBinary('+', 'Adds two strings together', stringType, [stringType, stringType]);
+
+const seedType = addType('Seed', 'A type used for seeding the random generator');
+const sintType = addType('SInt', 'A type allowing any signed integer to be passed in');
+const uintType = addType('UInt', 'A type allowing any unsigned integer to be passed in');
+for (let width = 1; width <= 2048; width++) {
+	const s = addType('S' + width, `A signed integer of width ${width}`);
+	addIntOperations(s);
+
+	const u = addType('U' + width, `An unsigned integer of width ${width}`);
+	addIntOperations(u);
+}
+addIntOperations(sintType);
+addIntOperations(uintType);
+addIntOperations(intType);
+
+addDef('_size', 						'pub def _size(data: @Any) Int {', intType, [anyType]);
 addDef('array', 						'pub def array(length: Int, value: @Any) [@Any] {', arr(anyType), [intType, anyType]);
 addDef('random', 						'pub def random(max: Int) Int {', intType, [intType]);
 addDef('min', 							'pub def min(a: Int, b: Int) Int {', intType, [intType, intType]);

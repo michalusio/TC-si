@@ -1,10 +1,9 @@
-import { Diagnostic, DiagnosticSeverity, Range, TextDocument } from "vscode";
+import { DiagnosticSeverity, Range, TextDocument } from "vscode";
 import { getRecoveryIssues } from "./parsers/base";
-import { diagnostics, log, tokensData } from "./storage";
+import { log, tokensData } from "./storage";
 import { languageParser } from "./parser";
 import { isFailure, ParseError, Parser } from "parser-combinators";
 import {
-  FunctionDeclaration,
   FunctionKind,
   OperatorKind,
   ParserOutput,
@@ -16,6 +15,7 @@ import {
   VariableKind,
   VariableName,
 } from "./parsers/ast";
+import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { IndexRValue, RValue } from "./parsers/rvalue";
 import { workspace } from 'vscode';
 
@@ -48,9 +48,9 @@ const useParser = <T>(
 
 export const performParsing = (
   document: TextDocument
-): [ParserOutput | null, Diagnostic[]] => {
+): [ParserOutput | null, SimplexDiagnostic[]] => {
   const fullText = document.getText();
-  const diags: Diagnostic[] = [];
+  const diags: SimplexDiagnostic[] = [];
   const startTime = Date.now();
 
   let parseResult: ParserOutput | null = null;
@@ -60,7 +60,7 @@ export const performParsing = (
     if (p instanceof ParseError) {
       const position = document.positionAt(p.index);
       diags.push(
-        new Diagnostic(
+        new SimplexDiagnostic(
           document.getWordRangeAtPosition(position) ??
             new Range(position, position),
           p.message,
@@ -76,7 +76,7 @@ export const performParsing = (
   for (const issue of issues) {
     if (issue.type === "skipped") {
       diags.push(
-        new Diagnostic(
+        new SimplexDiagnostic(
           new Range(
             document.positionAt(issue.index),
             document.positionAt(issue.index + issue.text.length)
@@ -89,7 +89,7 @@ export const performParsing = (
       );
     } else {
       diags.push(
-        new Diagnostic(
+        new SimplexDiagnostic(
           new Range(
             document.positionAt(issue.index),
             document.positionAt(issue.index)
@@ -213,14 +213,14 @@ export const checkVariableExistence = (
   document: TextDocument,
   result: Statement[],
   environments: Environment[],
-  diagnostics: Diagnostic[]
+  diagnostics: SimplexDiagnostic[]
 ) => {
   result.forEach(scope => {
     switch (scope.type) {
       case 'type-definition': {
         const kind = tryGetType(environments, scope.name.value);
           if (kind !== null) {
-            diagnostics.push(new Diagnostic(
+            diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(scope.name.start),
                 document.positionAt(scope.name.end)
@@ -256,7 +256,7 @@ export const checkVariableExistence = (
             ? tryGetDefFunction(environments, scope.definition.name.value, paramTypes)
             : tryGetDotFunction(environments, scope.definition.name.value, paramTypes);
           if (kind !== null) {
-            diagnostics.push(new Diagnostic(
+            diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(scope.definition.name.start),
                 document.positionAt(scope.definition.name.end)
@@ -291,7 +291,7 @@ export const checkVariableExistence = (
             ? tryGetBinaryOperator(environments, scope.definition.name.value, paramTypes)
             : tryGetUnaryOperator(environments, scope.definition.name.value, paramTypes);
           if (kind !== null) {
-            diagnostics.push(new Diagnostic(
+            diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(scope.definition.name.start),
                 document.positionAt(scope.definition.name.end)
@@ -329,7 +329,7 @@ export const checkVariableExistence = (
         diagnostics.push(...processRValue(document, environments, scope.value.value));
         const variable = tryGetVariable(true, environments, scope.name.value.name);
         if (variable !== null) {
-          diagnostics.push(new Diagnostic(
+          diagnostics.push(new SimplexDiagnostic(
             new Range(
               document.positionAt(scope.name.start),
               document.positionAt(scope.name.end)
@@ -366,13 +366,15 @@ export const checkVariableExistence = (
         const left = getType(scope.name, document, environments, diagnostics);
         const right = getType(scope.value, document, environments, diagnostics);
         if (typeCheck() && left !== right) {
-          diagnostics.push(new Diagnostic(
-            new Range(
-              document.positionAt(scope.value.start),
-              document.positionAt(scope.value.end)
-            ),
-            `Cannot assign a value of type ${typeTokenToTypeString(right)} to a variable of type ${typeTokenToTypeString(left)}`
-          ));
+          if (!isIntegerType(left) || scope.value.value.type !== 'number') {
+            diagnostics.push(new SimplexDiagnostic(
+              new Range(
+                document.positionAt(scope.value.start),
+                document.positionAt(scope.value.end)
+              ),
+              `Cannot assign a value of type ${typeTokenToTypeString(right)} to a variable of type ${typeTokenToTypeString(left)}`
+            ));
+          }
         }
         if (scope.name.value.type === 'variable') {
           const variable = tryGetVariable(!scope.name.value.value.value.front.includes('.'), environments, scope.name.value.value.value.name);
@@ -380,7 +382,7 @@ export const checkVariableExistence = (
             const variableSecondTry = tryGetVariable(false, environments, scope.name.value.value.value.name);
             if (variableSecondTry != null) {
               return [
-                new Diagnostic(
+                new SimplexDiagnostic(
                   new Range(
                     document.positionAt(scope.name.start),
                     document.positionAt(scope.name.end)
@@ -390,7 +392,7 @@ export const checkVariableExistence = (
               ];
             } else {
               return [
-                new Diagnostic(
+                new SimplexDiagnostic(
                   new Range(
                     document.positionAt(scope.name.start),
                     document.positionAt(scope.name.end)
@@ -406,7 +408,7 @@ export const checkVariableExistence = (
               info: {}
             });
             if (variable.kind !== "var") {
-              diagnostics.push(new Diagnostic(
+              diagnostics.push(new SimplexDiagnostic(
                 new Range(
                   document.positionAt(scope.name.start),
                   document.positionAt(scope.name.end)
@@ -428,7 +430,7 @@ export const checkVariableExistence = (
           const varType = getType(scope.value as Token<RValue>, document, environments, diagnostics);
           const funcType = tryGetReturnType(environments);
           if (typeCheck() && varType !== funcType) {
-            diagnostics.push(new Diagnostic(
+            diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(scope.value.start),
                 document.positionAt(scope.value.end)
@@ -468,19 +470,18 @@ export const checkVariableExistence = (
         if (scope.definition.type === 'function') {
           if (scope.definition.kind === 'dot') {
             if (scope.definition.parameters.length === 0) {
-              diagnostics.push(new Diagnostic(
+              diagnostics.push(new SimplexDiagnostic(
                 new Range(
                   document.positionAt(scope.definition.name.end),
                   document.positionAt(scope.definition.returnType.start)
                 ),
-                `Dot function should have at least one parameter`,
-                DiagnosticSeverity.Error
+                `Dot function should have at least one parameter`
               ));
             }
           }
           if (explicitReturn() && scope.definition.returnType.value) {
             if (!doesReturn(document, scope.statements, diagnostics)) {
-              diagnostics.push(new Diagnostic(
+              diagnostics.push(new SimplexDiagnostic(
                 new Range(
                   document.positionAt(scope.definition.returnType.start),
                   document.positionAt(scope.definition.returnType.end)
@@ -494,80 +495,73 @@ export const checkVariableExistence = (
           if (scope.definition.kind === 'binary') {
             if (scope.definition.parameters.length > 2) {
               scope.definition.parameters.slice(2).forEach(param => {
-                diagnostics.push(new Diagnostic(
+                diagnostics.push(new SimplexDiagnostic(
                   new Range(
                     document.positionAt(param.name.start),
                     document.positionAt(param.type.end)
                   ),
-                  `Binary operators should have two parameters`,
-                  DiagnosticSeverity.Error
+                  `Binary operators should have two parameters`
                 ));
               });
             } else if (scope.definition.parameters.length < 2) {
-              diagnostics.push(new Diagnostic(
+              diagnostics.push(new SimplexDiagnostic(
                 new Range(
                   document.positionAt(scope.definition.name.end),
                   document.positionAt(scope.definition.returnType.start)
                 ),
-                `Binary operators should have two parameters`,
-                DiagnosticSeverity.Error
+                `Binary operators should have two parameters`
               ));
             }
           } else {
             if (scope.definition.parameters.length > 1) {
               scope.definition.parameters.slice(1).forEach(param => {
-                diagnostics.push(new Diagnostic(
+                diagnostics.push(new SimplexDiagnostic(
                   new Range(
                     document.positionAt(param.name.start),
                     document.positionAt(param.type.end)
                   ),
-                  `Unary operators should have one parameter`,
-                  DiagnosticSeverity.Error
+                  `Unary operators should have one parameter`
                 ));
               });
             } else if (scope.definition.parameters.length < 1) {
-              diagnostics.push(new Diagnostic(
+              diagnostics.push(new SimplexDiagnostic(
                 new Range(
                   document.positionAt(scope.definition.name.end),
                   document.positionAt(scope.definition.returnType.start)
                 ),
-                `Unary operators should have one parameter`,
-                DiagnosticSeverity.Error
+                `Unary operators should have one parameter`
               ));
             }
           }
           if (!scope.definition.name.value.startsWith('=') && scope.definition.name.value.endsWith('=')) {
             if (scope.definition.returnType.value) {
-              diagnostics.push(new Diagnostic(
+              diagnostics.push(new SimplexDiagnostic(
                 new Range(
                   document.positionAt(scope.definition.returnType.start),
                   document.positionAt(scope.definition.returnType.end)
                 ),
-                `Assignment operators should not return anything`,
-                DiagnosticSeverity.Error
+                `Assignment operators should not return anything`
               ));
             }
             if (scope.definition.parameters.length > 0) {
               if (scope.definition.parameters[0].name.value.front !== '$') {
-                diagnostics.push(new Diagnostic(
+                diagnostics.push(new SimplexDiagnostic(
                   new Range(
                     document.positionAt(scope.definition.parameters[0].name.start),
                     document.positionAt(scope.definition.parameters[0].name.end)
                   ),
-                  `The first parameter of an assignment operator should be mutable`,
-                  DiagnosticSeverity.Error
+                  `The first parameter of an assignment operator should be mutable`
                 ));
               }
             }
           } else {
             if (!scope.definition.returnType.value) {
-              diagnostics.push(new Diagnostic(
+              diagnostics.push(new SimplexDiagnostic(
                 new Range(
                   document.positionAt(scope.definition.returnType.start),
                   document.positionAt(scope.definition.returnType.end)
                 ),
-                `Missing return type`,
-                DiagnosticSeverity.Error
+                `Missing return type`
               ));
             }
           }
@@ -585,7 +579,7 @@ export const checkVariableExistence = (
           const variableName = parameter.name.value;
           const varType = checkType(parameter.type, document, environments, diagnostics);
           if (typeCheck() && !varType) {
-            diagnostics.push(new Diagnostic(
+            diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(parameter.type.start),
                 document.positionAt(parameter.type.end)
@@ -656,7 +650,7 @@ export const checkVariableExistence = (
         );
         const varType = getType(scope.value, document, environments, diagnostics);
         if (typeCheck() && varType !== 'Bool') {
-          diagnostics.push(new Diagnostic(
+          diagnostics.push(new SimplexDiagnostic(
             new Range(
               document.positionAt(scope.value.start),
               document.positionAt(scope.value.end)
@@ -684,7 +678,7 @@ export const checkVariableExistence = (
           );
           const varType = getType(elif.value, document, environments, diagnostics);
           if (typeCheck() && varType !== 'Bool') {
-            diagnostics.push(new Diagnostic(
+            diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(scope.value.start),
                 document.positionAt(scope.value.end)
@@ -754,7 +748,7 @@ export const checkVariableExistence = (
         );
         const varType = getType(scope.value, document, environments, diagnostics);
         if (typeCheck() && varType !== 'Bool') {
-          diagnostics.push(new Diagnostic(
+          diagnostics.push(new SimplexDiagnostic(
             new Range(
               document.positionAt(scope.value.start),
               document.positionAt(scope.value.end)
@@ -779,8 +773,8 @@ const processRValue = (
   document: TextDocument,
   environments: Environment[],
   rValue: RValue
-): Diagnostic[] => {
-  const results: Diagnostic[] = [];
+): SimplexDiagnostic[] => {
+  const results: SimplexDiagnostic[] = [];
   switch (rValue.type) {
     case 'number':
     case 'string': {
@@ -839,7 +833,7 @@ const processRValue = (
       );
       if (kind === null) {
         results.push(
-          new Diagnostic(
+          new SimplexDiagnostic(
             new Range(
               document.positionAt(rValue.value.start),
               document.positionAt(rValue.value.end)
@@ -1042,7 +1036,7 @@ export const getArrayType = (environments: Environment[], typeName: string): str
   return arrayTypeName;
 }
 
-const checkVariable = (nameToken: Token<VariableName>, document: TextDocument, environments: Environment[]) : Diagnostic[] => {
+const checkVariable = (nameToken: Token<VariableName>, document: TextDocument, environments: Environment[]) : SimplexDiagnostic[] => {
   const kind = tryGetVariable(
     !nameToken.value.front.includes('.'),
     environments,
@@ -1052,7 +1046,7 @@ const checkVariable = (nameToken: Token<VariableName>, document: TextDocument, e
     const secondKind = tryGetVariable(false, environments, nameToken.value.name);
     if (secondKind != null) {
       return [
-        new Diagnostic(
+        new SimplexDiagnostic(
           new Range(
             document.positionAt(nameToken.start),
             document.positionAt(nameToken.end)
@@ -1062,7 +1056,7 @@ const checkVariable = (nameToken: Token<VariableName>, document: TextDocument, e
       ];
     } else {
       return [
-        new Diagnostic(
+        new SimplexDiagnostic(
           new Range(
             document.positionAt(nameToken.start),
             document.positionAt(nameToken.end)
@@ -1083,12 +1077,12 @@ const checkVariable = (nameToken: Token<VariableName>, document: TextDocument, e
   return [];
 }
 
-const checkType = (typeToken: Token<string | null>, document: TextDocument, environments: Environment[], diagnostics: Diagnostic[]): string | null => {
+const checkType = (typeToken: Token<string | null>, document: TextDocument, environments: Environment[], diagnostics: SimplexDiagnostic[]): string | null => {
   if (!typeToken.value) return null;
   const typeName = typeStringToTypeToken(typeToken.value);
   const envType = tryGetType(environments, typeName);
   if (!envType) {
-    diagnostics.push(new Diagnostic(
+    diagnostics.push(new SimplexDiagnostic(
       new Range(
         document.positionAt(typeToken.start),
         document.positionAt(typeToken.end)
@@ -1099,7 +1093,7 @@ const checkType = (typeToken: Token<string | null>, document: TextDocument, envi
   return typeName;
 }
 
-const doesReturn = (document: TextDocument, statements: StatementsBlock, diagnostics: Diagnostic[]): boolean => {
+const doesReturn = (document: TextDocument, statements: StatementsBlock, diagnostics: SimplexDiagnostic[]): boolean => {
   for (let index = statements.length - 1; index >= 0; index--) {
     const statement = statements[index];
     switch (statement.type) {
@@ -1107,7 +1101,7 @@ const doesReturn = (document: TextDocument, statements: StatementsBlock, diagnos
         if (statement.value.value) {
           return true;
         } else {
-          diagnostics.push(new Diagnostic(
+          diagnostics.push(new SimplexDiagnostic(
             new Range(
               document.positionAt(statement.value.start),
               document.positionAt(statement.value.end)
@@ -1137,7 +1131,7 @@ const doesReturn = (document: TextDocument, statements: StatementsBlock, diagnos
   return false;
 }
 
-const getType = (value: Token<RValue>, document: TextDocument, environments: Environment[], diagnostics: Diagnostic[]): string => {
+const getType = (value: Token<RValue>, document: TextDocument, environments: Environment[], diagnostics: SimplexDiagnostic[]): string => {
   const rValue = value.value;
   switch (rValue.type) {
     case 'number':
@@ -1156,7 +1150,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       const type = getType(rValue.value, document, environments, diagnostics);
       const operator = tryGetUnaryOperator(environments, rValue.operator, [type]);
       if (typeCheck() && !operator) {
-        diagnostics.push(new Diagnostic(
+        diagnostics.push(new SimplexDiagnostic(
           new Range(
             document.positionAt(rValue.value.start - 1),
             document.positionAt(rValue.value.start)
@@ -1170,9 +1164,15 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
     case 'binary': {
       const leftType = getType(rValue.left, document, environments, diagnostics);
       const rightType = getType(rValue.right, document, environments, diagnostics);
-      const operator = tryGetBinaryOperator(environments, rValue.operator, [leftType, rightType]);
+      let operator = tryGetBinaryOperator(environments, rValue.operator, [leftType, rightType]);
+      if (!operator && isIntegerType(leftType) && rValue.right.value.type === 'number') {
+        operator = tryGetBinaryOperator(environments, rValue.operator, [leftType, leftType]);
+      }
+      if (!operator && isIntegerType(rightType) && rValue.left.value.type === 'number') {
+        operator = tryGetBinaryOperator(environments, rValue.operator, [rightType, rightType]);
+      }
       if (typeCheck() && !operator) {
-        diagnostics.push(new Diagnostic(
+        diagnostics.push(new SimplexDiagnostic(
           new Range(
             document.positionAt(rValue.left.end),
             document.positionAt(rValue.right.start)
@@ -1188,7 +1188,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       const ifTrueType = getType(rValue.ifTrue, document, environments, diagnostics);
       const ifFalseType = getType(rValue.ifFalse, document, environments, diagnostics);
       if (typeCheck() && conditionType !== 'Bool') {
-        diagnostics.push(new Diagnostic(
+        diagnostics.push(new SimplexDiagnostic(
           new Range(
             document.positionAt(rValue.condition.start),
             document.positionAt(rValue.condition.end)
@@ -1197,7 +1197,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         ));
       }
       if (typeCheck() && ifTrueType !== ifFalseType) {
-        diagnostics.push(new Diagnostic(
+        diagnostics.push(new SimplexDiagnostic(
           new Range(
             document.positionAt(rValue.ifFalse.start),
             document.positionAt(rValue.ifFalse.end)
@@ -1221,7 +1221,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           : rValue.parameters[index - 1];
         if (!actualType) {
           if (typeCheck()) {
-            diagnostics.push(new Diagnostic(
+            diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(pos.start),
                 document.positionAt(pos.end)
@@ -1231,7 +1231,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
         } else {
           if (typeCheck() && !doesTypeMatch(actualType, type)) {
-            diagnostics.push(new Diagnostic(
+            diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(pos.start),
                 document.positionAt(pos.end)
@@ -1249,7 +1249,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       const func = tryGetDefFunction(environments, rValue.value.value, paramTypes);
       if (typeCheck() && !func) {
         diagnostics.push(
-          new Diagnostic(
+          new SimplexDiagnostic(
             new Range(
               document.positionAt(rValue.value.start),
               document.positionAt(rValue.value.end)
@@ -1263,7 +1263,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         const pos = rValue.parameters[index];
         if (!actualType) {
           if (typeCheck()) {
-            diagnostics.push(new Diagnostic(
+            diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(pos.start),
                 document.positionAt(pos.end)
@@ -1273,7 +1273,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
         } else {
           if (typeCheck() && !doesTypeMatch(actualType, type)) {
-            diagnostics.push(new Diagnostic(
+            diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(pos.start),
                 document.positionAt(pos.end)
@@ -1296,7 +1296,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       const valuesTypes = rValue.values.map(v => [v, getType(v, document, environments, diagnostics)] as const);
       const type = valuesTypes[0];
       if (typeCheck() && !type) {
-        diagnostics.push(new Diagnostic(
+        diagnostics.push(new SimplexDiagnostic(
           new Range(
             document.positionAt(value.start),
             document.positionAt(value.end)
@@ -1308,7 +1308,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       if (valuesTypes.some(([token, t]) => {
           if (t !== typeName) {
             if (typeCheck()) {
-              diagnostics.push(new Diagnostic(
+              diagnostics.push(new SimplexDiagnostic(
                 new Range(
                   document.positionAt(token.start),
                   document.positionAt(token.end)
@@ -1329,7 +1329,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
     case 'variable': {
       const variableData = tryGetVariable(false, environments, rValue.value.value.name);
       if (typeCheck() && (!variableData?.varType || variableData.varType.endsWith('?'))) {
-        diagnostics.push(new Diagnostic(
+        diagnostics.push(new SimplexDiagnostic(
           new Range(
             document.positionAt(rValue.value.start),
             document.positionAt(rValue.value.end)
@@ -1344,7 +1344,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       const parameterType = getType(rValue.parameter, document, environments, diagnostics);
       const variableType = getType(rValue.value, document, environments, diagnostics);
       if (typeCheck() && !isIntegerType(parameterType)) {
-        diagnostics.push(new Diagnostic(
+        diagnostics.push(new SimplexDiagnostic(
           new Range(
             document.positionAt(rValue.parameter.start),
             document.positionAt(rValue.parameter.end)
@@ -1354,7 +1354,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       }
       const afterIndexType = getAfterIndexType(variableType, environments);
       if (typeCheck() && !afterIndexType) {
-        diagnostics.push(new Diagnostic(
+        diagnostics.push(new SimplexDiagnostic(
           new Range(
             document.positionAt(rValue.value.start),
             document.positionAt(rValue.value.end)
@@ -1410,15 +1410,15 @@ const getAfterIndexType = (type: string, environments: Environment[]): string | 
 }
 
 const isIntegerType = (type: string): boolean => {
-  return isUnsignedIntegerType(type) || isSignedIntegerType(type);
+  return type === 'Int' || isUnsignedIntegerType(type) || isSignedIntegerType(type);
 }
 
 const isUnsignedIntegerType = (type: string): boolean => {
-  return ['Int', 'UInt'].includes(type) || /^U\d+$/.test(type);
+  return type === 'UInt' || /^U\d+$/.test(type);
 }
 
 const isSignedIntegerType = (type: string): boolean => {
-  return ['Int', 'SInt'].includes(type) || /^S\d+$/.test(type);
+  return type === 'SInt' || /^S\d+$/.test(type);
 }
 
 const doesArrayTypeMatch = (type: string, toMatch: string): boolean => {
@@ -1429,7 +1429,7 @@ const doesArrayTypeMatch = (type: string, toMatch: string): boolean => {
 const doesTypeMatch = (type: string, toMatch: string): boolean => {
   if (type === toMatch) return true;
   if (toMatch.startsWith('@')) return true;
-  if ((toMatch === 'Int' || toMatch === 'UInt') && isUnsignedIntegerType(type)) {
+  if (toMatch === 'UInt' && isUnsignedIntegerType(type)) {
     return true;
   }
   if ((toMatch === 'Int' || toMatch === 'SInt') && isSignedIntegerType(type)) {
