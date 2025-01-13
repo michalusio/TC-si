@@ -32,6 +32,11 @@ export type NumberRValue = {
     value: number
 }
 
+export type ParenthesisedRValue = {
+    type: 'parenthesis',
+    value: Token<RValue>
+};
+
 export type ArrayRValue = {
     type: 'array',
     values: Token<RValue>[]
@@ -75,4 +80,4 @@ export type TernaryRValue = {
     ifFalse: Token<RValue>
 }
 
-export type RValue = CastedRValue | UnaryRValue | StringRValue | InterpolatedRValue | NumberRValue | ArrayRValue | FunctionRValue | DotMethodRValue | IndexRValue | VariableRValue | BinaryRValue | TernaryRValue;
+export type RValue = ParenthesisedRValue | CastedRValue | UnaryRValue | StringRValue | InterpolatedRValue | NumberRValue | ArrayRValue | FunctionRValue | DotMethodRValue | IndexRValue | VariableRValue | BinaryRValue | TernaryRValue;

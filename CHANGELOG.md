@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.4.2]
+
+- Fixed parsing order for operators-between-ternaries scenario
+- Fixed false positives when parsing inline r-values
+
 ## [0.4.1]
 
 - Added a few missing operations to integers and arrays
