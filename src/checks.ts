@@ -424,6 +424,7 @@ export const checkVariableExistence = (
       }
       case 'return': {
         if (scope.value.value) {
+          log.appendLine(JSON.stringify(scope.value.value, null, 3))
           diagnostics.push(...processRValue(document, environments, scope.value.value));
           const varType = getType(scope.value as Token<RValue>, document, environments, diagnostics);
           const funcType = tryGetReturnType(environments);
