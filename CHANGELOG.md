@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.4.4]
+
+- Added support for enum type declarations
+- Added missing operators for TestResult and String
+- Added deduplication of diagnostic messages
+
 ## [0.4.3]
 
 - Better handling of liquid numeric constants

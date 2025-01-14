@@ -86,6 +86,16 @@ const addType = (name: string, description: string): string => {
 	return name;
 }
 
+export const addEnum = (name: string, description: string, values: string[], boolType?: string): string => {
+	const type = addType(name, description);
+	values.forEach(v => {
+		addConst(v, `A \`${v}\` value of enum ${name}`, type);
+	});
+	addBinary('==', `Checks if the first ${name} value is equal to the second`, boolType ?? type, [type, type]);
+	addBinary('!=', `Checks if the first ${name} value is not equal to the second`, boolType ?? type, [type, type]);
+	return type;
+}
+
 export const baseEnvironment: Environment = {
 	type: 'scope',
 	functions: [],
@@ -120,14 +130,26 @@ export const precedence: Record<ParseReturnType<typeof binaryOperator>, number> 
 	'asr': 7
 }
 
-const testResultType = addType('TestResult', '<pass, fail, win>');
+const boolType = addEnum('Bool', 'A boolean value', ['fail', 'true']);
+addUnary('!', 'Negates the boolean', boolType, boolType);
+addBinary('||', 'ORs two booleans', boolType, [boolType, boolType]);
+addBinary('&&', 'ANDs two booleans', boolType, [boolType, boolType]);
+
+addEnum('TestResult', 'Describes whether the test passes, fails, or wins the level', ['pass', 'fail', 'win'], boolType);
+
 const anyType = addType('@', 'Any type');
-const boolType = addType('Bool', 'A boolean value');
-const intType = addType('Int', 'A type allowing any integer to be passed in');
+
 const stringType = addType('String', 'A string type');
+addBinary('+', 'Adds two strings together', stringType, [stringType, stringType]);
+addBinary('==', 'Checks if the first array is equal to the second', boolType, [stringType, stringType]);
+addBinary('!=', 'Checks if the first array is not equal to the second', boolType, [stringType, stringType]);
+
+const intType = addType('Int', 'A type allowing any integer to be passed in');
+
 const addIntOperations = (iType: string) => {
 	addUnary('~', 'Inverts the bits of the integer', iType, iType);
 	addUnary('-', 'Negates the integer', iType, iType);
+
 	addBinary('+', 'Adds two integers together', iType, [iType, iType]);
 	addBinary('-', 'Subtracts two integers together', iType, [iType, iType]);
 	addBinary('*', 'Multiplies two integers together', iType, [iType, iType]);
@@ -136,34 +158,27 @@ const addIntOperations = (iType: string) => {
 	addBinary('&', 'ANDs bits of two integers together', iType, [iType, iType]);
 	addBinary('|', 'ORs bits of two integers together', iType, [iType, iType]);
 	addBinary('^', 'XORs bits of two integers together', iType, [iType, iType]);
-	addBinary('>', 'Checks if the first integer is larger than the second', boolType, [iType, iType]);
 	addBinary('>>', 'Shifts the first integer right by the second integers value', iType, [iType, iType]);
-	addBinary('<', 'Checks if the first integer is smaller than the second', boolType, [iType, iType]);
-	addBinary('<s', 'Checks if the first integer is smaller (signed) than the second', boolType, [iType, iType]);
-	addBinary('<u', 'Checks if the first integer is smaller (unsigned) than the second', boolType, [iType, iType]);
 	addBinary('<<', 'Shifts the first integer left by the second integers value', iType, [iType, iType]);
 	addBinary('rol', 'Rotates the first integer left by the second integers value', iType, [iType, iType]);
 	addBinary('ror', 'Rotates the first integer right by the second integers value', iType, [iType, iType]);
 	addBinary('asr', 'Arithmetically shifts the first integer right by the second integers value', iType, [iType, iType]);
+	
+	addBinary('>', 'Checks if the first integer is larger than the second', boolType, [iType, iType]);
+	addBinary('<', 'Checks if the first integer is smaller than the second', boolType, [iType, iType]);
+	addBinary('<s', 'Checks if the first integer is smaller (signed) than the second', boolType, [iType, iType]);
+	addBinary('<u', 'Checks if the first integer is smaller (unsigned) than the second', boolType, [iType, iType]);
 	addBinary('>=', 'Checks if the first integer is larger or equal to the second', boolType, [iType, iType]);
 	addBinary('<=', 'Checks if the first integer is smaller or equal to the second', boolType, [iType, iType]);
 	addBinary('!=', 'Checks if the first integer is not equal to the second', boolType, [iType, iType]);
 	addBinary('==', 'Checks if the first integer is equal to the second', boolType, [iType, iType]);
 }
 
-const arr = getArrayType.bind(null, [baseEnvironment]);
-
-addBinary('+', 'Concatenates two arrays together', arr(anyType), [arr(anyType), arr(anyType)]);
-
-addUnary('!', 'Negates the boolean', boolType, boolType);
-addBinary('||', 'ORs two booleans', boolType, [boolType, boolType]);
-addBinary('&&', 'ANDs two booleans', boolType, [boolType, boolType]);
-addBinary('==', 'Checks if the first boolean is equal to the second', boolType, [boolType, boolType]);
-addBinary('!=', 'Checks if the first boolean is not equal to the second', boolType, [boolType, boolType]);
-
-addBinary('+', 'Adds two strings together', stringType, [stringType, stringType]);
-
 const seedType = addType('Seed', 'A type used for seeding the random generator');
+addDef('get_random_seed',				'pub def get_random_seed() Seed {', seedType, []);
+addDef('next',							'pub dot next($s: Seed) Int {', intType, [seedType]);
+addDef('random',						'pub def random(max: Int) Int {', intType, [intType]);
+
 const sintType = addType('SInt', 'A type allowing any signed integer to be passed in');
 const uintType = addType('UInt', 'A type allowing any unsigned integer to be passed in');
 for (let width = 1; width <= 2048; width++) {
@@ -177,6 +192,20 @@ addIntOperations(sintType);
 addIntOperations(uintType);
 addIntOperations(intType);
 
+const arr = getArrayType.bind(null, [baseEnvironment]);
+addDot('find', 							'pub dot find(array: [@Any], value: @Any) Int {', intType, [arr(anyType), anyType]);
+addDot('len', 							'pub dot len(string: String) Int {', intType, [stringType]);
+addDot('len', 							'pub dot len(array: [@Any]) Int {', intType, [arr(anyType)]);
+addDot('contains',						'pub dot contains(array: [@Type], value: @Type) Bool {', boolType, [arr(anyType), anyType]);
+addDot('in',							'pub dot in(value: @Type, array: [@Type]) Bool {', boolType, [anyType, arr(anyType)]);
+addDef('high', 							'pub dot high(a: [@Any]) Int {', intType, [arr(anyType)]);
+addDef('sort',							'pub def sort($arr: [@Any]) {', null, [arr(anyType)]);
+addDef('quick_sort', 					'pub def quick_sort($arr: [@Any]) {', null, [arr(anyType)]);
+addDef('sample',						'pub def sample(array: [@Any]) @Any {', anyType, [arr(anyType)]);
+addBinary('+', 'Concatenates two arrays together', arr(anyType), [arr(anyType), arr(anyType)]);
+addBinary('==', 'Checks if the first array is equal to the second', boolType, [arr(anyType), arr(anyType)]);
+addBinary('!=', 'Checks if the first array is not equal to the second', boolType, [arr(anyType), arr(anyType)]);
+
 addDef('_size', 						'pub def _size(data: @Any) Int {', intType, [anyType]);
 addDef('array', 						'pub def array(length: Int, value: @Any) [@Any] {', arr(anyType), [intType, anyType]);
 addDef('random', 						'pub def random(max: Int) Int {', intType, [intType]);
@@ -186,6 +215,7 @@ addDef('log10', 						'pub def log10(a: Int) Int {', intType, [intType]);
 addDef('int', 							'pub def int(value: String) Int {', intType, [stringType]);
 addDef('str', 							'pub def str(value: @Any) String {', stringType, [anyType]);
 addDef('exit', 							'pub def exit() {', null, []);
+addDef('exit', 							'pub def exit(code: Int) {', null, [intType]);
 addDef('get_tick', 						'pub def get_tick() Int {', intType, []);
 addDef('get_last_time', 				'pub def get_last_time() Int {', intType, []);
 addDef('get_register_value', 			'pub def get_register_value(register: Int) Int {', intType, [intType]);
@@ -216,24 +246,6 @@ addDef('set_value_text', 				'pub def set_value_text(text: String) {', null, [st
 addDef('get_cycle_count', 				'pub def get_cycle_count() Int {', intType, []);
 addDef('get_probe_value', 				'pub def get_probe_value() Int {', intType, []);
 addDef('get_gate_score', 				'pub def get_gate_score() Int {', intType, []);
-addDef('quick_sort', 					'pub def quick_sort($arr: [@Any]) {', null, [arr(anyType)]);
 addDef('print', 						'pub def print(input: @Any) {', null, [anyType]);
 
-addDot('find', 							'pub dot find(array: [@Any], value: @Any) Int {', intType, [arr(anyType), anyType]);
-addDot('len', 							'pub dot len(string: String) Int {', intType, [stringType]);
-addDot('len', 							'pub dot len(array: [@Any]) Int {', intType, [arr(anyType)]);
-addDot('contains',						'pub dot contains(array: [@Type], value: @Type) Bool {', boolType, [arr(anyType), anyType]);
-addDot('in',							'pub dot in(value: @Type, array: [@Type]) Bool {', boolType, [anyType, arr(anyType)]);
-addDef('high', 							'pub dot high(a: [@Any]) Int {', intType, [arr(anyType)]);
-addDef('sort',							'pub def sort($arr: [@Any]) {', null, [arr(anyType)]);
-addDef('get_random_seed',				'pub def get_random_seed() Seed {', seedType, []);
-addDef('next',							'pub dot next($s: Seed) Int {', intType, [seedType]);
-addDef('random',						'pub def random(max: Int) Int {', intType, [intType]);
-addDef('sample',						'pub def sample(array: [@Any]) @Any {', anyType, [arr(anyType)]);
-
-addConst('true', 'A `true` value', boolType);
-addConst('false', 'A `false` value', boolType);
-addConst('pass', 'Returning this value will pass the ongoing level test', testResultType);
-addConst('fail', 'Returning this value will fail the ongoing level test', testResultType);
-addConst('win', 'Returning this value will win the level', testResultType);
 addConst('Z_STATE', 'Constant denoting the `Hi-Z` state of the wire.\n\nEquivalent to `0x8000_0000_0000_0000`.', intType);

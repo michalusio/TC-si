@@ -18,7 +18,7 @@ export type TypeDefinition = {
     type: 'type-definition',
     public: boolean,
     name: Token<string>,
-    definition: Token<string>
+    definition: Token<string> | Token<string[]>
 }
 
 export type VariableName = {

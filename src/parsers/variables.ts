@@ -1,9 +1,9 @@
-import { any, between, exhaust, expect, intP, many, map, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
-import { lab, rab, lbr, variableName, typeDefinition, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators } from "./base";
+import { any, between, exhaust, expect, intP, many, map, opt, Parser, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
+import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators, typeAliasDefinition } from "./base";
 import { ArrayRValue, BinaryRValue, CastedRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./rvalue";
 import { recoverByAddingChars, rstr, token } from "./utils";
 import { Token, VariableDeclaration, VariableModification } from "./ast";
-import { log, precedence } from "../storage";
+import { precedence } from "../storage";
 
 const variableKind = token(any(
     str('const'),
@@ -157,7 +157,7 @@ export const functionCall = map(seq(
 
 const cast = between(
     lab,
-    typeDefinition(),
+    typeAliasDefinition(),
     rab
 );
 

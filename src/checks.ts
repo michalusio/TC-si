@@ -234,6 +234,37 @@ export const checkVariableExistence = (
               type: 'user-defined',
               data: scope
             });
+            if (Array.isArray(scope.definition.value)) {
+              scope.definition.value.forEach(v => {
+                currentEnv.variables.set(v, {
+                    type: 'built-in',
+                    kind: 'const',
+                    data: `A \`${v}\` value of enum ${scope.name.value}`,
+                    varType: scope.name.value
+                  });
+              });
+              currentEnv.operators.push({
+                type: 'built-in',
+                kind: 'binary',
+                name: '==',
+                data: `Checks if the first ${scope.name.value} value is equal to the second`,
+                parameterTypes: [scope.name.value, scope.name.value],
+                returnType: 'Bool'
+              });
+              currentEnv.operators.push({
+                type: 'built-in',
+                kind: 'binary',
+                name: '!=',
+                data: `Checks if the first ${scope.name.value} value is not equal to the second`,
+                parameterTypes: [scope.name.value, scope.name.value],
+                returnType: 'Bool'
+              });
+            } else {
+              currentEnv.types.set(scope.name.value, {
+                type: 'user-defined',
+                data: scope
+              });
+            }
             tokensData.push({
               definition: scope.definition,
               position: scope.name,
@@ -1405,7 +1436,7 @@ const getAfterIndexType = (type: string, environments: Environment[]): string | 
   if (type.startsWith('*')) return type.slice(1);
   if (type === 'String') return 'Char';
   const typeInfo = tryGetType(environments, type);
-  if (!typeInfo || typeInfo.type === 'built-in') return null;
+  if (!typeInfo || typeInfo.type === 'built-in' || Array.isArray(typeInfo.data.definition.value)) return null;
   return getAfterIndexType(typeInfo.data.definition.value, environments);
 }
 

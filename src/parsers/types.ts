@@ -10,7 +10,7 @@ export const typeDeclaration = map(seq(
             spacesPlus,
             typeName,
             spacesPlus,
-            typeDefinition()
+            typeDefinition
         )
     )
 ), ([pub, _, [__, name, ___, definition]]) => (<TypeDefinition>{

@@ -1,5 +1,5 @@
 import { any, between, exhaust, map, opt, seq, spaces, spacesPlus, str, surely } from "parser-combinators";
-import { functionBinaryOperator, functionKind, functionName, lpr, typeDefinition, unaryOperator, variableName } from "./base";
+import { functionBinaryOperator, functionKind, functionName, lpr, typeAliasDefinition, unaryOperator, variableName } from "./base";
 import { FunctionDefinition, Parameter } from "./ast";
 import { recoverByAddingChars, rstr, token } from "./utils";
 
@@ -8,7 +8,7 @@ const parameter = map(seq(
 	spaces,
 	rstr(':'),
 	spaces,
-	recoverByAddingChars('Int', typeDefinition(), true, 'parameter type')
+	recoverByAddingChars('Int', typeAliasDefinition(), true, 'parameter type')
 ), ([name, _, __, ___, type]) => <Parameter>({ name, type }));
 
 const parameterList = between(
@@ -33,7 +33,7 @@ export const functionDeclaration = map(seq(
 				functionName,
 				parameterList,
 				spaces,
-				token(opt(map(typeDefinition(), t => t.value)))
+				token(opt(map(typeAliasDefinition(), t => t.value)))
 			))
 		), ([kind, _, [name, params, __, returnType]]) => {
 			params ??= [];
@@ -55,7 +55,7 @@ export const functionDeclaration = map(seq(
 						opt(spaces),
 						parameterList,
 						spaces,
-						token(opt(map(typeDefinition(), t => t.value)))
+						token(opt(map(typeAliasDefinition(), t => t.value)))
 					))
 				),
 				seq(
@@ -66,7 +66,7 @@ export const functionDeclaration = map(seq(
 						opt(spaces),
 						parameterList,
 						spaces,
-						token(opt(map(typeDefinition(), t => t.value)))
+						token(opt(map(typeAliasDefinition(), t => t.value)))
 					))
 				)
 			)

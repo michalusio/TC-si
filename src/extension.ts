@@ -149,7 +149,15 @@ const hoverProvider: HoverProvider = {
 
 const diagnosticsPerFile: Record<string, Diagnostic[]> = {};
 const deduplicateDiagnostics = (diags: Diagnostic[]): Diagnostic[] => {
-	return diags;
+  const key = (d: Diagnostic) => `${d.message}(${d.range.start.line}:${d.range.start.character},${d.range.end.line}:${d.range.end.character})`;
+  const container: Record<string, Diagnostic> = {};
+  diags.forEach(d => {
+    const k = key(d);
+    if (!(k in container)) {
+      container[k] = d;
+    }
+  })
+	return Object.values(container);
 }
 const tokenProvider: DocumentSemanticTokensProvider = {
   provideDocumentSemanticTokens(document): ProviderResult<SemanticTokens> {
