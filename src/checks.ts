@@ -172,20 +172,37 @@ export type EnvironmentType = {
   data: string;
 }
 
-export type Environment = {
+export type Environment = ({
   type: 'function';
   returnType: string | null;
-  variables: Map<string, EnvironmentVariable>;
-  functions: EnvironmentFunction[];
-  operators: EnvironmentOperator[];
-  types: Map<string, EnvironmentType>;
 } | {
   type: 'scope';
+}) & {
   variables: Map<string, EnvironmentVariable>;
   functions: EnvironmentFunction[];
   operators: EnvironmentOperator[];
   types: Map<string, EnvironmentType>;
+  switchTypes: Map<string, [string, (string | null)[]]>;
 };
+
+const newScope = (): Environment => ({
+  type: 'scope',
+  switchTypes: new Map(),
+  functions: [],
+  operators: [],
+  types: new Map(),
+  variables: new Map()
+});
+
+const newFunction = (returnType: string | null): Environment => ({
+  type: 'function',
+  switchTypes: new Map(),
+  functions: [],
+  operators: [],
+  types: new Map(),
+  variables: new Map(),
+  returnType
+});
 
 export const typeStringToTypeToken = (value: string): string => {
   let numberOfArrays = 0;
@@ -369,7 +386,14 @@ export const checkVariableExistence = (
             DiagnosticSeverity.Warning
           ));
         } else {
-          const varType = getType(scope.value, document, environments, diagnostics);
+          const varType = getType(
+            scope.value,
+            document,
+            scope.kind.value === 'const'
+              ? filterOnlyConst(environments)
+              : environments,
+            diagnostics
+          );
           environments[environments.length - 1]
             .variables
             .set(scope.name.value.name, {
@@ -475,16 +499,7 @@ export const checkVariableExistence = (
         break;
       }
       case 'statements': {
-        const nextEnvironments: Environment[] = [
-          ...environments,
-          {
-            type: 'scope',
-            functions: [],
-            operators: [],
-            types: new Map(),
-            variables: new Map()
-          }
-        ];
+        const nextEnvironments: Environment[] = [...environments, newScope()];
         checkVariableExistence(
           document,
           scope.statements,
@@ -507,18 +522,6 @@ export const checkVariableExistence = (
                   document.positionAt(scope.definition.returnType.start)
                 ),
                 `Dot function should have at least one parameter`
-              ));
-            }
-          }
-          if (explicitReturn() && scope.definition.returnType.value) {
-            if (!doesReturn(document, scope.statements, diagnostics)) {
-              diagnostics.push(new SimplexDiagnostic(
-                new Range(
-                  document.positionAt(scope.definition.returnType.start),
-                  document.positionAt(scope.definition.returnType.end)
-                ),
-                `A function with return type has to return a value`,
-                DiagnosticSeverity.Warning
               ));
             }
           }
@@ -597,14 +600,7 @@ export const checkVariableExistence = (
             }
           }
         }
-        const nextEnvironments: Environment[] = [...environments, {
-          type: 'function',
-          functions: [],
-          operators: [],
-          types: new Map(),
-          variables: new Map(),
-          returnType: scope.definition.returnType.value
-        }];
+        const nextEnvironments: Environment[] = [...environments, newFunction(scope.definition.returnType.value)];
         scope.definition.parameters.forEach((parameter) => {
           const env = nextEnvironments[nextEnvironments.length - 1];
           const variableName = parameter.name.value;
@@ -662,17 +658,23 @@ export const checkVariableExistence = (
           nextEnvironments,
           diagnostics
         );
+        if (explicitReturn() && scope.definition.returnType.value) {
+          if (!doesReturn(document, scope.statements, nextEnvironments, diagnostics)) {
+            diagnostics.push(new SimplexDiagnostic(
+              new Range(
+                document.positionAt(scope.definition.returnType.start),
+                document.positionAt(scope.definition.returnType.end)
+              ),
+              `A function with return type has to return a value`,
+              DiagnosticSeverity.Warning
+            ));
+          }
+        }
         break;
       }
       case "if": {
         diagnostics.push(...processRValue(document, environments, scope.value.value));
-        const nextIfEnvironments: Environment[] = [...environments, {
-          type: 'scope',
-          functions: [],
-          operators: [],
-          types: new Map(),
-          variables: new Map()
-        }];
+        const nextIfEnvironments: Environment[] = [...environments, newScope()];
         checkVariableExistence(
           document,
           scope.ifBlock,
@@ -691,16 +693,7 @@ export const checkVariableExistence = (
         }
         scope.elifBlocks.forEach((elif) => {
           diagnostics.push(...processRValue(document, environments, elif.value.value));
-          const nextElifEnvironments: Environment[] = [
-            ...environments,
-            {
-              type: 'scope',
-              functions: [],
-              operators: [],
-              types: new Map(),
-              variables: new Map()
-            }
-          ];
+          const nextElifEnvironments: Environment[] = [...environments, newScope()];
           checkVariableExistence(
             document,
             elif.statements,
@@ -718,16 +711,7 @@ export const checkVariableExistence = (
             ));
           }
         });
-        const nextElseEnvironments: Environment[] = [
-          ...environments,
-          {
-            type: 'scope',
-            functions: [],
-            operators: [],
-            types: new Map(),
-            variables: new Map()
-          }
-        ];
+        const nextElseEnvironments: Environment[] = [...environments, newScope()];
         checkVariableExistence(
           document,
           scope.elseBlock,
@@ -737,7 +721,8 @@ export const checkVariableExistence = (
         break;
       }
       case "switch": {
-        const caseTypes: (string | null)[] = [];
+        const varType = getType(scope.value, document, environments, diagnostics);
+        const caseValues: (string | null)[] = [];
         scope.cases.forEach((oneCase) => {
           if (typeof oneCase.caseName.value !== 'string') {
             if (oneCase.caseName.value.type === 'variable') {
@@ -745,20 +730,50 @@ export const checkVariableExistence = (
             }
           }
           if (oneCase.caseName.value === 'default') {
-            caseTypes.push(null);
-          } else {
-            caseTypes.push(getType(oneCase.caseName as Token<StringRValue | NumberRValue | VariableRValue>, document, environments, diagnostics));
-          }
-          const nextCaseEnvironments: Environment[] = [
-            ...environments,
-            {
-              type: 'scope',
-              functions: [],
-              operators: [],
-              types: new Map(),
-              variables: new Map()
+            if (typeCheck() && caseValues.includes(null)) {
+              diagnostics.push(new SimplexDiagnostic(
+                new Range(
+                  document.positionAt(oneCase.caseName.start),
+                  document.positionAt(oneCase.caseName.end)
+                ),
+                `The switch block already has a default case`
+              ));
             }
-          ];
+            caseValues.push(null);
+          } else {
+            const caseName = oneCase.caseName as Token<StringRValue | NumberRValue | VariableRValue>;
+            const caseType = getType(caseName, document, environments, diagnostics);
+            const caseValue = caseName.value.type === 'variable'
+              ? `v'${caseName.value.value.value.front}${caseName.value.value.value.name}`
+              : (caseName.value.type === 'number'
+                ? `n'${caseName.value.value}`
+                : `s'${caseName.value.value}`
+              );
+            if (typeCheck()) {
+              if (varType !== caseType) {
+                if (!isIntegerType(varType) || caseName.value.type !== 'number') {
+                  diagnostics.push(new SimplexDiagnostic(
+                    new Range(
+                      document.positionAt(caseName.start),
+                      document.positionAt(caseName.end)
+                    ),
+                    `The switch block condition is of type ${typeTokenToTypeString(varType)} but the case value is of type ${typeTokenToTypeString(caseType)}`
+                  ));
+                }
+              }
+              if (caseValues.includes(caseValue)) {
+                diagnostics.push(new SimplexDiagnostic(
+                  new Range(
+                    document.positionAt(oneCase.caseName.start),
+                    document.positionAt(oneCase.caseName.end)
+                  ),
+                  `This switch block already has this case specified`
+                ));
+              }
+            }
+            caseValues.push(caseValue);
+          }
+          const nextCaseEnvironments: Environment[] = [...environments, newScope()];
           checkVariableExistence(
             document,
             oneCase.statements,
@@ -766,18 +781,15 @@ export const checkVariableExistence = (
             diagnostics
           );
         });
-        const varType = getType(scope.value, document, environments, diagnostics);
+        diagnostics.push(...processRValue(document, environments, scope.value.value));
+        environments[environments.length - 1]
+          .switchTypes
+          .set(`${scope.value.start}_${scope.value.end}`, [varType, caseValues]);
         break;
       }
       case "while": {
         diagnostics.push(...processRValue(document, environments, scope.value.value));
-        const nextEnvironments: Environment[] = [...environments, {
-          type: 'scope',
-          functions: [],
-          operators: [],
-          types: new Map(),
-          variables: new Map()
-        }];
+        const nextEnvironments: Environment[] = [...environments, newScope()];
         checkVariableExistence(
           document,
           scope.statements,
@@ -1131,7 +1143,7 @@ const checkType = (typeToken: Token<string | null>, document: TextDocument, envi
   return typeName;
 }
 
-const doesReturn = (document: TextDocument, statements: StatementsBlock, diagnostics: SimplexDiagnostic[]): boolean => {
+const doesReturn = (document: TextDocument, statements: StatementsBlock, environments: Environment[], diagnostics: SimplexDiagnostic[]): boolean => {
   for (let index = statements.length - 1; index >= 0; index--) {
     const statement = statements[index];
     switch (statement.type) {
@@ -1151,17 +1163,39 @@ const doesReturn = (document: TextDocument, statements: StatementsBlock, diagnos
         break;
       }
       case 'if': {
-        if (doesReturn(document, statement.ifBlock, diagnostics)
-          && doesReturn(document, statement.elseBlock, diagnostics)
-          && statement.elifBlocks.every(b => doesReturn(document, b.statements, diagnostics))) {
+        if (doesReturn(document, statement.ifBlock, environments, diagnostics)
+          && doesReturn(document, statement.elseBlock, environments, diagnostics)
+          && statement.elifBlocks.every(b => doesReturn(document, b.statements, environments, diagnostics))) {
           return true;
         }
         break;
       }
       case 'switch': {
-        if (statement.cases.some(c => c.caseName.value === 'default')
-          && statement.cases.every(c => doesReturn(document, c.statements, diagnostics))) {
-          return true;
+        if (statement.cases.every(c => doesReturn(document, c.statements, environments, diagnostics))) {
+          if (statement.cases.some(c => c.caseName.value === 'default')) {
+            return true;
+          }
+          const currentEnv = environments[environments.length - 1];
+          const switchData = currentEnv.switchTypes.get(`${statement.value.start}_${statement.value.end}`);
+          if (switchData) {
+            const enumData = isEnumType(switchData[0], environments);
+            if (enumData) {
+              if (switchData[1].every(s => s?.startsWith('v'))) {
+                if (new Set(switchData[1]).size === enumData.length) {
+                  return true;
+                } else {
+                  diagnostics.push(new SimplexDiagnostic(
+                    new Range(
+                      document.positionAt(statement.value.start),
+                      document.positionAt(statement.value.end)
+                    ),
+                    `The switch block over an enum does not check all the cases. Did you miss a default case?`,
+                    DiagnosticSeverity.Warning
+                  ));
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -1474,4 +1508,45 @@ const doesTypeMatch = (type: string, toMatch: string): boolean => {
     return true;
   }
   return doesArrayTypeMatch(type, toMatch);
+}
+
+const filterOnlyConst = (environments: Environment[]): Environment[] => {
+  return environments.map((e, i) => {
+    const operators = i === 0 ? e.operators : [];
+    const types = i === 0 ? e.types : new Map();
+    const switchTypes = i === 0 ? e.switchTypes : new Map();
+    const variables = new Map(
+      Array.from(e.variables.entries())
+      .filter(e => e[1].kind === 'const')
+    );
+    return e.type === 'function'
+    ? ({
+      type: 'function',
+      switchTypes,
+      returnType: null,
+      functions: [],
+      operators,
+      types,
+      variables
+    })
+    : ({
+      type: 'scope',
+      switchTypes,
+      functions: [],
+      operators,
+      types,
+      variables
+    });
+  });
+}
+
+const isEnumType = (type: string, environments: Environment[]): string[] | null => {
+  log.appendLine(`Checking ${type}`);
+  if (type === 'Bool') return ['false', 'true'];
+  if (type === 'TestResult') return ['pass', 'fail', 'win'];
+  const typeData = tryGetType(environments, type);
+  if (typeData?.type === 'user-defined' && Array.isArray(typeData.data.definition.value)) {
+    return typeData.data.definition.value;
+  }
+  return null;
 }

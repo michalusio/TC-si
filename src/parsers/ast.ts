@@ -22,7 +22,7 @@ export type TypeDefinition = {
 }
 
 export type VariableName = {
-    front: '$' | '.' | '$.' | '.$',
+    front: '$' | '.' | '$.' | '.$' | '',
     name: string
 }
 export type VariableKind = 'const' | 'let' | 'var';

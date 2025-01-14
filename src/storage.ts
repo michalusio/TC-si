@@ -98,6 +98,7 @@ export const addEnum = (name: string, description: string, values: string[], boo
 
 export const baseEnvironment: Environment = {
 	type: 'scope',
+	switchTypes: new Map(),
 	functions: [],
 	operators: [],
 	types: new Map(),

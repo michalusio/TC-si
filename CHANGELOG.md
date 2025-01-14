@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.5.0]
+
+- Added switch cases type checking
+- Added switch cases exhaustiveness checking for enum values
+
 ## [0.4.5]
 
 - Fixed Bool type to be false/true

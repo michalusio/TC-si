@@ -177,6 +177,7 @@ const tokenProvider: DocumentSemanticTokensProvider = {
           baseEnvironment,
           {
             type: "scope",
+            switchTypes: new Map(),
             functions: [],
             operators: [],
             types: new Map(),
