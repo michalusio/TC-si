@@ -130,7 +130,7 @@ export const precedence: Record<ParseReturnType<typeof binaryOperator>, number> 
 	'asr': 7
 }
 
-const boolType = addEnum('Bool', 'A boolean value', ['fail', 'true']);
+const boolType = addEnum('Bool', 'A boolean value', ['false', 'true']);
 addUnary('!', 'Negates the boolean', boolType, boolType);
 addBinary('||', 'ORs two booleans', boolType, [boolType, boolType]);
 addBinary('&&', 'ANDs two booleans', boolType, [boolType, boolType]);

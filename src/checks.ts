@@ -16,7 +16,7 @@ import {
   VariableName,
 } from "./parsers/ast";
 import { SimplexDiagnostic } from './SimplexDiagnostic';
-import { IndexRValue, RValue } from "./parsers/rvalue";
+import { IndexRValue, NumberRValue, RValue, StringRValue, VariableRValue } from "./parsers/rvalue";
 import { workspace } from 'vscode';
 
 const useParser = <T>(
@@ -737,11 +737,17 @@ export const checkVariableExistence = (
         break;
       }
       case "switch": {
+        const caseTypes: (string | null)[] = [];
         scope.cases.forEach((oneCase) => {
-          if (typeof oneCase.caseName !== 'string') {
-            if (!("type" in oneCase.caseName)) {
-              diagnostics.push(...checkVariable(oneCase.caseName, document, environments));
+          if (typeof oneCase.caseName.value !== 'string') {
+            if (oneCase.caseName.value.type === 'variable') {
+              diagnostics.push(...checkVariable(oneCase.caseName.value.value, document, environments));
             }
+          }
+          if (oneCase.caseName.value === 'default') {
+            caseTypes.push(null);
+          } else {
+            caseTypes.push(getType(oneCase.caseName as Token<StringRValue | NumberRValue | VariableRValue>, document, environments, diagnostics));
           }
           const nextCaseEnvironments: Environment[] = [
             ...environments,
@@ -760,6 +766,7 @@ export const checkVariableExistence = (
             diagnostics
           );
         });
+        const varType = getType(scope.value, document, environments, diagnostics);
         break;
       }
       case "while": {
@@ -1152,7 +1159,7 @@ const doesReturn = (document: TextDocument, statements: StatementsBlock, diagnos
         break;
       }
       case 'switch': {
-        if (statement.cases.some(c => c.caseName === 'default')
+        if (statement.cases.some(c => c.caseName.value === 'default')
           && statement.cases.every(c => doesReturn(document, c.statements, diagnostics))) {
           return true;
         }

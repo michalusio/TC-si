@@ -87,13 +87,14 @@ export const anyNumericLiteral = any(
     numericBase10Literal
 );
 
-const variableLiteral = map(
+export const variableLiteral = map(
     expect(variableName, 'Variable literal'),
     (value) => (<VariableRValue>{
         type: 'variable',
         value
     })
 );
+
 const arrayLiteral = map(
     seq(
         lbr,

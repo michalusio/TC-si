@@ -89,7 +89,7 @@ export type SwitchStatement = {
     type: 'switch',
     value: Token<RValue>,
     cases: {
-        caseName: 'default' | NumberRValue | StringRValue | Token<VariableName>,
+        caseName: Token<StringRValue | NumberRValue | VariableRValue | "default">,
         statements: StatementsBlock
     }[]
 };

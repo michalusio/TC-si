@@ -2,11 +2,11 @@ import { Position, TextDocument } from "vscode";
 import { any, between, Context, exhaust, map, oneOrMany, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators";
 import { functionDeclaration as functionDefinition } from "./parsers/functions";
 import { blockComment, lcb, lineComment, newline, variableName } from "./parsers/base";
-import { anyNumericLiteral, functionCall, rValue, stringLiteral, topmostVariableDeclaration, variableDeclaration, variableModification } from "./parsers/variables";
+import { anyNumericLiteral, rValue, stringLiteral, topmostVariableDeclaration, variableDeclaration, variableLiteral, variableModification } from "./parsers/variables";
 import { typeDeclaration } from "./parsers/types";
 import { eof, lookaround, manyForSure, recoverByAddingChars, recoverBySkipping, rstr, token } from "./parsers/utils";
-import { FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, TokenRange, TypeDefinition, VariableDeclaration, VariableKind, WhileStatement } from "./parsers/ast";
-import { log, tokensData } from "./storage";
+import { FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, TokenRange, TypeDefinition, VariableDeclaration, WhileStatement } from "./parsers/ast";
+import { tokensData } from "./storage";
 
 export const getPositionInfo = (document: TextDocument, position: Position): {
 	current: TokenRange,
@@ -239,7 +239,7 @@ function switchBlock(): Parser<SwitchStatement> {
 										}
 										return wspace === (v?.length ?? 0);
 									}),
-									any(anyNumericLiteral, stringLiteral, str('default'), variableName),
+									token(any(anyNumericLiteral, stringLiteral, variableLiteral, str('default'))),
 									spacesPlus,
 									rstr('{'),
 									surely(map(
@@ -261,7 +261,13 @@ function switchBlock(): Parser<SwitchStatement> {
 					([value, _, cases]) => ({ value, cases })
 				))
 			),
-			([_, __, data]) => (<SwitchStatement>{ type: 'switch', ...data })
+			([_, __, data]) => {
+				const statement: SwitchStatement = {
+					type: 'switch',
+					...data
+				}
+				return statement;
+			}
 		)(ctx);
 	}
 }

@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.4.5]
+
+- Fixed Bool type to be false/true
+
 ## [0.4.4]
 
 - Added support for enum type declarations
