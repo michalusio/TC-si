@@ -1,0 +1,29 @@
+
+def get_input($scratch_space: [Int], tick: Int, $inputs: [Int]) {
+
+    inputs[2] = tick & 1
+    inputs[1] = tick >> 1 & 1
+    inputs[0] = tick >> 2 & 1
+
+}
+
+var correct = [[0,0],[1,0],[1,0],[0,1],[1,0],[0,1],[0,1],[1,1]]
+def check_output($scratch_space: [Int], tick: Int, inputs: [Int], outputs: [Int]) TestResult {
+  
+    let sum = inputs[0] + inputs[1] + inputs[2]
+    if outputs[0] == (sum & 1) && outputs[1] == (sum >> 1 & 1) {
+      
+        if tick == 7 { 
+
+            return win 
+
+        }
+    
+    } else {
+
+        return fail
+
+    }
+
+}
+//# 10:82-10:92 -Warning -A function with return type has to return a value

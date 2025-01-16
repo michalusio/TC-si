@@ -1,8 +1,10 @@
 .vscode/**
 .vscode-test/**
+.vscode-test.js
 .gitignore
 vsc-extension-quickstart.md
 tsconfig.json
 esbuild.js
 src/**
+tests/**
 node_modules

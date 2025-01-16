@@ -1,0 +1,314 @@
+
+const INPUT_CURSOR    = 0
+const ANSWER          = 1
+const TEXT_LEN        = 2
+const TEXT            = 3
+
+const FORMULAS = [
+    ["1 2 +", "3"],
+    ["3 8 5 | +", "16"],
+    ["2 3 + 5 1 >> -", "3"],
+    ["65534 1 ^ 2 ^ 3 ^ 4 ^ 5 ^ 6 ^ 7 ^ 8 ^ 9 ^ 10 ^ 11 ^ 12 ^ 13 ^ 32767 -", "32768"],
+    ["2 1 - 1 - 1 - 1 - 1 - 1 -", "-4"],
+    ["1 3 + 2 4 - | 13 4 7 & ^ -", "-11"],
+    ["1401 1002 - 903 1004 | +", "1406"],
+    ["28612 -25354 -", "53966"],
+    ["-17482 -13491 - 7723 -21511 - |", "62075"],
+    ["1632 22834 +", "24466"],
+    ["10625 -29496 >>", "41"],
+    ["29803 -9598 | 76 31992 << >> -13384 28201 >> 5817 20543 + - |", "65515"],
+    ["-17103 14083 <<", "59784"],
+    ["15116 -8538 - -4539 17982 | - -12426 -23129 + -20726 30320 ^ >> -", "28135"],
+    ["-22876 -23380 |", "42668"],
+    ["27345 -8179 | -31616 27464 + >> -32301 5135 ^ 25521 -971 >> << ^", "38198"],
+    ["24547 12091 +", "36638"],
+    ["-28058 -9602 -", "47080"],
+    ["30609 -30360 << -29838 11959 | >>", "0"],
+    ["-30006 -17348 & -10119 19375 + -", "25568"],
+    ["2360 -2957 >>", "0"],
+    ["-2515 5855 <<", "0"],
+    ["29255 60 & -14972 -11889 - +", "62457"],
+    ["6678 7543 <<", "0"],
+    ["-32471 -14980 <<", "0"],
+    ["-9028 -22854 >>", "0"],
+    ["6102 22776 +", "28878"],
+    ["25153 -443 >> 23534 -30073 | +", "57089"],
+    ["-15954 26028 | -30007 -12899 | >>", "0"],
+    ["32150 -4199 |", "65439"],
+    ["26194 11116 << -2516 -10151 | |", "65149"],
+    ["-6326 31911 +", "25585"],
+    ["-3414 -28243 &", "37032"],
+    ["24084 28339 ^ -31164 25327 - >> 21542 -5784 + 16631 -21167 | >> >>", "0"],
+    ["10887 25524 + -31960 -31460 + ^ -29642 25227 + 22127 -3235 | | -", "34432"],
+    ["3377 -3272 ^", "65033"],
+    ["-73 18751 <<", "0"],
+    ["6456 -10320 |", "57272"],
+    ["-12999 23968 & 6037 -5719 + & 30575 -26798 ^ -4475 32578 ^ ^ ^", "28890"],
+    ["-18221 -31966 -", "13745"],
+    ["-11912 9419 - -14125 -24657 ^ &", "1068"],
+    ["8259 -23624 >>", "0"],
+    ["-1430 -24373 & 6648 32757 & ^ -26410 -6298 & 4592 -3970 ^ >> >>", "11886"],
+    ["-10434 -24049 | 448 -27308 << ^ -17255 2011 + -19559 -28502 + | &", "50231"],
+    ["-8501 1237 &", "1217"],
+    ["-29235 6063 >> 17899 27779 | ^ -32129 8485 + -25817 -15307 ^ ^ ^", "37213"],
+    ["31684 -1724 ^ -21755 -22918 ^ & -9336 22970 & 11013 -24003 - - &", "0"],
+    ["-733 22329 - 33 11080 >> - -22697 12995 >> -31528 -15109 + - -", "56019"],
+    ["-19749 -24849 << -6525 -7197 >> - 31928 9435 ^ 27385 -11093 >> | >>", "0"],
+    ["-8614 28142 + -27173 27226 | |", "65499"],
+    ["-7490 31131 >> -11708 9462 << +", "0"],
+    ["-1631 32059 + -19913 27256 ^ >>", "0"],
+    ["-4463 24014 | -9850 4770 - | -3679 -4829 & 7649 26197 ^ << >>", "65535"],
+    ["-25934 -16790 <<", "0"],
+    ["20750 -14710 ^ -26091 -32418 << <<", "38788"],
+    ["10761 -4263 ^ 8298 5938 >> |", "50512"],
+    ["-5951 -4647 ^", "1304"],
+    ["24055 1338 ^ 15338 -26367 ^ |", "64239"],
+    ["-26458 -22374 >>", "0"],
+    ["14052 -10442 | 8395 -25146 | + 7516 25841 + -29223 -27265 + & <<", "50432"],
+    ["23511 -27496 +", "61551"],
+    ["-32516 20324 + -21809 19419 - &", "20576"],
+    ["10994 -2714 + 147 -31102 - | -32709 1341 >> 24465 1232 >> << ^", "31321"],
+    ["27374 -18560 +", "8814"],
+    ["30550 25226 + -25091 9486 ^ >>", "0"],
+    ["5235 27971 + 11839 -16965 >> & -22635 11160 - 2942 5211 << - ^", "31741"],
+    ["-14267 -25756 |", "56165"],
+    ["20272 -4024 +", "16248"],
+    ["-5670 30833 << 15515 28069 ^ |", "20798"],
+    ["9456 6181 >> -31691 -6571 | << -22376 -25770 << 27503 11162 - ^ ^", "16341"],
+    ["593 31779 >> -26244 -662 - &", "0"]
+]
+
+const MAX_VALUES_IN_FORMULA = 16
+// const MAX_UNARY_OPS_IN_FORMULA = 4
+const MAX_UNARY_OPS_IN_FORMULA = 0  // simple way to disable unary ops
+
+const OP_NOT    = 0
+const UNARY_OPS = OP_NOT + 1
+
+const OP_ADD        = 0
+const OP_SUB        = OP_ADD + 1
+const OP_OR         = OP_SUB + 1
+const OP_AND        = OP_OR  + 1
+const OP_XOR        = OP_AND + 1
+const NON_SHIFT_OPS = OP_XOR + 1
+
+const OP_LSL        = OP_XOR + 1
+const OP_LSR        = OP_LSL + 1
+const BINARY_OPS    = OP_LSR + 1
+
+// The higher the order, the more likely lower results are and the less likely higher results.
+// The shape of the distribution should roughly be [ x ** order ] and order == 1 means uniform.
+// Here upper_bound is inclusive (as opposed to random() where it's exclusive).
+
+def curve_rand(upper_bound: Int, order: Int) Int {
+
+    var result = upper_bound
+    var iteration = 0
+
+    while result > 0 && iteration < order {
+
+        result = random(1 + result)
+        iteration += 1
+
+    }
+
+    return result
+
+}
+
+def make_formula($scratch_space: [Int], answer_idx: Int) String {
+
+    let min_values    = 1 + random(min(3, MAX_VALUES_IN_FORMULA))
+    let num_values    = curve_rand(MAX_VALUES_IN_FORMULA - min_values, 3) + min_values
+    let num_unary_ops = curve_rand(MAX_UNARY_OPS_IN_FORMULA, 3)
+
+    // we can use the same space, as the text will be longer and will subsequently overwrite it
+    var stack_pointer = TEXT
+    var top_of_stack = curve_rand(0xffff, 5)
+    var formula = `{top_of_stack}`
+
+    var value_count = 1  // we already generated an initial value above
+    var unary_op_count = 0
+    var binary_op_count = 0
+
+    var max_add_values = num_values - value_count
+    var max_add_unary_ops = num_unary_ops - unary_op_count
+    var max_add_binary_ops = value_count - 1 - binary_op_count
+    var num_possibilites = max_add_values + max_add_unary_ops + max_add_binary_ops
+
+    while num_possibilites > 0 {
+
+        let what = random(num_possibilites)
+
+        if what < max_add_values {
+
+            scratch_space[stack_pointer] = top_of_stack
+            stack_pointer += 1
+
+            top_of_stack = curve_rand(0xffff, 5)
+            formula += ` {top_of_stack}`
+            value_count += 1
+
+        } elif what - max_add_values < max_add_unary_ops {
+
+            let op_idx = random(UNARY_OPS)
+
+            switch op_idx
+
+                OP_NOT {
+
+                    top_of_stack = ~top_of_stack
+                    formula += " ~"
+
+                }
+
+            top_of_stack &= 0xffff
+            unary_op_count += 1
+
+        } else {
+
+            stack_pointer -= 1
+            let a = scratch_space[stack_pointer]
+            let b = top_of_stack
+
+            let op_idx = random(b <= 16 ? BINARY_OPS : NON_SHIFT_OPS)
+
+            switch op_idx
+
+                OP_ADD {
+
+                    top_of_stack = a + b
+                    formula += " +"
+
+                }
+
+                OP_SUB {
+
+                    top_of_stack = a - b
+                    formula += " -"
+
+                }
+
+                OP_OR {
+
+                    top_of_stack = a | b
+                    formula += " |"
+
+                }
+
+                OP_AND {
+
+                    top_of_stack = a & b
+                    formula += " &"
+
+                }
+
+                OP_XOR {
+
+                    top_of_stack = a ^ b
+                    formula += " ^"
+
+                }
+
+                OP_LSL {
+
+                    top_of_stack = a << (b & 0x3f)
+                    formula += " <<"
+
+                }
+
+                OP_LSR {
+
+                    top_of_stack = a >> (b & 0x3f)
+                    formula += " >>"
+
+                }
+
+            top_of_stack &= 0xffff
+            binary_op_count += 1
+
+        }
+
+        max_add_values = num_values - value_count
+        max_add_unary_ops = num_unary_ops - unary_op_count
+        max_add_binary_ops = value_count - 1 - binary_op_count
+        num_possibilites = max_add_values + max_add_unary_ops + max_add_binary_ops
+
+    }
+
+    scratch_space[answer_idx] = top_of_stack
+
+    return formula
+
+}
+
+def on_reset($scratch_space: [Int], test: Int) {
+
+    var text = ""
+
+    if test < FORMULAS.len() {
+
+        let formula = FORMULAS[test]
+
+        text = formula[0]
+        scratch_space[ANSWER] = int(formula[1])
+
+    } else {
+
+        text = make_formula($scratch_space, ANSWER)
+
+    }
+
+    let len = text.len()
+    scratch_space[TEXT_LEN] = len
+
+    var i = 0
+    while i < len {
+        scratch_space[TEXT + i] = <Int> (<U8> text[i])
+        i += 1
+    }
+
+    ui_set_hidden("pointer", true)
+    ui_set_text("text", text + " ")
+}
+
+def arch_get_input($scratch_space: [Int], test: Int) Int {
+    let cursor = scratch_space[INPUT_CURSOR]
+    _reg_alloc_use cursor
+    scratch_space[INPUT_CURSOR] += 1
+    let len = scratch_space[TEXT_LEN]
+
+    ui_set_hidden("pointer", false)
+    var ptext = ""
+    var i = 0
+    while i <= len {
+        if i == cursor {
+            ptext += "v"
+        } else {
+            ptext += " "
+        }
+        i += 1
+    }
+    ui_set_text("pointer", ptext)
+
+    return scratch_space[TEXT + cursor]
+}
+
+def arch_check_output($scratch_space: [Int], test: Int, input: Int, output: Int) TestResult {
+
+    let len = scratch_space[TEXT_LEN]
+
+    if len > scratch_space[INPUT_CURSOR] {
+        set_error(`You did not read all the characters from the formula yet`)
+        return fail
+    }
+
+    let answer = scratch_space[ANSWER]
+
+    if (<S16>output) != (<S16>answer) {
+        set_error(`Output should have been {str(answer)}, not {str(output)}`)
+        return fail
+    }
+
+    return win
+}

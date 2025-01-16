@@ -254,6 +254,25 @@ export function rValue(): Parser<Token<RValue>> {
         ),
         ([value, indexes, _, operation]) => {
             let actualValue: Token<RValue> = value;
+            if (actualValue.value.type === 'cast' && actualValue.value.value.value.type === 'binary') {
+                const binary = actualValue.value.value.value;
+                actualValue = <Token<RValue>>{
+                    start: actualValue.start,
+                    end: actualValue.end,
+                    value: <BinaryRValue>{
+                        ...binary,
+                        left: <Token<RValue>>{
+                            start: actualValue.start,
+                            end: binary.left.start,
+                            value: <CastedRValue>{
+                                type: 'cast',
+                                to: actualValue.value.to,
+                                value: binary.left
+                            }
+                        }
+                    }
+                };
+            }
             indexes.forEach(index => {
                 actualValue = <Token<RValue>>{
                     start: actualValue.start,

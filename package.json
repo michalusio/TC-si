@@ -66,19 +66,23 @@
     }
   },
   "scripts": {
-    "compile": "npm run check-types && node esbuild.js",
-    "check-types": "tsc --noEmit",
+    "compile": "tsc --noEmit && node esbuild.js",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
-    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "watch:tsc": "tsc --noEmit --watch",
+    "test": "npm run compile && node esbuild-test.js && vscode-test",
     "vscode:prepublish": "npm run package",
-    "package": "npm run check-types && node esbuild.js --production"
+    "package": "tsc --noEmit && node esbuild.js --production"
   },
   "devDependencies": {
-    "@types/node": "^22.10.5",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.10.6",
     "@types/vscode": "^1.73.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
     "esbuild": "^0.24.2",
     "esbuild-plugin-copy": "^2.1.1",
+    "mocha": "^11.1.0",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.7.3"
   },

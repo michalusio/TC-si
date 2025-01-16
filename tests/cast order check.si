@@ -1,0 +1,299 @@
+
+const REGS = 0
+const COUNTER = 16
+
+const OP_IO  = 0
+const OP_ALU = 1
+const OP_JMP = 2
+const OP_RAM = 3
+const FLAG_REG = 15
+
+def instruction_to_str(instruction: Int) String {
+
+    let mode            = (instruction >> 30)
+    let opcode          = (instruction >> 24) & 0b1111
+    let dest            = (instruction >> 20) & 0b1111
+    let a               = (instruction >> 16) & 0b1111
+    let b               = (instruction >> 8) & 0b1111
+    let immediate       = (instruction >> 28) & 1 != 0
+    let immediate_value =  instruction & 0xffff
+
+    var dest_str = ""
+
+    switch dest
+        0 { dest_str = "zr" }
+        14 { dest_str = "sp" }
+        15 { dest_str = "flags" }
+        default { dest_str = "r" + str(dest) }
+
+
+    var a_str = ""
+
+    switch a
+        0 { a_str = "zr" }
+        14 { a_str = "sp" }
+        15 { a_str = "flags" }
+        default { a_str = "r" + str(a) }
+
+    var b_str = ""
+
+    if immediate {
+
+        b_str = str(immediate_value)
+
+    } else {
+
+        switch b
+            0 { b_str = "zr" }
+            14 { b_str = "sp" }
+            15 { b_str = "flags" }
+            default { b_str = "r" + str(b) }
+
+    }
+
+    switch mode
+
+        OP_IO {
+
+            const NOP      = 0
+            const IN       = 1
+            const OUT      = 2
+            const CONSOLE  = 3
+            const TIME_0   = 4
+            const TIME_1   = 5
+            const TIME_2   = 6
+            const TIME_3   = 7
+            const COUNTER  = 8
+            const KEYBOARD = 9
+
+            switch opcode
+                NOP      { return `nop (does nothing)` }
+                IN       { return `in {dest_str}` }
+                OUT      { return `out {b_str}` }
+                CONSOLE  { return `console {b_str}` }
+                TIME_0   { return `time_0 {dest_str}` }
+                TIME_1   { return `time_1 {dest_str}` }
+                TIME_2   { return `time_2 {dest_str}` }
+                TIME_3   { return `time_3 {dest_str}` }
+                COUNTER  { return `counter {dest_str}` }
+                KEYBOARD { return `keyboard {dest_str}` }
+
+        }
+
+        OP_ALU {
+
+            var opcode_str = ""
+
+            switch opcode
+                0 { opcode_str = "nand" }
+                1 { opcode_str = "or"  }
+                2 { opcode_str = "and" }
+                3 { opcode_str = "nor" }
+                4 { opcode_str = "add" }
+                5 { opcode_str = "sub" }
+                6 { opcode_str = "xor" }
+                7 { opcode_str = "lsl" }
+                8 { opcode_str = "lsr" }
+                9 { return `cmp {a_str}, {b_str}` }
+
+            return `{opcode_str} {dest_str}, {a_str}, {b_str}`
+
+        }
+
+        OP_JMP {
+
+            switch opcode
+                0b1000  { return `jmp {b_str}` }
+                0b0001  { return `je {b_str}` }
+                0b1001  { return `jne {b_str}` }
+
+                0b0010  { return `jb {b_str}` }
+                0b1010  { return `jae {b_str}` }
+                0b0011  { return `jbe {b_str}` }
+                0b1011  { return `ja {b_str}` }
+
+                0b0100  { return `jl {b_str}` }
+                0b1100  { return `jge {b_str}` }
+                0b0101  { return `jle {b_str}` }
+                0b1101  { return `jg {b_str}` }
+
+        }
+
+        OP_RAM {
+
+            const LOAD  = 0
+            const STORE = 1
+
+            switch opcode
+                LOAD  { return `load {dest_str}, [{b_str}]` }
+                STORE { return `store [{b_str}], {a_str}` }
+
+        }
+
+}
+def retire_instruction(instruction: Int, $scratch_space: [Int], input: Int) Int {
+    
+    let mode            = (instruction >> 30)
+    let opcode          = (instruction >> 24) & 0b1111
+    let dest            = (instruction >> 20) & 0b1111
+    let a               = (instruction >> 16) & 0b1111
+    let b               = (instruction >> 8) & 0b1111
+    let immediate       = (instruction >> 28) & 1 != 0
+    let immediate_value =  instruction & 0xffff
+
+    scratch_space[REGS + 0] = 0
+
+    let a_value = scratch_space[REGS + a]
+    let b_value = immediate ? immediate_value : scratch_space[REGS + b]
+
+    def flag_result(a: Int, b: Int) Int {
+
+        let equal = <Int> (a == b)
+        let uless = <Int> (<U16> a < <U16> b) & 1
+        let sless = <Int> (<S16> a < <S16> b) & 1
+
+        return (sless << 2) | (uless << 1) | equal
+
+    }
+
+    switch mode
+
+        OP_IO {
+            scratch_space[COUNTER] += 4
+
+            switch opcode
+                1 {
+
+                    scratch_space[REGS + dest] = input
+
+                }
+                2 {
+
+                    return b_value
+
+                }
+
+        }
+
+        OP_ALU {
+            scratch_space[COUNTER] += 4
+
+            var result = 0
+
+            switch opcode
+                0 {
+                    result = ~(a_value & b_value)
+                }
+                1 { 
+                    result = a_value | b_value
+                }
+                2 { 
+                    result = a_value & b_value
+                }
+                3 { 
+                    result = ~(a_value | b_value)
+                }
+                4 { 
+                    result = a_value + b_value
+                }
+                5 { 
+                    result = a_value - b_value
+                }
+                6 { 
+                    result = a_value ^ b_value
+                }
+                7 { 
+                    result = a_value << b_value
+                }
+                8 { 
+                    result = a_value >> b_value
+                }
+                9 { 
+                    result = flag_result(a_value, b_value)
+                }
+
+            scratch_space[REGS + dest] = result & 0xffff
+
+        }
+
+        OP_JMP {
+
+            let flags   = a_value & 0b111
+            let matched = (opcode & flags) > 0
+            let met     = matched != ((opcode & 0b1000) > 0)
+            scratch_space[REGS + FLAG_REG] = scratch_space[COUNTER] + 4
+
+            if met {
+                
+                scratch_space[COUNTER] = b_value
+
+            } else {
+
+                scratch_space[COUNTER] += 4
+
+            }
+
+        }
+
+    return Z_STATE
+
+}
+
+
+
+def get_input($scratch_space: [Int], tick: Int, $inputs: [Int]) {
+
+    let result = random(0xffff)
+    inputs[0] = result
+
+}
+
+def check_output($scratch_space: [Int], tick: Int, inputs: [Int], outputs: [Int]) TestResult {
+
+    if get_program_address() != scratch_space[COUNTER] {
+
+        set_error(`You should read address {scratch_space[COUNTER]} from the assembler, not {get_program_address()}`)
+        return fail
+
+    }
+
+    let instruction = get_program_output()
+    ui_set_text("description", instruction_to_str(instruction))
+    let output = retire_instruction(instruction, $scratch_space, inputs[0])
+
+    if output != Z_STATE && output != outputs[1] & 0xffff {
+
+        set_error(`Output should have been {output}.`)
+        return fail
+
+    }
+
+    var reg = 1
+    while reg < 16 {
+
+        let value = get_register_value(reg - 1)
+
+        if value != scratch_space[REGS + reg] {
+
+            var register = ""
+            switch reg
+                14 { register = "'sp'" }
+                15 { register = "'flags'" }
+                default { register = `r{reg}`}
+
+            set_error(`{register} should have value {scratch_space[REGS + reg]}, not {value}`)
+            return fail
+
+        }
+
+        reg += 1
+
+    }
+    if tick == 1000 {
+        return win
+    }
+
+}
+//# 10:41-10:47 -Warning -A function with return type has to return a value
+//# 65:18-65:25 -Warning -You should not redeclare variables: 'COUNTER'
+//# 250:82-250:92 -Warning -A function with return type has to return a value

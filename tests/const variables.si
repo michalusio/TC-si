@@ -1,0 +1,7 @@
+const a = 213213
+const B = 12
+const C = "Hi!"
+const D = B * 2
+const E = C + B
+//# 0:6-0:7 -Error -Constants have to use only uppercase letters
+//# 4:11-4:14 -Error -Cannot find binary operator + for types String and Int

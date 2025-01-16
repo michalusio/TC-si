@@ -28,8 +28,8 @@ import { getRecoveryIssues } from "./parsers/base";
 import {
   checkVariableExistence,
   performParsing,
-  typeTokenToTypeString,
 } from "./checks";
+import { typeTokenToTypeString } from "./typeSetup";
 
 const selector = { language: "si", scheme: "file" };
 
@@ -148,7 +148,7 @@ const hoverProvider: HoverProvider = {
 //}
 
 const diagnosticsPerFile: Record<string, Diagnostic[]> = {};
-const deduplicateDiagnostics = (diags: Diagnostic[]): Diagnostic[] => {
+export const deduplicateDiagnostics = (diags: Diagnostic[]): Diagnostic[] => {
   const key = (d: Diagnostic) => `${d.message}(${d.range.start.line}:${d.range.start.character},${d.range.end.line}:${d.range.end.character})`;
   const container: Record<string, Diagnostic> = {};
   diags.forEach(d => {

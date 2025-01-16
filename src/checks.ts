@@ -4,20 +4,17 @@ import { log, tokensData } from "./storage";
 import { languageParser } from "./parser";
 import { isFailure, ParseError, Parser } from "parser-combinators";
 import {
-  FunctionKind,
-  OperatorKind,
   ParserOutput,
   Statement,
   StatementsBlock,
   Token,
-  TokenRange,
-  TypeDefinition,
-  VariableKind,
   VariableName,
 } from "./parsers/ast";
 import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { IndexRValue, NumberRValue, RValue, StringRValue, VariableRValue } from "./parsers/rvalue";
 import { workspace } from 'vscode';
+import { Environment } from "./environment";
+import { doesTypeMatch, filterOnlyConst, getAfterIndexType, isEnumType, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
 
 const useParser = <T>(
   text: string,
@@ -120,71 +117,6 @@ let logging = false;
 
 const logg = (v: string) => logging && log.appendLine(v);
 
-export type EnvironmentVariable = {
-  type: 'user-defined';
-  kind: VariableKind;
-  data: TokenRange;
-  varType: string | null;
-} | {
-  type: 'built-in';
-  kind: VariableKind;
-  data: string;
-  varType: string;
-};
-
-export type EnvironmentFunction = {
-  type: 'user-defined';
-  kind: FunctionKind;
-  name: string;
-  data: TokenRange;
-  parameterTypes: string[];
-  returnType: string | null;
-} | {
-  type: 'built-in';
-  kind: FunctionKind;
-  name: string;
-  data: string;
-  parameterTypes: string[];
-  returnType: string | null;
-};
-
-export type EnvironmentOperator = {
-  type: 'user-defined';
-  kind: OperatorKind;
-  name: string;
-  data: TokenRange;
-  parameterTypes: string[];
-  returnType: string;
-} | {
-  type: 'built-in';
-  kind: OperatorKind;
-  name: string;
-  data: string;
-  parameterTypes: string[];
-  returnType: string;
-};
-
-export type EnvironmentType = {
-  type: 'user-defined';
-  data: TypeDefinition;
-} | {
-  type: 'built-in';
-  data: string;
-}
-
-export type Environment = ({
-  type: 'function';
-  returnType: string | null;
-} | {
-  type: 'scope';
-}) & {
-  variables: Map<string, EnvironmentVariable>;
-  functions: EnvironmentFunction[];
-  operators: EnvironmentOperator[];
-  types: Map<string, EnvironmentType>;
-  switchTypes: Map<string, [string, (string | null)[]]>;
-};
-
 const newScope = (): Environment => ({
   type: 'scope',
   switchTypes: new Map(),
@@ -203,28 +135,6 @@ const newFunction = (returnType: string | null): Environment => ({
   variables: new Map(),
   returnType
 });
-
-export const typeStringToTypeToken = (value: string): string => {
-  let numberOfArrays = 0;
-  for (let index = 0; index < value.length; index++) {
-    const char = value[index];
-    if (char === '[') {
-      numberOfArrays++;
-    } else break;
-  }
-  return `${'*'.repeat(numberOfArrays)}${value.slice(numberOfArrays, value.length - numberOfArrays)}`;
-}
-
-export const typeTokenToTypeString = (value: string): string => {
-  let numberOfArrays = 0;
-  for (let index = 0; index < value.length; index++) {
-    const char = value[index];
-    if (char === '*') {
-      numberOfArrays++;
-    } else break;
-  }
-  return `${'['.repeat(numberOfArrays)}${value.slice(numberOfArrays)}${']'.repeat(numberOfArrays)}`;
-}
 
 export const checkVariableExistence = (
   document: TextDocument,
@@ -375,6 +285,29 @@ export const checkVariableExistence = (
     switch (scope.type) {
       case 'declaration': {
         diagnostics.push(...processRValue(document, environments, scope.value.value));
+        if (scope.kind.value === 'const') {
+          if (scope.name.value.name.search(/[a-z]/) >= 0) {
+            diagnostics.push(new SimplexDiagnostic(
+              new Range(
+                document.positionAt(scope.name.start),
+                document.positionAt(scope.name.end)
+              ),
+              `Constants have to use only uppercase letters`,
+              DiagnosticSeverity.Error
+            ));
+          }
+        } else {
+          if (scope.name.value.name.search(/[A-Z]/) >= 0) {
+            diagnostics.push(new SimplexDiagnostic(
+              new Range(
+                document.positionAt(scope.name.start),
+                document.positionAt(scope.name.end)
+              ),
+              `Variables have to use only lowercase letters`,
+              DiagnosticSeverity.Error
+            ));
+          }
+        }
         const variable = tryGetVariable(true, environments, scope.name.value.name);
         if (variable !== null) {
           diagnostics.push(new SimplexDiagnostic(
@@ -937,155 +870,6 @@ const processRValue = (
   return results;
 };
 
-const tryGetVariable = (
-  inScope: boolean,
-  environments: Environment[],
-  name: string
-): EnvironmentVariable | null => {
-  for (let index = environments.length - 1; index >= 1; index--) {
-    const type = environments[index].type;
-    const variable = environments[index].variables.get(name);
-    if (variable === undefined) {
-      if (inScope && type === 'function') {
-        break;
-      }
-      continue;
-    }
-    return variable;
-  }
-  for (let index = environments.length - 1; index >= 0; index--) {
-    const variable = environments[index].variables.get(name);
-    if (variable === undefined) {
-      continue;
-    }
-    if (variable.type === 'built-in' || variable.kind === 'const') {
-      return variable;
-    }
-  }
-  return null;
-};
-
-const tryGetDotFunction = (
-  environments: Environment[],
-  name: string,
-  params: string[]
-): EnvironmentFunction | null => {
-  for (let index = environments.length - 1; index >= 0; index--) {
-    for (let func of environments[index].functions.filter(f => f.name === name && f.kind === 'dot')) {
-      if (params.length === func.parameterTypes.length && func.parameterTypes.every((toMatch, i) => {
-        const type = params[i];
-        return doesTypeMatch(type, toMatch);
-      })) {
-        return func;
-      }
-    }
-  }
-  return null;
-};
-
-const tryGetDefFunction = (
-  environments: Environment[],
-  name: string,
-  params: string[]
-): EnvironmentFunction | null => {
-  for (let index = environments.length - 1; index >= 0; index--) {
-    for (let func of environments[index].functions.filter(f => f.name === name && f.kind === 'def')) {
-      if (params.length === func.parameterTypes.length && func.parameterTypes.every((toMatch, i) => {
-        const type = params[i];
-        return doesTypeMatch(type, toMatch);
-      })) {
-        return func;
-      }
-    }
-  }
-  return null;
-};
-
-const tryGetBinaryOperator = (
-  environments: Environment[],
-  name: string,
-  params: string[]
-): EnvironmentOperator | null => {
-  for (let index = environments.length - 1; index >= 0; index--) {
-    for (let func of environments[index].operators.filter(f => f.name === name && f.kind === 'binary')) {
-      if (params.length === func.parameterTypes.length && func.parameterTypes.every((toMatch, i) => {
-        const type = params[i];
-        return doesTypeMatch(type, toMatch);
-      })) {
-        return func;
-      }
-    }
-  }
-  return null;
-};
-
-const tryGetUnaryOperator = (
-  environments: Environment[],
-  name: string,
-  params: string[]
-): EnvironmentOperator | null => {
-  for (let index = environments.length - 1; index >= 0; index--) {
-    for (let func of environments[index].operators.filter(f => f.name === name && f.kind === 'unary')) {
-      if (params.length === func.parameterTypes.length && func.parameterTypes.every((toMatch, i) => {
-        const type = params[i];
-        return doesTypeMatch(type, toMatch);
-      })) {
-        return func;
-      }
-    }
-  }
-  return null;
-};
-
-const tryGetType = (
-  environments: Environment[],
-  name: string
-): EnvironmentType | null => {
-  if (name.startsWith('@')) return environments[0].types.get('@') ?? null;
-  for (let index = environments.length - 1; index >= 0; index--) {
-    const type = environments[index].types.get(name);
-    if (type !== undefined) {
-      return type;
-    }
-  }
-  if (name.startsWith('*')) {
-    return environments[0].types.get(getArrayType(environments, name.slice(1))) ?? null;
-  }
-  return null;
-};
-
-const tryGetReturnType = (environments: Environment[]): string | null => {
-  for (let index = environments.length - 1; index >= 0; index--) {
-    const env = environments[index];
-    if (env.type === 'function') {
-      if (env.returnType) {
-        return typeStringToTypeToken(env.returnType);
-      } else return null;
-    }
-  }
-  return null;
-}
-
-export const getArrayType = (environments: Environment[], typeName: string): string => {
-  const type = tryGetType(environments, typeName) ?? {
-    type: 'built-in',
-    data: typeName
-  };
-  const arrayTypeName = `*${typeName}`;
-  const arrayType = environments[0].types.get(arrayTypeName);
-  if (!arrayType) {
-    const typeString = type.type === 'user-defined'
-      ? type.data.definition.value
-      : type.data;
-    const arrayType: EnvironmentType = {
-      type: 'built-in',
-      data: `[${typeString}]`
-    };
-    environments[0].types.set(arrayTypeName, arrayType);
-  }
-  return arrayTypeName;
-}
-
 const checkVariable = (nameToken: Token<VariableName>, document: TextDocument, environments: Environment[]) : SimplexDiagnostic[] => {
   const kind = tryGetVariable(
     !nameToken.value.front.includes('.'),
@@ -1442,111 +1226,4 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       throw x;
     }
   }
-}
-
-const transformGenericType = (func: EnvironmentOperator | EnvironmentFunction | null, types: string[]): string => {
-  if (!func?.returnType) return '?';
-  if (!func.returnType.includes('@')) return func.returnType;
-  for (let index = 0; index < func.parameterTypes.length; index++) {
-    const matchCount = howBaseTypeMatches(func.parameterTypes[index], func.returnType);
-    if (matchCount == null) continue;
-    if (matchCount == 0) return types[index];
-    if (matchCount > 0) {
-      return '*'.repeat(matchCount) + types[index];
-    } else {
-      return types[index].slice(-matchCount);
-    }
-  }
-  return '?';
-}
-
-const howBaseTypeMatches = (t1: string, t2: string): number | null => {
-  if (t1 === t2) return 0;
-  if (t1.startsWith('*')) {
-    const r = howBaseTypeMatches(t1.slice(1), t2);
-    return r != null ? (r - 1) : r;
-  }
-  if (t2.startsWith('*')) {
-    const r = howBaseTypeMatches(t1, t2.slice(1));
-    return r != null ? (r + 1) : r;
-  }
-  return null;
-}
-
-const getAfterIndexType = (type: string, environments: Environment[]): string | null => {
-  if (type.startsWith('*')) return type.slice(1);
-  if (type === 'String') return 'Char';
-  const typeInfo = tryGetType(environments, type);
-  if (!typeInfo || typeInfo.type === 'built-in' || Array.isArray(typeInfo.data.definition.value)) return null;
-  return getAfterIndexType(typeInfo.data.definition.value, environments);
-}
-
-const isIntegerType = (type: string): boolean => {
-  return type === 'Int' || isUnsignedIntegerType(type) || isSignedIntegerType(type);
-}
-
-const isUnsignedIntegerType = (type: string): boolean => {
-  return type === 'UInt' || /^U\d+$/.test(type);
-}
-
-const isSignedIntegerType = (type: string): boolean => {
-  return type === 'SInt' || /^S\d+$/.test(type);
-}
-
-const doesArrayTypeMatch = (type: string, toMatch: string): boolean => {
-  if (!type.startsWith('*') || !toMatch.startsWith('*')) return false;
-  return doesTypeMatch(type.slice(1), toMatch.slice(1));
-}
-
-const doesTypeMatch = (type: string, toMatch: string): boolean => {
-  if (type === toMatch) return true;
-  if (toMatch.startsWith('@')) return true;
-  if (toMatch === 'UInt' && isUnsignedIntegerType(type)) {
-    return true;
-  }
-  if ((toMatch === 'Int' || toMatch === 'SInt') && isSignedIntegerType(type)) {
-    return true;
-  }
-  return doesArrayTypeMatch(type, toMatch);
-}
-
-const filterOnlyConst = (environments: Environment[]): Environment[] => {
-  return environments.map((e, i) => {
-    const operators = i === 0 ? e.operators : [];
-    const types = i === 0 ? e.types : new Map();
-    const switchTypes = i === 0 ? e.switchTypes : new Map();
-    const variables = new Map(
-      Array.from(e.variables.entries())
-      .filter(e => e[1].kind === 'const')
-    );
-    return e.type === 'function'
-    ? ({
-      type: 'function',
-      switchTypes,
-      returnType: null,
-      functions: [],
-      operators,
-      types,
-      variables
-    })
-    : ({
-      type: 'scope',
-      switchTypes,
-      functions: [],
-      operators,
-      types,
-      variables
-    });
-  });
-}
-
-const isEnumType = (type: string, environments: Environment[]): string[] | null => {
-  log.appendLine(`Checking ${type}`);
-  if (type === 'Bool') return ['false', 'true'];
-  if (type === 'TestResult') return ['pass', 'fail', 'win'];
-  const typeData = tryGetType(environments, type);
-  if (typeData?.type === 'user-defined' && Array.isArray(typeData.data.definition.value)) {
-    return typeData.data.definition.value;
-  }
-  return null;
 }
