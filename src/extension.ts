@@ -30,6 +30,7 @@ import {
   performParsing,
 } from "./checks";
 import { typeTokenToTypeString } from "./typeSetup";
+import './definitions';
 
 const selector = { language: "si", scheme: "file" };
 

@@ -1,5 +1,12 @@
 # Change Log
 
+## [0.5.1]
+
+- Fixed invalid-typed built-in methods
+- Added some other methods and types (File, Char, etc.)
+- Added === operator
+- Added support for underscores in hex literals
+
 ## [0.5.0]
 
 - Added switch cases type checking

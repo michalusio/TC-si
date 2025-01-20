@@ -74,10 +74,10 @@ const numericBase10Literal = map(
     })
 );
 const numericBase16Literal = map(
-    regex(/0x[0-9a-zA-Z]+/, 'Numeric literal'),
+    regex(/0x[0-9a-zA-Z_]+/, 'Numeric literal'),
     (str) => (<NumberRValue>{
         type: 'number',
-        value: parseInt(str, 16)
+        value: parseInt(str.replaceAll('_', ''), 16)
     })
 );
 

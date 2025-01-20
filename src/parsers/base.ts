@@ -116,6 +116,7 @@ export const binaryOperator = any(
   str("<s"),
   str(">="),
   str("!="),
+  str("==="),
   str("=="),
   str("<<"),
   str(">>"),

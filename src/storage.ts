@@ -36,6 +36,7 @@ export const baseEnvironment: Environment = {
 export const precedence: Record<ParseReturnType<typeof binaryOperator>, number> = {
 	'||': 3,
 	'&&': 4,
+	'===': 5,
 	'==': 5,
 	'!=': 5,
 	'<=': 5,
