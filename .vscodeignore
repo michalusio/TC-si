@@ -7,4 +7,5 @@ tsconfig.json
 esbuild.js
 src/**
 tests/**
+dist-test/**
 node_modules
