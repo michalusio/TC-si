@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.5.2]
+
+- Made variables accept uppercase letters if it's not the first letter
+- Added checks for casting and assigning constants that will not fit
+
 ## [0.5.1]
 
 - Fixed invalid-typed built-in methods

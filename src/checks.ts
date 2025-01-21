@@ -14,7 +14,7 @@ import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { IndexRValue, NumberRValue, RValue, StringRValue, VariableRValue } from "./parsers/rvalue";
 import { workspace } from 'vscode';
 import { Environment } from "./environment";
-import { doesTypeMatch, filterOnlyConst, getAfterIndexType, isEnumType, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
+import { doesTypeMatch, filterOnlyConst, getAfterIndexType, getIntSigned, getIntSize, isEnumType, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
 
 const useParser = <T>(
   text: string,
@@ -297,13 +297,13 @@ export const checkVariableExistence = (
             ));
           }
         } else {
-          if (scope.name.value.name.search(/[A-Z]/) >= 0) {
+          if (scope.name.value.name.substring(0, 1).search(/[A-Z]/) >= 0) {
             diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(scope.name.start),
                 document.positionAt(scope.name.end)
               ),
-              `Variables have to use only lowercase letters`,
+              `Variables have to start with a lowercase letter`,
               DiagnosticSeverity.Error
             ));
           }
@@ -362,6 +362,28 @@ export const checkVariableExistence = (
               ),
               `Cannot assign a value of type ${typeTokenToTypeString(right)} to a variable of type ${typeTokenToTypeString(left)}`
             ));
+          } else {
+            const signed = getIntSigned(left)
+            const size = getIntSize(left)
+
+            if (!signed && scope.value.value.value < 0) {
+              diagnostics.push(new SimplexDiagnostic(
+                new Range(
+                  document.positionAt(scope.value.start),
+                  document.positionAt(scope.value.end)
+                ),
+                `A negative value cannot be assigned to ${typeTokenToTypeString(left)}`
+              ));
+            }
+            if (size < BigInt(scope.value.value.value)) {
+              diagnostics.push(new SimplexDiagnostic(
+                new Range(
+                  document.positionAt(scope.value.start),
+                  document.positionAt(scope.value.end)
+                ),
+                `This value is too large to be assigned to ${typeTokenToTypeString(left)}`
+              ));
+            }
           }
         }
         if (scope.name.value.type === 'variable') {
@@ -1143,10 +1165,34 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       return transformGenericType(func, paramTypes);
     }
     case 'cast': {
-      // Should I do anything with the inner type?
       getType(rValue.value, document, environments, diagnostics);
-      logg(`Cast: ${rValue.to.value}`);
-      return typeStringToTypeToken(rValue.to.value);
+      const newType = typeStringToTypeToken(rValue.to.value);
+
+      if (isIntegerType(newType) && rValue.value.value.type === 'number') {
+        const signed = getIntSigned(newType)
+        const size = getIntSize(newType)
+
+        if (!signed && rValue.value.value.value < 0) {
+          diagnostics.push(new SimplexDiagnostic(
+            new Range(
+              document.positionAt(rValue.value.start),
+              document.positionAt(rValue.value.end)
+            ),
+            `A negative value cannot be casted to ${typeTokenToTypeString(newType)}`
+          ));
+        }
+        if (size < BigInt(rValue.value.value.value)) {
+          diagnostics.push(new SimplexDiagnostic(
+            new Range(
+              document.positionAt(rValue.value.start),
+              document.positionAt(rValue.value.end)
+            ),
+            `This value is too large to be casted to ${typeTokenToTypeString(newType)}`
+          ));
+        }
+      }
+      logg(`Cast: ${newType}`);
+      return newType;
     }
     case 'array': {
       const valuesTypes = rValue.values.map(v => [v, getType(v, document, environments, diagnostics)] as const);

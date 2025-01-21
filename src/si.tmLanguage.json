@@ -84,7 +84,7 @@
                 },
                 {
                     "name": "constant.numeric.si",
-                    "match": "(0x[0-9a-fA-F]+)"
+                    "match": "(0x[0-9a-fA-F_]+)"
                 },
                 {
                     "name": "constant.numeric.si",

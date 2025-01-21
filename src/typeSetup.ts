@@ -262,6 +262,22 @@ export const isIntegerType = (type: string): boolean => {
   );
 };
 
+export const getIntSigned = (type: string): boolean => {
+  if (type.startsWith('S')) return true;
+  return false;
+};
+
+export const getIntSize = (type: string): bigint => {
+  if (type === 'Int') return getIntSize('S2048');
+  if (type === 'SInt') return getIntSize('S2048');
+  if (type === 'UInt') return getIntSize('U2048');
+  let typeValue = parseInt(type.slice(1));
+  if (getIntSigned(type)) {
+    typeValue -= 1;
+  }
+  return (BigInt(1) << BigInt(typeValue)) - BigInt(1);
+};
+
 export const isUnsignedIntegerType = (type: string): boolean => {
   return type === "UInt" || /^U\d+$/.test(type);
 };
