@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.5.3]
+
+- Added SSD and Dual-Load RAM special functions
+
 ## [0.5.2]
 
 - Made variables accept uppercase letters if it's not the first letter
