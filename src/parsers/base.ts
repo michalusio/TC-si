@@ -4,13 +4,12 @@ import {
   exhaust,
   many,
   map,
-  opt,
   Parser,
   ref,
   regex,
   seq,
-  spaces,
   str,
+  wspaces,
 } from "parser-combinators";
 import { rstr, token } from "./utils";
 import { Token, VariableName } from "./ast";
@@ -141,22 +140,22 @@ export const typeDefinition = any(
     token(
       map(
         seq(
-          spaces,
+          wspaces,
           regex(/\w+/, "Variable name"),
           exhaust(
             seq(
-              spaces,
+              wspaces,
               str(","),
-              spaces,
+              wspaces,
               regex(/\w+/, "Variable name")
             ),
-            seq(spaces, rstr(">", false))
+            seq(wspaces, rstr(">", false))
           )
         ),
         ([_, variant, variants]) => [variant, ...variants.map((p) => p[3])]
       )
     ),
-    seq(spaces, rstr(">"))
+    seq(wspaces, rstr(">"))
   )
 );
 

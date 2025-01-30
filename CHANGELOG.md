@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.5.6]
+
+- Enum definitions now accept newlines
+
 ## [0.5.5]
 
 - Added basic asm block support
