@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.5.4]
+
+- Added push, pop and memory_copy methods
+- Added support for multiple function calls in series in an expression
+
 ## [0.5.3]
 
 - Added SSD and Dual-Load RAM special functions

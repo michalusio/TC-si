@@ -1,7 +1,9 @@
-import { addBinary, addType } from "../typeSetup";
+import { addBinary, addDot, addType } from "../typeSetup";
 import { boolType } from "./bool";
+import { intType } from "./int";
 
 export const stringType = addType("String", "A string type");
+addDot("len", "pub dot len(string: String) Int {", intType, [stringType]);
 addBinary("+", "Adds two strings together", stringType, [
   stringType,
   stringType,

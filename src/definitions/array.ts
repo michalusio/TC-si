@@ -7,7 +7,6 @@ addDot("find", "pub dot find(array: [@Any], value: @Any) Int {", intType, [
   arr(anyType),
   anyType,
 ]);
-addDot("len", "pub dot len(string: String) Int {", intType, [stringType]);
 addDot("len", "pub dot len(array: [@Any]) Int {", intType, [arr(anyType)]);
 addDot(
   "contains",
@@ -49,3 +48,6 @@ addDef(
   arr(anyType),
   [intType, anyType]
 );
+
+addDot("push", "pub dot push(arr: [@Any], value: @Any) {", null, [arr(anyType), anyType]);
+addDot("pop", "pub dot pop(arr: [@Any]) @Any {", anyType, [arr(anyType)]);

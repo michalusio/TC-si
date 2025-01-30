@@ -233,12 +233,10 @@ export function rValue(): Parser<Token<RValue>> {
                     ))
                 ),
                 seq(
-                    opt(
-                        seq(
-                            str('.'),
-                            surely(functionCall)
-                        )
-                    ),
+                    many(seq(
+                        str('.'),
+                        surely(functionCall)
+                    )),
                     opt(
                         seq(
                             between(
@@ -299,20 +297,20 @@ export function rValue(): Parser<Token<RValue>> {
                 };
                 return data;
             } else {
-                const op = operation as [[".", FunctionRValue] | null, [BinaryOperators, Token<RValue>] | null];
+                const op = operation as [[".", FunctionRValue][], [BinaryOperators, Token<RValue>] | null];
                 const functionCall = op[0];
-                if (functionCall) {
+                functionCall.forEach(([_, call]) => {
                     actualValue = <Token<RValue>>{
                         start: actualValue.start,
-                        end: (functionCall[1].parameters[functionCall[1].parameters.length - 1]?.end ?? (actualValue.end + 1)) + 1,
+                        end: (call.parameters[call.parameters.length - 1]?.end ?? (actualValue.end + 1)) + 1,
                         value: <DotMethodRValue>{
                             type: 'dotMethod',
                             object: actualValue,
-                            value: functionCall[1].value,
-                            parameters: functionCall[1].parameters
+                            value: call.value,
+                            parameters: call.parameters
                         }
                     };
-                }
+                });
 
                 const binaryOperator = op[1];
                 if (binaryOperator) {

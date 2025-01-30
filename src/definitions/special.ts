@@ -51,3 +51,5 @@ addDef("str", "pub def str(value: Int) String {", stringType, ['Int']);
 addDef("str", "pub def str(value: Char) String {", stringType, ['Char']);
 addDef("str", "pub def str(value: [@Type]) String {", stringType, [arr(anyType)]);
 addBinary("===", "pub binary ===(a: @A, b: @B) Bool {", boolType, [anyType, anyType]);
+
+addDef("_memory_copy", "def _memory_copy(source: Int, destination: Int, length: Int) {", null, [intType, intType, intType]);

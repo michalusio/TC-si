@@ -9,3 +9,4 @@ src/**
 tests/**
 dist-test/**
 node_modules
+lib.si
