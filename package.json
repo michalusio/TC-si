@@ -8,7 +8,7 @@
     "url": "https://github.com/michalusio/TC-si"
   },
   "description": "Turing Complete Simplex language extension",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "engines": {
     "vscode": "^1.73.0"
   },
