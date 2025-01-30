@@ -64,6 +64,23 @@ const regAllocUse = map(
 	})
 );
 
+const asmDeclaration = map(
+	seq(
+		str('asm'),
+		spacesPlus,
+		regex(/\w+/, "architecture"),
+		spacesPlus,
+		surely(
+			seq(
+				rstr('{'),
+				exhaust(regex(/[^}]/, 'any character'), str('}')),
+				str('}')
+			)
+		)
+	),
+	() => "asm block"
+)
+
 function statementsBlock(): Parser<StatementsBlock> {
 	return (ctx: Context) => map(
 		surely(
@@ -76,6 +93,7 @@ function statementsBlock(): Parser<StatementsBlock> {
 								lineComment,
 								blockComment,
 								newline,
+								asmDeclaration,
 								typeDeclaration,
 								regAllocUse,
 								returnStatement,

@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.5.5]
+
+- Added basic asm block support
+
 ## [0.5.4]
 
 - Added push, pop and memory_copy methods
