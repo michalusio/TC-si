@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.5.7]
+
+- Added `clz` and `ctz` functions definitions
+
 ## [0.5.6]
 
 - Enum definitions now accept newlines

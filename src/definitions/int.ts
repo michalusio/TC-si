@@ -130,5 +130,7 @@ addConst(
 addDef("random", "pub def random(max: Int) Int {", intType, [intType]);
 addDef("min", "pub def min(a: Int, b: Int) Int {", intType, [intType, intType]);
 addDef("max", "pub def max(a: Int, b: Int) Int {", intType, [intType, intType]);
+addDef("clz", "pub def clz(value: Int) Int {", intType, [intType]);
+addDef("ctz", "pub def ctz(value: Int) Int {", intType, [intType]);
 addDef("log10", "pub def log10(a: Int) Int {", intType, [intType]);
 addDef("int", "pub def int(value: String) Int {", intType, [stringType]);
