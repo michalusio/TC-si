@@ -67,14 +67,14 @@ const numericBase2Literal = map(
     })
 );
 const numericBase10Literal = map(
-    expect(intP, 'Numeric literal'),
-    (value) => (<NumberRValue>{
+    regex(/[0-9][_0-9]*/, 'Numeric literal'),
+    (str) => (<NumberRValue>{
         type: 'number',
-        value
+        value: parseInt(str.replaceAll('_', ''), 10)
     })
 );
 const numericBase16Literal = map(
-    regex(/0x[0-9a-zA-Z_]+/, 'Numeric literal'),
+    regex(/0x[0-9a-zA-Z][_0-9a-zA-Z]*/, 'Numeric literal'),
     (str) => (<NumberRValue>{
         type: 'number',
         value: parseInt(str.replaceAll('_', ''), 16)

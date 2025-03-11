@@ -4,6 +4,7 @@ import {
   exhaust,
   many,
   map,
+  opt,
   Parser,
   ref,
   regex,
@@ -13,7 +14,6 @@ import {
 } from "parser-combinators";
 import { rstr, token } from "./utils";
 import { Token, VariableName } from "./ast";
-import { log } from "../storage";
 
 export type ParseReturnType<T> = T extends Parser<infer R> ? R : never;
 
@@ -129,6 +129,9 @@ export const binaryOperator = any(
 
 export type BinaryOperators = ParseReturnType<typeof binaryOperator>;
 
+export const lineComment = regex(/\s*\/\/.*?\r?\n/s, "Line comment");
+export const blockComment = regex(/\s*\/\*.*?\*\//s, "Block comment");
+
 export const newline = regex(/[ \t]*\r?\n/, "End of line");
 
 export const functionKind = any(str("def"), str("dot"));
@@ -146,13 +149,14 @@ export const typeDefinition = any(
             seq(
               wspaces,
               str(","),
+              opt(any(lineComment, blockComment)),
               wspaces,
               regex(/\w+/, "Variable name")
             ),
             seq(wspaces, rstr(">", false))
           )
         ),
-        ([_, variant, variants]) => [variant, ...variants.map((p) => p[3])]
+        ([_, variant, variants]) => [variant, ...variants.map((p) => p[4])]
       )
     ),
     seq(wspaces, rstr(">"))
@@ -171,6 +175,3 @@ export function typeAliasDefinition(): Parser<Token<string>> {
       )
     )(ctx);
 }
-
-export const lineComment = regex(/\s*\/\/.*?\r?\n/s, "Line comment");
-export const blockComment = regex(/\s*\/\*.*?\*\//s, "Block comment");

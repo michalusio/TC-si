@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.5.8]
+
+- Added `_default` method - currently not working fully as it doesn't have support for referencing types
+- Added support for underscores in base-10 integers
+- Added support for comments in enum declarations
+
 ## [0.5.7]
 
 - Added `clz` and `ctz` functions definitions
