@@ -5,6 +5,7 @@ import type {
   EnvironmentType,
   EnvironmentVariable,
 } from "./environment";
+import { levenshtein } from "./levenshtein";
 import { baseEnvironment } from "./storage";
 
 /**
@@ -63,6 +64,24 @@ export const tryGetVariable = (
   return null;
 };
 
+export const getCloseVariable = (
+  environments: Environment[],
+  name: string
+): string | null => {
+  for (let index = environments.length - 1; index >= 1; index--) {
+    const variableKeys = Array.from(environments[index].variables.keys());
+    const variable = variableKeys
+      .filter(vk => levenshtein(vk, name) < 3)
+      .sort((a, b) => levenshtein(a, name) - levenshtein(b, name))
+      [0];
+    if (variable === undefined) {
+      continue;
+    }
+    return variable;
+  }
+  return null;
+};
+
 export const tryGetDotFunction = (
   environments: Environment[],
   name: string,
@@ -86,6 +105,29 @@ export const tryGetDotFunction = (
   return null;
 };
 
+export const getCloseDot = (
+  environments: Environment[],
+  name: string,
+  params: string[]
+): string | null => {
+  for (let index = environments.length - 1; index >= 0; index--) {
+    for (let func of environments[index].functions.filter(
+      (f) => levenshtein(f.name, name) < 3 && f.kind === "dot"
+    ).sort((a, b) => levenshtein(a.name, name) - levenshtein(b.name, name))) {
+      if (
+        params.length === func.parameterTypes.length &&
+        func.parameterTypes.every((toMatch, i) => {
+          const type = params[i];
+          return doesTypeMatch(type, toMatch);
+        })
+      ) {
+        return func.name;
+      }
+    }
+  }
+  return null;
+};
+
 export const tryGetDefFunction = (
   environments: Environment[],
   name: string,
@@ -103,6 +145,29 @@ export const tryGetDefFunction = (
         })
       ) {
         return func;
+      }
+    }
+  }
+  return null;
+};
+
+export const getCloseDef = (
+  environments: Environment[],
+  name: string,
+  params: string[]
+): string | null => {
+  for (let index = environments.length - 1; index >= 0; index--) {
+    for (let func of environments[index].functions.filter(
+      (f) => levenshtein(f.name, name) < 3 && f.kind === "def"
+    ).sort((a, b) => levenshtein(a.name, name) - levenshtein(b.name, name))) {
+      if (
+        params.length === func.parameterTypes.length &&
+        func.parameterTypes.every((toMatch, i) => {
+          const type = params[i];
+          return doesTypeMatch(type, toMatch);
+        })
+      ) {
+        return func.name;
       }
     }
   }
@@ -210,6 +275,30 @@ export const tryGetType = (
   }
   return null;
 };
+
+export const getCloseType = (
+  environments: Environment[],
+  name: string
+): string | null => {
+  if (name.startsWith("@")) return "@";
+  if (name.startsWith("*")) {
+    const found = getCloseType(environments, name.slice(1));
+    return found
+      ? '*' + found
+      : null;
+  }
+  for (let index = environments.length - 1; index >= 0; index--) {
+    const typeKeys = Array.from(environments[index].types.keys());
+    const type = typeKeys
+      .filter(vk => levenshtein(vk, name) < 3)
+      .sort((a, b) => levenshtein(a, name) - levenshtein(b, name))
+      [0];
+    if (type !== undefined) {
+      return type;
+    }
+  }
+  return null;
+}
 
 export const transformGenericType = (
   func: EnvironmentOperator | EnvironmentFunction | null,

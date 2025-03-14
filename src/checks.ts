@@ -11,10 +11,10 @@ import {
   VariableName,
 } from "./parsers/ast";
 import { SimplexDiagnostic } from './SimplexDiagnostic';
-import { IndexRValue, NumberRValue, RValue, StringRValue, VariableRValue } from "./parsers/rvalue";
+import { NumberRValue, RValue, StringRValue, VariableRValue } from "./parsers/rvalue";
 import { workspace } from 'vscode';
 import { Environment } from "./environment";
-import { doesTypeMatch, filterOnlyConst, getAfterIndexType, getIntSigned, getIntSize, isEnumType, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
+import { doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getIntSigned, getIntSize, isEnumType, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
 
 const useParser = <T>(
   text: string,
@@ -401,15 +401,28 @@ export const checkVariableExistence = (
                 )
               ];
             } else {
-              return [
-                new SimplexDiagnostic(
-                  new Range(
-                    document.positionAt(scope.name.start),
-                    document.positionAt(scope.name.end)
-                  ),
-                  `Cannot find name '${scope.name.value.value.value.name}'`
-                )
-              ];
+              const closeVariable = getCloseVariable(environments, scope.name.value.value.value.name);
+              if (closeVariable) {
+                return [
+                  new SimplexDiagnostic(
+                    new Range(
+                      document.positionAt(scope.name.start),
+                      document.positionAt(scope.name.end)
+                    ),
+                    `Cannot find name '${scope.name.value.value.value.name}' - did you mean '${closeVariable}'?`
+                  )
+                ];
+              } else {
+                return [
+                  new SimplexDiagnostic(
+                    new Range(
+                      document.positionAt(scope.name.start),
+                      document.positionAt(scope.name.end)
+                    ),
+                    `Cannot find name '${scope.name.value.value.value.name}'`
+                  )
+                ];
+              }
             }
           } else {
             tokensData.push({
@@ -850,15 +863,32 @@ const processRValue = (
         [rValue.object, ...rValue.parameters].map(p => getType(p, document, environments, results))
       );
       if (kind === null) {
-        results.push(
-          new SimplexDiagnostic(
-            new Range(
-              document.positionAt(rValue.value.start),
-              document.positionAt(rValue.value.end)
-            ),
-            `Cannot find name '${rValue.value.value}'`
-          )
+        const closeDot = getCloseDot(
+          environments,
+          rValue.value.value,
+          [rValue.object, ...rValue.parameters].map(p => getType(p, document, environments, results))
         );
+        if (closeDot) {
+          results.push(
+            new SimplexDiagnostic(
+              new Range(
+                document.positionAt(rValue.value.start),
+                document.positionAt(rValue.value.end)
+              ),
+              `Cannot find name '${rValue.value.value}' - did you mean '${closeDot}'?`
+            )
+          );
+        } else {
+          results.push(
+            new SimplexDiagnostic(
+              new Range(
+                document.positionAt(rValue.value.start),
+                document.positionAt(rValue.value.end)
+              ),
+              `Cannot find name '${rValue.value.value}'`
+            )
+          );
+        }
       } else {
         tokensData.push({
           definition: kind.data,
@@ -932,15 +962,28 @@ const checkVariable = (nameToken: Token<VariableName>, document: TextDocument, e
         )
       ];
     } else {
-      return [
-        new SimplexDiagnostic(
-          new Range(
-            document.positionAt(nameToken.start),
-            document.positionAt(nameToken.end)
-          ),
-          `Cannot find name '${nameToken.value.name}'`
-        )
-      ];
+      const closeVariable = getCloseVariable(environments, nameToken.value.name);
+      if (closeVariable) {
+        return [
+          new SimplexDiagnostic(
+            new Range(
+              document.positionAt(nameToken.start),
+              document.positionAt(nameToken.end)
+            ),
+            `Cannot find name '${nameToken.value.name}' - did you mean '${closeVariable}'?`
+          )
+        ];
+      } else {
+        return [
+          new SimplexDiagnostic(
+            new Range(
+              document.positionAt(nameToken.start),
+              document.positionAt(nameToken.end)
+            ),
+            `Cannot find name '${nameToken.value.name}'`
+          )
+        ];
+      }
     }
   } else {
     tokensData.push({
@@ -959,13 +1002,24 @@ const checkType = (typeToken: Token<string | null>, document: TextDocument, envi
   const typeName = typeStringToTypeToken(typeToken.value);
   const envType = tryGetType(environments, typeName);
   if (!envType) {
-    diagnostics.push(new SimplexDiagnostic(
-      new Range(
-        document.positionAt(typeToken.start),
-        document.positionAt(typeToken.end)
-      ),
-      `Cannot find type: '${typeToken.value}'`
-    ));
+    const closeType = getCloseType(environments, typeName);
+    if (closeType) {
+      diagnostics.push(new SimplexDiagnostic(
+        new Range(
+          document.positionAt(typeToken.start),
+          document.positionAt(typeToken.end)
+        ),
+        `Cannot find type: '${typeToken.value}' - did you mean '${closeType}'?`
+      ));
+    } else {
+      diagnostics.push(new SimplexDiagnostic(
+        new Range(
+          document.positionAt(typeToken.start),
+          document.positionAt(typeToken.end)
+        ),
+        `Cannot find type: '${typeToken.value}'`
+      ));
+    }
   }
   return typeName;
 }
@@ -1147,15 +1201,28 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       const paramTypes = rValue.parameters.map(param => getType(param, document, environments, diagnostics));
       const func = tryGetDefFunction(environments, rValue.value.value, paramTypes);
       if (typeCheck() && !func) {
-        diagnostics.push(
-          new SimplexDiagnostic(
-            new Range(
-              document.positionAt(rValue.value.start),
-              document.positionAt(rValue.value.end)
-            ),
-            `Cannot find function '${rValue.value.value}(${paramTypes.map(typeTokenToTypeString).join(", ")})'`
-          )
-        );
+        const closeFunc = getCloseDef(environments, rValue.value.value, paramTypes);
+        if (closeFunc) {
+          diagnostics.push(
+            new SimplexDiagnostic(
+              new Range(
+                document.positionAt(rValue.value.start),
+                document.positionAt(rValue.value.end)
+              ),
+              `Cannot find function '${rValue.value.value}(${paramTypes.map(typeTokenToTypeString).join(", ")})' - did you mean '${closeFunc}(${paramTypes.map(typeTokenToTypeString).join(", ")})'?`
+            )
+          );
+        } else {
+          diagnostics.push(
+            new SimplexDiagnostic(
+              new Range(
+                document.positionAt(rValue.value.start),
+                document.positionAt(rValue.value.end)
+              ),
+              `Cannot find function '${rValue.value.value}(${paramTypes.map(typeTokenToTypeString).join(", ")})'`
+            )
+          );
+        }
       }
       func?.parameterTypes.forEach((type, index) => {
         const actualType = paramTypes[index];

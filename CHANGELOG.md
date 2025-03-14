@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.5.10]
+- The extension will now try to provide a guess for def and dot functions, for types and variables.
+
 ## [0.5.9]
 - Full support for typechecking the `_default` method
 - Added basic call_conv block support
