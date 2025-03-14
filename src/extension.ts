@@ -5,6 +5,9 @@ import {
   DocumentSemanticTokensProvider,
   Hover,
   HoverProvider,
+  InlayHint,
+  InlayHintKind,
+  InlayHintsProvider,
   languages,
   LocationLink,
   MarkdownString,
@@ -23,7 +26,7 @@ import {
   log,
   tokensData,
 } from "./storage";
-import { getPositionInfo } from "./parser";
+import { getPositionInfo, getDeclarations } from "./parser";
 import { getRecoveryIssues } from "./parsers/base";
 import {
   checkVariableExistence,
@@ -31,6 +34,7 @@ import {
 } from "./checks";
 import { typeTokenToTypeString } from "./typeSetup";
 import './definitions';
+import { showInlayTypeHints } from "./workspace";
 
 const selector = { language: "si", scheme: "file" };
 
@@ -130,6 +134,17 @@ const hoverProvider: HoverProvider = {
     return new Hover(label, range);
   },
 };
+
+const inlayProvider: InlayHintsProvider = {
+  provideInlayHints(document, range, token) {
+    if (!showInlayTypeHints()) return [];
+    const declarations = getDeclarations(document);
+    return declarations
+      .filter(d => range.contains(document.positionAt(d.position.end)))
+      .map(d => new InlayHint(document.positionAt(d.position.end), ": "+typeTokenToTypeString(d.info.type!), InlayHintKind.Type));
+  },
+}
+
 // const linkProvider: DocumentLinkProvider = {
 //     provideDocumentLinks(document): ProviderResult<DocumentLink[]> {
 //         return tokensData
@@ -206,5 +221,6 @@ languages.registerDocumentSemanticTokensProvider(
 );
 languages.registerDeclarationProvider(selector, declarationProvider);
 languages.registerHoverProvider(selector, hoverProvider);
+languages.registerInlayHintsProvider(selector, inlayProvider);
 //languages.registerDocumentLinkProvider(selector, linkProvider);
 languages.registerRenameProvider(selector, renameProvider);

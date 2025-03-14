@@ -12,9 +12,9 @@ import {
 } from "./parsers/ast";
 import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { NumberRValue, RValue, StringRValue, VariableRValue } from "./parsers/rvalue";
-import { workspace } from 'vscode';
 import { Environment } from "./environment";
 import { doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getIntSigned, getIntSize, isEnumType, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
+import { explicitReturn, typeCheck } from "./workspace";
 
 const useParser = <T>(
   text: string,
@@ -103,15 +103,6 @@ export const performParsing = (
 
   return [parseResult, diags];
 };
-
-const typeCheck = () => workspace.getConfiguration('tcsi').get('showTypeCheckingErrors') as boolean;
-const explicitReturn = () => workspace.getConfiguration('tcsi').get('warnOnMissingExplicitReturn') as boolean;
-
-if (typeCheck() == null) {
-  try {
-    workspace.getConfiguration('tcsi').update('showTypeCheckingErrors', true);
-  } catch (e) {}
-}
 
 let logging = false;
 

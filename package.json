@@ -32,6 +32,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show type-checking errors"
+        },
+        "tcsi.showInlayTypeHints": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inlay type hints in variable declarations"
         }
       }
     },

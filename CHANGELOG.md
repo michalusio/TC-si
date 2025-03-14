@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.5.11]
+- Added a setting to show inlay type hints for declarations (defaults to `true`)
+
 ## [0.5.10]
 - The extension will now try to provide a guess for def and dot functions, for types and variables.
 

@@ -35,6 +35,22 @@ export const getPositionInfo = (document: TextDocument, position: Position): {
 	};
 }
 
+export const getDeclarations = (document: TextDocument): {
+    position: TokenRange;
+    definition: TokenRange | string;
+    info: {
+        range?: TokenRange;
+        type?: string;
+    };
+}[] => {
+	return tokensData.filter(td => {
+		if (typeof td.definition === 'string' || !td.info.type) return false;
+		return td.position.start == td.definition.start
+			&& td.position.end == td.definition.end
+			&& td.position.end == td.info.range?.end;
+	});
+}
+
 const returnStatement = map(
 	seq(
 		str('return'),
