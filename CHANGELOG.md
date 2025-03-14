@@ -1,5 +1,12 @@
 # Change Log
 
+## [0.5.9]
+- Full support for typechecking the `_default` method
+- Added basic call_conv block support
+- Added basic extern support
+- Added `_default`, `asm`, `x86_64`, `aarch64` and `windows_x64` to keywords
+- Added support for inline assigning of values to casted and indexed arrays
+
 ## [0.5.8]
 
 - Added `_default` method - currently not working fully as it doesn't have support for referencing types

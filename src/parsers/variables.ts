@@ -1,6 +1,6 @@
-import { any, between, exhaust, expect, intP, many, map, opt, Parser, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
-import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators, typeAliasDefinition } from "./base";
-import { ArrayRValue, BinaryRValue, CastedRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./rvalue";
+import { any, between, exhaust, expect, many, map, opt, Parser, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
+import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators, typeAliasDefinition, rpr } from "./base";
+import { ArrayRValue, BinaryRValue, CastedRValue, DefaultRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./rvalue";
 import { recoverByAddingChars, rstr, token } from "./utils";
 import { Token, VariableDeclaration, VariableModification } from "./ast";
 import { precedence } from "../storage";
@@ -174,6 +174,17 @@ const castedRValue = map(seq(
     }
 });
 
+const defaultRValue = map(seq(
+    str('_default(:'),
+    typeAliasDefinition(),
+    rpr
+), ([_, typeValue, __]) => {
+    return <DefaultRValue>{
+        type: '_default',
+        typeValue
+    }
+})
+
 const unaryRValue = map(seq(
     unaryOperator,
     spaces,
@@ -198,7 +209,7 @@ const parenthesisedRValue = map(between(
 export function rValue(): Parser<Token<RValue>> {
     return (ctx) => map(
         seq(
-            token(any(
+            token(any<RValue>(
                 unaryRValue,
                 castedRValue,
                 stringLiteral,
@@ -208,6 +219,7 @@ export function rValue(): Parser<Token<RValue>> {
                 numericBase10Literal,
                 parenthesisedRValue,
                 arrayLiteral,
+                defaultRValue,
                 functionCall,
                 variableLiteral
             )),
@@ -379,7 +391,7 @@ export function rValue(): Parser<Token<RValue>> {
 export const variableModification = map(
     expect(
         seq(
-            token(variableLiteral),
+            token(any(variableLiteral, between(lpr, castedRValue, rpr))),
             many(between(
                 lbr,
                 recoverByAddingChars('0', rValue(), true, 'value'),
@@ -396,7 +408,7 @@ export const variableModification = map(
         'Variable modification statement'
     ),
     ([name, indexes, _, operator, __, [___, value]]) => {
-        let actualName: Token<VariableRValue | IndexRValue> = name;
+        let actualName: Token<VariableRValue | CastedRValue | IndexRValue> = name;
         indexes.forEach(index => {
             actualName = <Token<IndexRValue>>{
                 start: actualName.start,

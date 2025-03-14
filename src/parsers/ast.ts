@@ -1,4 +1,4 @@
-import { IndexRValue, NumberRValue, RValue, StringRValue, VariableRValue } from "./rvalue";
+import { CastedRValue, IndexRValue, NumberRValue, RValue, StringRValue, VariableRValue } from "./rvalue";
 
 export type TokenRange = {
     start: number, 
@@ -61,7 +61,7 @@ export type VariableDeclaration = {
 
 export type VariableModification = {
     type: 'modification',
-    name: Token<IndexRValue | VariableRValue>,
+    name: Token<IndexRValue | CastedRValue | VariableRValue>,
     operator?: string,
     value: Token<RValue>
 }

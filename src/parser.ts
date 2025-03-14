@@ -81,6 +81,36 @@ const asmDeclaration = map(
 	() => "asm block"
 )
 
+const callConvDeclaration = map(
+	seq(
+		str('call_conv'),
+		spacesPlus,
+		regex(/\w+/, "architecture"),
+		spacesPlus,
+		regex(/\w+/, "os"),
+		spacesPlus,
+		surely(
+			seq(
+				rstr('('),
+				exhaust(regex(/[^)]/, 'any character'), str(')')),
+				str(')')
+			)
+		)
+	),
+	() => "call_conv block"
+)
+
+const externDeclaration = map(
+	seq(
+		str('extern'),
+		spacesPlus,
+		regex(/\w+/, "os"),
+		spacesPlus,
+		regex(/\w+/, "varName")
+	),
+	() => "extern block"
+)
+
 function statementsBlock(): Parser<StatementsBlock> {
 	return (ctx: Context) => map(
 		surely(
@@ -299,6 +329,8 @@ export const languageParser = map(
 				lineComment,
 				blockComment,
 				newline,
+				callConvDeclaration,
+				externDeclaration,
 				map(seq(topmostVariableDeclaration, any(newline, lineComment, spacesPlus, eof)), ([v]) => v.value),
 				map(
 					seq(

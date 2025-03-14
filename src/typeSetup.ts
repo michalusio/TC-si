@@ -7,6 +7,9 @@ import type {
 } from "./environment";
 import { baseEnvironment } from "./storage";
 
+/**
+ * Converts from [] notation to * notation
+ */
 export const typeStringToTypeToken = (value: string): string => {
   let numberOfArrays = 0;
   for (let index = 0; index < value.length; index++) {
@@ -18,6 +21,9 @@ export const typeStringToTypeToken = (value: string): string => {
   return `${'*'.repeat(numberOfArrays)}${value.slice(numberOfArrays, value.length - numberOfArrays)}`;
 }
 
+/**
+ * Converts from * notation to [] notation
+ */
 export const typeTokenToTypeString = (value: string): string => {
   let numberOfArrays = 0;
   for (let index = 0; index < value.length; index++) {

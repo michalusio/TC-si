@@ -64,11 +64,11 @@
             "patterns": [
                 {
                     "name": "keyword.control.si",
-                    "match": "\\b(if|while|return|else|elif|switch|_reg_alloc_use|default)\\b"
+                    "match": "\\b(if|while|return|else|elif|switch|_reg_alloc_use|_default|default|asm)\\b"
                 },
                 {
                     "name": "keyword.other.si",
-                    "match": "\\b(pub|def|dot|binary|unary|const|let|var|type|extern|call_conv)\\b"
+                    "match": "\\b(pub|def|dot|binary|unary|const|let|var|type|extern|call_conv|x86_64|aarch64|windows_x64)\\b"
                 },
                 {
                     "name": "keyword.operator.arithmetic.si",

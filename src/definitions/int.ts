@@ -1,6 +1,5 @@
-import { addBinary, addConst, addDef, addType, addUnary, anyType } from "../typeSetup";
+import { addBinary, addConst, addDef, addType, addUnary } from "../typeSetup";
 import { boolType } from "./bool";
-import { stringType } from "./string";
 
 export const intType = addType("Int", "A type allowing any integer to be passed in");
 
@@ -133,4 +132,3 @@ addDef("max", "pub def max(a: Int, b: Int) Int {", intType, [intType, intType]);
 addDef("clz", "pub def clz(value: Int) Int {", intType, [intType]);
 addDef("ctz", "pub def ctz(value: Int) Int {", intType, [intType]);
 addDef("log10", "pub def log10(a: Int) Int {", intType, [intType]);
-addDef("int", "pub def int(value: String) Int {", intType, [stringType]);

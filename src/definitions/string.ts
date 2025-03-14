@@ -1,4 +1,4 @@
-import { addBinary, addDot, addType } from "../typeSetup";
+import { addBinary, addDef, addDot, addType } from "../typeSetup";
 import { boolType } from "./bool";
 import { intType } from "./int";
 
@@ -18,3 +18,4 @@ addBinary(
   boolType,
   [stringType, stringType]
 );
+addDef("int", "pub def int(value: String) Int {", intType, [stringType]);

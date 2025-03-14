@@ -1,0 +1,10 @@
+def on_reset($scratch_space: [Int], test: Int) {
+
+    var text = ""
+
+    let len = text.len()
+
+    if len > 12 {
+        exit(1)
+    }
+}

@@ -48,6 +48,11 @@ export type FunctionRValue = {
     parameters: Token<RValue>[]
 }
 
+export type DefaultRValue = {
+    type: '_default',
+    typeValue: Token<string>
+}
+
 export type DotMethodRValue = {
     type: 'dotMethod',
     object: Token<RValue>,
@@ -80,4 +85,4 @@ export type TernaryRValue = {
     ifFalse: Token<RValue>
 }
 
-export type RValue = ParenthesisedRValue | CastedRValue | UnaryRValue | StringRValue | InterpolatedRValue | NumberRValue | ArrayRValue | FunctionRValue | DotMethodRValue | IndexRValue | VariableRValue | BinaryRValue | TernaryRValue;
+export type RValue = ParenthesisedRValue | CastedRValue | UnaryRValue | StringRValue | InterpolatedRValue | NumberRValue | ArrayRValue | FunctionRValue | DefaultRValue | DotMethodRValue | IndexRValue | VariableRValue | BinaryRValue | TernaryRValue;

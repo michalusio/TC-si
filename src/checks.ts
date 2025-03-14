@@ -427,8 +427,21 @@ export const checkVariableExistence = (
               ));
             }
           }
+        } else if (scope.name.value.type === 'cast') {
+          const cast = scope.name.value;
+          const newType = checkType(cast.to, document, environments, diagnostics);
+          diagnostics.push(...processRValue(document, environments, cast.value.value));
+          diagnostics.push(new SimplexDiagnostic(
+            new Range(
+              document.positionAt(scope.name.start),
+              document.positionAt(scope.name.end)
+            ),
+            newType?.startsWith('*')
+              ? `Cannot assign to a casted value - did you mean to assign to an element of it?`
+              : `Cannot assign to a casted value`
+          ));
         } else {
-          const index = scope.name.value as IndexRValue;
+          const index = scope.name.value;
           diagnostics.push(...processRValue(document, environments, index.parameter.value));
           diagnostics.push(...processRValue(document, environments, index.value.value));
         }
@@ -884,6 +897,14 @@ const processRValue = (
       results.push(...processRValue(document, environments, rValue.value.value));
       break;
     }
+    case '_default': {
+      getType({
+        start: rValue.typeValue.start,
+        end: rValue.typeValue.end,
+        value: rValue
+      }, document, environments, results);
+      break;
+    }
     default: {
       const x: never = rValue;
       throw x;
@@ -1239,7 +1260,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           `Unknown variable type`
         ));
       }
-      logg(`Variable: *${variableData?.varType ?? '?'}`);
+      logg(`Variable: ${variableData?.varType ?? '?'}`);
       return variableData?.varType ?? '?';
     }
     case 'index': {
@@ -1266,6 +1287,20 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       }
       logg(`Index: ${afterIndexType ?? '?'}`);
       return afterIndexType ?? '?';
+    }
+    case '_default': {
+      const type = checkType(rValue.typeValue, document, environments, diagnostics);
+      if (typeCheck() && (!type || type.endsWith('?'))) {
+        diagnostics.push(new SimplexDiagnostic(
+          new Range(
+            document.positionAt(rValue.typeValue.start),
+            document.positionAt(rValue.typeValue.end)
+          ),
+          `Unknown type`
+        ));
+      }
+      logg(`Type: ${type ?? '?'}`);
+      return type ?? '?';
     }
     default: {
       const x: never = rValue;
