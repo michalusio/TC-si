@@ -103,30 +103,23 @@ export const functionBinaryOperator = any(
 );
 
 export const binaryOperator = any(
-  str("+"),
-  str("-"),
-  str("&&"),
-  str("&"),
-  str("||"),
-  str("|"),
-  str("^"),
-  str("*"),
-  str("%"),
-  str("<="),
   str("<u"),
   str("<s"),
-  str(">="),
-  str("!="),
   str("==="),
-  str("=="),
-  str("<<"),
-  str(">>"),
-  str("<"),
-  str(">"),
   str("rol"),
   str("ror"),
   str("asr"),
-  map<string, "/">(regex(/\/(?!\/)/, "/"), (r) => r as "/")
+  regex(/\/(?!\/)/, "/"),
+  ...operatable.flatMap(o => o === '?'
+    ? []
+    : [
+    ...operatable.flatMap(o2 => [
+      ...operatable.map(o3 => str(o+o2+o3)),
+      str(o+o2)
+    ]),
+    str(o)
+  ]),
+  str('/='),
 );
 
 export type BinaryOperators = ParseReturnType<typeof binaryOperator>;

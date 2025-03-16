@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.5.14]
+- Fixed binary operator support in some edge cases
+
 ## [0.5.13]
 - Added support for 2-character unary operators and 3-character binary operators
 - Added support for assigning different integer types

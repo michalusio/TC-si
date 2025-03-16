@@ -4,13 +4,19 @@ def on_reset($scratch_space: [Int], test: Int) {
 
     let len = text.len()
 
+    let aa = 0 -> 5
+
     if len > 12 {
         exit(1)
     }
 }
 
+binary -> (a: Int, b: Int) String {
+    return ""
+}
+
 const A = <U64>0
 var b = <S65>0
 def x() {
-    b = A
+    .b = A
 }
