@@ -9,11 +9,11 @@ import {
   StatementsBlock,
   Token,
   VariableName,
-} from "./parsers/ast";
+} from "./parsers/types/ast";
 import { SimplexDiagnostic } from './SimplexDiagnostic';
-import { NumberRValue, RValue, StringRValue, VariableRValue } from "./parsers/rvalue";
+import { NumberRValue, RValue, StringRValue, VariableRValue } from "./parsers/types/rvalue";
 import { Environment } from "./environment";
-import { doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getIntSigned, getIntSize, isEnumType, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
+import { doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntSize, isEnumType, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
 import { explicitReturn, typeCheck } from "./workspace";
 
 const useParser = <T>(
@@ -99,7 +99,7 @@ export const performParsing = (
       );
     }
   }
-  log.appendLine(`Time spent parsing: ${Date.now() - startTime}ms`);
+  logg(`Time spent parsing: ${Date.now() - startTime}ms`);
 
   return [parseResult, diags];
 };
@@ -883,8 +883,13 @@ const processRValue = (
       } else {
         tokensData.push({
           definition: kind.data,
-          position: rValue.value,
-          info: {}
+          position: {
+            start: rValue.value.start,
+            end: rValue.parameters.reduce((c, n) => Math.max(c, n.end), rValue.value.end + 1) + 1
+          },
+          info: {
+            dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? '?')
+          }
         });
       }
       break;
@@ -906,9 +911,13 @@ const processRValue = (
       if (kind !== null) {
         tokensData.push({
           definition: kind.data,
-          position: rValue.value,
+          position: {
+            start: rValue.value.start,
+            end: rValue.parameters.reduce((c, n) => Math.max(c, n.end), rValue.value.end + 1) + 1
+          },
           info: {
-            type: kind.returnType ?? undefined
+            type: kind.returnType ?? undefined,
+            dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? '?')
           }
         });
       }
@@ -981,7 +990,8 @@ const checkVariable = (nameToken: Token<VariableName>, document: TextDocument, e
       definition: kind.data,
       position: nameToken,
       info: {
-        type: kind.varType ?? '?'
+        type: kind.varType ?? '?',
+        dotFunctionSuggestions: getDotFunctionsFor(environments, kind.varType ?? '?')
       }
     });
   }
@@ -1080,14 +1090,38 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
   switch (rValue.type) {
     case 'number':
       logg(`Number: Int`);
+      tokensData.push({
+        definition: rValue.value.toString(),
+        position: value,
+        info: {
+          type: 'Int',
+          dotFunctionSuggestions: getDotFunctionsFor(environments, 'Int')
+        }
+      });
       return 'Int';
     case 'string':
     case 'interpolated':
       logg(`String: String`);
+      tokensData.push({
+        definition: rValue.value.toString(),
+        position: value,
+        info: {
+          type: 'String',
+          dotFunctionSuggestions: getDotFunctionsFor(environments, 'String')
+        }
+      });
       return 'String';
     case 'parenthesis': {
       const type = getType(rValue.value, document, environments, diagnostics);
       logg(`Parenthesis: ${type}`);
+      tokensData.push({
+        definition: "",
+        position: value,
+        info: {
+          type: type,
+          dotFunctionSuggestions: getDotFunctionsFor(environments, type)
+        }
+      });
       return type;
     }
     case 'unary': {
@@ -1358,6 +1392,14 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         ));
       }
       logg(`Type: ${type ?? '?'}`);
+      tokensData.push({
+        definition: "",
+        position: value,
+        info: {
+          type: type ?? '?',
+          dotFunctionSuggestions: getDotFunctionsFor(environments, type ?? '?')
+        }
+      });
       return type ?? '?';
     }
     default: {

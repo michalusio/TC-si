@@ -13,9 +13,7 @@ import {
   wspaces,
 } from "parser-combinators";
 import { rstr, token } from "./utils";
-import { Token, VariableName } from "./ast";
-
-export type ParseReturnType<T> = T extends Parser<infer R> ? R : never;
+import { ParseReturnType, Token, VariableName } from "./types/ast";
 
 const recoveryIssues: {
   type: "added" | "skipped";
@@ -68,7 +66,22 @@ export const functionName = token(
   ref(regex(/\w+/, "Function name"), (p) => !disallowedNames.includes(p))
 );
 
-export const unaryOperator = any(str("-"), str("~"), str("!"), str("+"));
+export const unaryOperator = any(
+  str("-"),
+  str("="),
+  str("<"),
+  str(">"),
+  str('*'),
+  str('/'),
+  str('%'),
+  str("+"),
+  str("~"),
+  str('|'),
+  str('^'),
+  str("!"),
+  str("&"),
+  str("?"),
+);
 
 export const functionBinaryOperator = any(
   str("+="),

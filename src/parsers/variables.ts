@@ -1,8 +1,8 @@
 import { any, between, exhaust, expect, many, map, opt, Parser, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
 import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators, typeAliasDefinition, rpr } from "./base";
-import { ArrayRValue, BinaryRValue, CastedRValue, DefaultRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./rvalue";
+import { ArrayRValue, BinaryRValue, CastedRValue, DefaultRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./types/rvalue";
 import { recoverByAddingChars, rstr, token } from "./utils";
-import { Token, VariableDeclaration, VariableModification } from "./ast";
+import { Token, VariableDeclaration, VariableModification } from "./types/ast";
 import { precedence } from "../storage";
 
 const variableKind = token(any(

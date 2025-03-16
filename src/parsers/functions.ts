@@ -1,6 +1,6 @@
 import { any, between, exhaust, map, opt, seq, spaces, spacesPlus, str, surely } from "parser-combinators";
 import { functionBinaryOperator, functionKind, functionName, lpr, typeAliasDefinition, unaryOperator, variableName } from "./base";
-import { FunctionDefinition, Parameter } from "./ast";
+import { FunctionDefinition, Parameter } from "./types/ast";
 import { recoverByAddingChars, rstr, token } from "./utils";
 
 const parameter = map(seq(

@@ -1,4 +1,7 @@
 import {
+  CompletionItem,
+  CompletionItemKind,
+  CompletionItemProvider,
   Declaration,
   DeclarationProvider,
   Diagnostic,
@@ -9,6 +12,7 @@ import {
   InlayHintKind,
   InlayHintsProvider,
   languages,
+  LanguageStatusSeverity,
   LocationLink,
   MarkdownString,
   ProviderResult,
@@ -21,10 +25,11 @@ import {
 } from "vscode";
 import {
   baseEnvironment,
+  clearTokensData,
   diagnostics,
+  finalizeTokensData,
   legend,
   log,
-  tokensData,
 } from "./storage";
 import { getPositionInfo, getDeclarations } from "./parser";
 import { getRecoveryIssues } from "./parsers/base";
@@ -102,66 +107,50 @@ const hoverProvider: HoverProvider = {
   provideHover(document, position): ProviderResult<Hover> {
     const data = getPositionInfo(document, position);
     if (!data) return;
+
     const range = new Range(
       document.positionAt(data.current.start),
       document.positionAt(data.current.end)
     );
-    const label = new MarkdownString();
-    if (data.info.type) {
-      label.appendCodeblock(
-        `${document.getText(range)}: ${typeTokenToTypeString(
-          data.info.type ?? "?"
-        )}`
-      );
-    } else {
-      label.appendCodeblock(document.getText(range));
-    }
-    label.appendMarkdown("---");
     if (typeof data.definition === "string") {
-      label.appendCodeblock("\n" + data.definition, "si");
-      return new Hover(
-        label,
-        new Range(
-          document.positionAt(data.current.start),
-          document.positionAt(data.current.end)
-        )
-      );
+      const label = new MarkdownString();
+      label.appendCodeblock(data.definition, "si");
+      return new Hover(label, range);
     }
     if (!data.info.range) return;
+
     const startPosition = document.positionAt(data.info.range.start);
     const line = document.lineAt(startPosition.line);
-    label.appendCodeblock("\n" + line.text.trim(), "si");
+    const label = new MarkdownString();
+    label.appendCodeblock(line.text.trim(), "si");
+    
     return new Hover(label, range);
   },
 };
 
 const inlayProvider: InlayHintsProvider = {
-  provideInlayHints(document, range, token) {
+  provideInlayHints(document, range) {
     if (!showInlayTypeHints()) return [];
-    const declarations = getDeclarations(document);
+    const declarations = getDeclarations();
     return declarations
       .filter(d => range.contains(document.positionAt(d.position.end)))
       .map(d => new InlayHint(document.positionAt(d.position.end), ": "+typeTokenToTypeString(d.info.type!), InlayHintKind.Type));
   },
 }
 
-// const linkProvider: DocumentLinkProvider = {
-//     provideDocumentLinks(document): ProviderResult<DocumentLink[]> {
-//         return tokensData
-//             .filter(t => !(t.definition.start === t.position.start && t.definition.end === t.position.end))
-//             .map(t => {
-//                 const position = new Range(
-//                     document.positionAt(t.position.start),
-//                     document.positionAt(t.position.end)
-//                 );
-//                 const definitionPosition = document.positionAt(t.definition.start);
-//                 return new DocumentLink(
-//                     position,
-//                     document.uri.with({ fragment: `L${definitionPosition.line+1},${definitionPosition.character+1}`})
-//                 );
-//             });
-//     }
-//}
+const dotCompletionProvider: CompletionItemProvider = {
+  provideCompletionItems(document, position, token, context): ProviderResult<CompletionItem[]> {
+    const info = getPositionInfo(document, position.translate(0, -1));
+    if (!info || info.current.end !== document.offsetAt(position) - 1) return [];
+    return info.dotFunctionSuggestions.map(s =>  new CompletionItem({
+      label: s[0],
+      description: typeof s[1] === 'string' ? s[1] : document.getText(new Range(
+        document.positionAt(s[1].start),
+        document.positionAt(s[1].end)
+      ))
+    }, CompletionItemKind.Method));
+  },
+}
 
 const diagnosticsPerFile: Record<string, Diagnostic[]> = {};
 export const deduplicateDiagnostics = (diags: Diagnostic[]): Diagnostic[] => {
@@ -175,42 +164,68 @@ export const deduplicateDiagnostics = (diags: Diagnostic[]): Diagnostic[] => {
   })
 	return Object.values(container);
 }
+
+const statusItem = languages.createLanguageStatusItem('si', selector);
+statusItem.name = "TC Simplex Language status";
+
 const tokenProvider: DocumentSemanticTokensProvider = {
-  provideDocumentSemanticTokens(document): ProviderResult<SemanticTokens> {
+  provideDocumentSemanticTokens(document, token): ProviderResult<SemanticTokens> {
+    statusItem.busy = true;
+    statusItem.text = "TC Simplex is parsing the file";
+    statusItem.severity = LanguageStatusSeverity.Information;
+
     log.clear();
-    tokensData.length = 0;
+    clearTokensData();
     getRecoveryIssues().length = 0;
     diagnostics.clear();
+    return new Promise<SemanticTokens>(res => {
+      const startTime = Date.now();
+      const tokensBuilder = new SemanticTokensBuilder(legend);
 
-    const tokensBuilder = new SemanticTokensBuilder(legend);
-    const [parseResult, diags] = performParsing(document);
+      if (token.isCancellationRequested) {
+        statusItem.busy = false;
+        statusItem.text = "TC Simplex stopped parsing the file";
+      }
 
-    if (parseResult) {
-      checkVariableExistence(
-        document,
-        parseResult,
-        [
-          baseEnvironment,
-          {
-            type: "scope",
-            switchTypes: new Map(),
-            functions: [],
-            operators: [],
-            types: new Map(),
-            variables: new Map(),
-          },
-        ],
-        diags
-      );
-    }
-    log.appendLine(`Tokens: ${tokensData.length}`);
+      const [parseResult, diags] = performParsing(document);
 
-	diagnosticsPerFile[document.uri.toString()] = deduplicateDiagnostics(diags);
-	Object.entries(diagnosticsPerFile).forEach(([key, value]) => {
-		diagnostics.set(Uri.parse(key, true), value);
-	});
+      if (token.isCancellationRequested) {
+        statusItem.busy = false;
+        statusItem.text = "TC Simplex stopped parsing the file";
+      }
 
-    return tokensBuilder.build();
+      if (parseResult) {
+        checkVariableExistence(
+          document,
+          parseResult,
+          [
+            baseEnvironment,
+            {
+              type: "scope",
+              switchTypes: new Map(),
+              functions: [],
+              operators: [],
+              types: new Map(),
+              variables: new Map(),
+            },
+          ],
+          diags
+        );
+        statusItem.busy = false;
+        statusItem.text = `TC Simplex parsed the file (in ${Date.now() - startTime}ms)`;
+      } else {
+        statusItem.busy = false;
+        statusItem.severity = LanguageStatusSeverity.Warning;
+        statusItem.text = `TC Simplex failed to parse the file (in ${Date.now() - startTime}ms)`;
+      }
+
+      diagnosticsPerFile[document.uri.toString()] = deduplicateDiagnostics(diags);
+      Object.entries(diagnosticsPerFile).forEach(([key, value]) => {
+        diagnostics.set(Uri.parse(key, true), value);
+      });
+      finalizeTokensData();
+      res(tokensBuilder.build());
+    });
   },
 };
 
@@ -222,5 +237,5 @@ languages.registerDocumentSemanticTokensProvider(
 languages.registerDeclarationProvider(selector, declarationProvider);
 languages.registerHoverProvider(selector, hoverProvider);
 languages.registerInlayHintsProvider(selector, inlayProvider);
-//languages.registerDocumentLinkProvider(selector, linkProvider);
 languages.registerRenameProvider(selector, renameProvider);
+languages.registerCompletionItemProvider(selector, dotCompletionProvider, '.');

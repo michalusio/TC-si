@@ -11,7 +11,7 @@ import {
 } from "parser-combinators";
 import { getRecoveryIssues } from "./base";
 import { log } from "../storage";
-import { Token } from "./ast";
+import { Token } from "./types/ast";
 
 export function recoverBySkippingChars<T>(
   chars: number,

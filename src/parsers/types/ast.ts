@@ -1,4 +1,7 @@
+import { Parser } from "parser-combinators";
 import { CastedRValue, IndexRValue, NumberRValue, RValue, StringRValue, VariableRValue } from "./rvalue";
+
+export type ParseReturnType<T> = T extends Parser<infer R> ? R : never;
 
 export type TokenRange = {
     start: number, 

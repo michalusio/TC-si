@@ -1,6 +1,6 @@
 import { window, Range, SemanticTokensLegend, languages } from 'vscode';
-import { TokenRange } from './parsers/ast';
-import type { binaryOperator, ParseReturnType } from './parsers/base';
+import { ParseReturnType, TokenRange } from './parsers/types/ast';
+import type { binaryOperator } from './parsers/base';
 import type { Environment } from './environment';
 
 export const log = window.createOutputChannel("TC-si");
@@ -9,14 +9,31 @@ const tokenTypes = ['type', 'parameter', 'variable'];
 const tokenModifiers = ['declaration', 'definition', 'readonly'];
 export const legend = new SemanticTokensLegend(tokenTypes, tokenModifiers);
 
-export const tokensData: {
+export type TokenData = {
 	position: TokenRange,
 	definition: TokenRange | string,
 	info: {
 		range?: TokenRange,
 		type?: string;
+		dotFunctionSuggestions?: [string, string | TokenRange][];
 	}
-}[] = [];
+};
+
+export const tokensData: TokenData[] = [];
+export let lastTokensData: TokenData[] = [];
+
+export const clearTokensData = () => {
+	if (tokensData.length > 0) {
+		lastTokensData = [...tokensData];
+	}
+	tokensData.length = 0;
+}
+
+export const finalizeTokensData = () => {
+	if (tokensData.length > 0) {
+		lastTokensData = [...tokensData];
+	}
+}
 
 export const diagnostics = languages.createDiagnosticCollection('si');
 

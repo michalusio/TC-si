@@ -37,6 +37,7 @@ addDef("has_console_component", "pub def has_console_component() Bool {", boolTy
 addDef("get_assembler_register_count", "pub def get_assembler_register_count() Int {", intType, []);
 addDef("get_console_offset", "pub def get_console_offset() Int {", intType, []);
 addDef("get_assembler_width", "pub def get_assembler_width() Int {", intType, []);
+addDef("get_assembler_little_endian", "pub def get_assembler_little_endian() Bool {", boolType, []);
 addDef("get_latency_ram_is_busy", "pub def get_latency_ram_is_busy() Bool {", boolType, []);
 addDef("set_address_text", "pub def set_address_text(text: String) {", null, [stringType]);
 addDef("set_value_text", "pub def set_value_text(text: String) {", null, [stringType]);

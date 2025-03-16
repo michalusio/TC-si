@@ -1,5 +1,13 @@
 # Change Log
 
+## [0.5.12]
+- Added `get_assembler_little_endian` built-in method support
+- Added status bar information item about parsing (whether it parsed correctly and time taken)
+- Made the hover information more succinct
+- Made the language extension hold some type information from previous parse when the new one fails
+- Added support for all single-character unary operators
+- Added dot method code completions for numeric and string literals, function calls and variables
+
 ## [0.5.11]
 - Added a setting to show inlay type hints for declarations (defaults to `true`)
 

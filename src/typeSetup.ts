@@ -6,6 +6,7 @@ import type {
   EnvironmentVariable,
 } from "./environment";
 import { levenshtein } from "./levenshtein";
+import { TokenRange } from "./parsers/types/ast";
 import { baseEnvironment } from "./storage";
 
 /**
@@ -127,6 +128,21 @@ export const getCloseDot = (
   }
   return null;
 };
+
+export const getDotFunctionsFor = (
+  environments: Environment[],
+  type: string
+): [string, string | TokenRange][] => {
+  const results: [string, string | TokenRange][] = [];
+  for (let index = environments.length - 1; index >= 0; index--) {
+    for (let func of environments[index].functions.filter(f => f.kind === "dot")) {
+      if (func.parameterTypes[0] === type) {
+        results.push([func.name, func.data]);
+      }
+    }
+  }
+  return results;
+}
 
 export const tryGetDefFunction = (
   environments: Environment[],

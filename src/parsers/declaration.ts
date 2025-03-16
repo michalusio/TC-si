@@ -1,6 +1,6 @@
 import { map, opt, seq, spacesPlus, str, surely } from "parser-combinators";
 import { typeDefinition, typeName } from "./base";
-import { TypeDefinition } from "./ast";
+import { TypeDefinition } from "./types/ast";
 
 export const typeDeclaration = map(seq(
     opt(str('pub ')),

@@ -1,5 +1,5 @@
 import { Token, VariableName } from "./ast"
-import { binaryOperator, BinaryOperators, ParseReturnType } from "./base"
+import { BinaryOperators } from "../base"
 
 export type CastedRValue = {
     type: 'cast',

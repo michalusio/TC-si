@@ -3,10 +3,10 @@ import { any, between, Context, exhaust, map, oneOrMany, opt, Parser, ref, regex
 import { functionDeclaration as functionDefinition } from "./parsers/functions";
 import { blockComment, lcb, lineComment, newline, variableName } from "./parsers/base";
 import { anyNumericLiteral, rValue, stringLiteral, topmostVariableDeclaration, variableDeclaration, variableLiteral, variableModification } from "./parsers/variables";
-import { typeDeclaration } from "./parsers/types";
+import { typeDeclaration } from "./parsers/declaration";
 import { eof, lookaround, manyForSure, recoverByAddingChars, recoverBySkipping, rstr, token } from "./parsers/utils";
-import { FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, TokenRange, TypeDefinition, VariableDeclaration, WhileStatement } from "./parsers/ast";
-import { tokensData } from "./storage";
+import { FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, TokenRange, TypeDefinition, VariableDeclaration, WhileStatement } from "./parsers/types/ast";
+import { lastTokensData } from "./storage";
 
 export const getPositionInfo = (document: TextDocument, position: Position): {
 	current: TokenRange,
@@ -15,15 +15,16 @@ export const getPositionInfo = (document: TextDocument, position: Position): {
 		range?: TokenRange;
 		type?: string;
 	},
-	all: TokenRange[]
+	all: TokenRange[],
+	dotFunctionSuggestions: [string, string | TokenRange][]
  } | null => {
 	const index = document.offsetAt(position);
-	const token = tokensData.find(token => token.position.start <= index && token.position.end >= index);
+	const token = lastTokensData.find(token => token.position.start <= index && token.position.end >= index);
 	if (!token) return null;
 	const definitionToken = (typeof token.definition !== 'string')
-		? tokensData.find(t => t.position.start === (token.definition as TokenRange).start && t.position.end === (token.definition as TokenRange).end)
+		? lastTokensData.find(t => t.position.start === (token.definition as TokenRange).start && t.position.end === (token.definition as TokenRange).end)
 		: undefined;
-	const allTokens = tokensData.filter(t => 
+	const allTokens = lastTokensData.filter(t => 
 		(typeof t.definition === 'string' && typeof token.definition === 'string' && (t.definition === token.definition))
 	 || (typeof t.definition !== 'string' && typeof token.definition !== 'string' && t.definition.start === token.definition.start && t.definition.end === token.definition.end)
 	);
@@ -31,11 +32,12 @@ export const getPositionInfo = (document: TextDocument, position: Position): {
 		current: token.position,
 		definition: token.definition,
 		info: definitionToken?.info ?? {},
-		all: allTokens.map(t => t.position)
+		all: allTokens.map(t => t.position),
+		dotFunctionSuggestions: token.info.dotFunctionSuggestions ?? []
 	};
 }
 
-export const getDeclarations = (document: TextDocument): {
+export const getDeclarations = (): {
     position: TokenRange;
     definition: TokenRange | string;
     info: {
@@ -43,7 +45,7 @@ export const getDeclarations = (document: TextDocument): {
         type?: string;
     };
 }[] => {
-	return tokensData.filter(td => {
+	return lastTokensData.filter(td => {
 		if (typeof td.definition === 'string' || !td.info.type) return false;
 		return td.position.start == td.definition.start
 			&& td.position.end == td.definition.end
