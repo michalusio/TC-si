@@ -210,8 +210,8 @@ export function rValue(): Parser<Token<RValue>> {
     return (ctx) => map(
         seq(
             token(any<RValue>(
-                unaryRValue,
                 castedRValue,
+                unaryRValue,
                 stringLiteral,
                 stringInterpolatedLiteral,
                 numericBase16Literal,

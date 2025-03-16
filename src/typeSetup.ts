@@ -379,15 +379,32 @@ export const getIntSigned = (type: string): boolean => {
 };
 
 export const getIntSize = (type: string): bigint => {
-  if (type === 'Int') return getIntSize('S2048');
-  if (type === 'SInt') return getIntSize('S2048');
-  if (type === 'UInt') return getIntSize('U2048');
-  let typeValue = parseInt(type.slice(1));
+  const typeValue = getIntBitSize(type);
+  return (BigInt(1) << BigInt(typeValue)) - BigInt(1);
+};
+
+export const getIntBitSize = (type: string): number => {
+  if (type === 'Int') return 2048;
+  if (type === 'SInt') return 2048;
+  if (type === 'UInt') return 2048;
+  let typeValue = parseInt(type.slice(1), 10);
   if (getIntSigned(type)) {
     typeValue -= 1;
   }
-  return (BigInt(1) << BigInt(typeValue)) - BigInt(1);
+  return typeValue;
 };
+
+/**
+ * Checks whether an integer type can be assigned to another integer type
+ */
+export const isIntAssignableTo = (to: string, from: string): boolean => {
+  if (to === 'Int') return true;
+  if (to === 'UInt' && isUnsignedIntegerType(from)) return true;
+  if (to === 'SInt' && isSignedIntegerType(from)) return true;
+  const toBitSize = getIntBitSize(to);
+  const fromBitSize = getIntBitSize(from);
+  return toBitSize >= fromBitSize;
+}
 
 export const isUnsignedIntegerType = (type: string): boolean => {
   return type === "UInt" || /^U\d+$/.test(type);

@@ -66,50 +66,39 @@ export const functionName = token(
   ref(regex(/\w+/, "Function name"), (p) => !disallowedNames.includes(p))
 );
 
+const operatable = [
+  "-",
+  "=",
+  "<",
+  ">",
+  '*',
+  '%',
+  "+",
+  "~",
+  '|',
+  '^',
+  "!",
+  "&",
+  "?",
+];
+
 export const unaryOperator = any(
-  str("-"),
-  str("="),
-  str("<"),
-  str(">"),
-  str('*'),
-  str('/'),
-  str('%'),
-  str("+"),
-  str("~"),
-  str('|'),
-  str('^'),
-  str("!"),
-  str("&"),
-  str("?"),
+  ...operatable.flatMap(o => [
+    ...operatable.map(o2 => str(o+o2)),
+    str(o)
+  ]),
+  regex(/\/(?!\/)/, "/")
 );
 
 export const functionBinaryOperator = any(
-  str("+="),
-  str("-="),
-  str("&&="),
-  str("&="),
-  str("||="),
-  str("|="),
-  str("^="),
-  str("*="),
-  str("%="),
-  str("+"),
-  str("-"),
-  str("&&"),
-  str("&"),
-  str("||"),
-  str("|"),
-  str("^"),
-  str("*"),
-  str("%"),
-  str("<="),
-  str(">="),
-  str("!="),
-  str("=="),
-  str("<<"),
-  str(">>"),
-  str("<"),
-  str(">"),
+  ...operatable.flatMap(o => [
+    ...operatable.flatMap(o2 => [
+      ...operatable.map(o3 => str(o+o2+o3)),
+      str(o+o2)
+    ]),
+    str(o)
+  ]),
+  str('/='),
   regex(/\/(?!\/)/, "/")
 );
 

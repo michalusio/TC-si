@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.5.13]
+- Added support for 2-character unary operators and 3-character binary operators
+- Added support for assigning different integer types
+
 ## [0.5.12]
 - Added `get_assembler_little_endian` built-in method support
 - Added status bar information item about parsing (whether it parsed correctly and time taken)

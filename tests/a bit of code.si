@@ -8,3 +8,9 @@ def on_reset($scratch_space: [Int], test: Int) {
         exit(1)
     }
 }
+
+const A = <U64>0
+var b = <S65>0
+def x() {
+    b = A
+}

@@ -13,7 +13,7 @@ import {
 import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { NumberRValue, RValue, StringRValue, VariableRValue } from "./parsers/types/rvalue";
 import { Environment } from "./environment";
-import { doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntSize, isEnumType, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
+import { doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntSize, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
 import { explicitReturn, typeCheck } from "./workspace";
 
 const useParser = <T>(
@@ -346,13 +346,25 @@ export const checkVariableExistence = (
         const right = getType(scope.value, document, environments, diagnostics);
         if (typeCheck() && left !== right) {
           if (!isIntegerType(left) || scope.value.value.type !== 'number') {
-            diagnostics.push(new SimplexDiagnostic(
-              new Range(
-                document.positionAt(scope.value.start),
-                document.positionAt(scope.value.end)
-              ),
-              `Cannot assign a value of type ${typeTokenToTypeString(right)} to a variable of type ${typeTokenToTypeString(left)}`
-            ));
+            if (isIntegerType(left) && isIntegerType(right)) {
+              if (!isIntAssignableTo(left, right)) {
+                diagnostics.push(new SimplexDiagnostic(
+                  new Range(
+                    document.positionAt(scope.value.start),
+                    document.positionAt(scope.value.end)
+                  ),
+                  `Cannot assign a value of type ${typeTokenToTypeString(right)} to a variable of type ${typeTokenToTypeString(left)} - it will not fit!`
+                ));
+              }
+            } else {
+              diagnostics.push(new SimplexDiagnostic(
+                new Range(
+                  document.positionAt(scope.value.start),
+                  document.positionAt(scope.value.end)
+                ),
+                `Cannot assign a value of type ${typeTokenToTypeString(right)} to a variable of type ${typeTokenToTypeString(left)}`
+              ));
+            }
           } else {
             const signed = getIntSigned(left)
             const size = getIntSize(left)
