@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.5.15]
+- Added `get_ssd_size` built-in method support
+
 ## [0.5.14]
 - Fixed binary operator support in some edge cases
 

@@ -18,6 +18,7 @@ addDef("get_ram_width", "pub def get_ram_width() Int {", intType, []);
 addDef("get_ram_width_2", "pub def get_ram_width_2() Int {", intType, []);
 addDef("get_ram_value", "pub def get_ram_value(address: Int) Int {", intType, [intType]);
 addDef("get_ssd_value", "pub def get_ssd_value(address: Int) Int {", intType, [intType]);
+addDef("get_ssd_size", "pub def get_ssd_size() Int {", intType, []);
 addDef("get_ram_size", "pub def get_ram_size() Int {", intType, []);
 addDef("get_delay_score", "pub def get_delay_score() Int {", intType, []);
 addDef("get_component_count", "pub def get_component_count() Int {", intType, []);
