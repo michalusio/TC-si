@@ -5,7 +5,7 @@ import { blockComment, lcb, lineComment, newline, variableName } from "./parsers
 import { anyNumericLiteral, rValue, stringLiteral, topmostVariableDeclaration, variableDeclaration, variableLiteral, variableModification } from "./parsers/variables";
 import { typeDeclaration } from "./parsers/declaration";
 import { eof, lookaround, manyForSure, recoverByAddingChars, recoverBySkipping, rstr, token } from "./parsers/utils";
-import { FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, TokenRange, TypeDefinition, VariableDeclaration, WhileStatement } from "./parsers/types/ast";
+import { BreakStatement, ContinueStatement, FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, TokenRange, TypeDefinition, VariableDeclaration, WhileStatement } from "./parsers/types/ast";
 import { lastTokensData } from "./storage";
 
 export const getPositionInfo = (document: TextDocument, position: Position): {
@@ -67,6 +67,24 @@ const returnStatement = map(
 	([_, value]) => (<ReturnStatement>{
 		type: 'return',
 		value
+	})
+);
+
+const breakStatement = map(
+	seq(
+		str('break')
+	),
+	([_]) => (<BreakStatement>{
+		type: 'break'
+	})
+);
+
+const continueStatement = map(
+	seq(
+		str('continue')
+	),
+	([_]) => (<ContinueStatement>{
+		type: 'continue'
 	})
 );
 
@@ -145,6 +163,8 @@ function statementsBlock(): Parser<StatementsBlock> {
 								typeDeclaration,
 								regAllocUse,
 								returnStatement,
+								breakStatement,
+								continueStatement,
 								whileBlock(),
 								ifBlock(),
 								switchBlock(),

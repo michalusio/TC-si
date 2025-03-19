@@ -71,7 +71,7 @@ export type VariableModification = {
 
 export type StatementsBlock = Statement[];
 
-export type Statement = TypeDefinition | FunctionDeclaration | StatementsStatement | VariableDeclaration | VariableModification | RegAllocUseStatement | ReturnStatement | SwitchStatement | WhileStatement | IfStatement | RValue;
+export type Statement = TypeDefinition | FunctionDeclaration | StatementsStatement | VariableDeclaration | VariableModification | RegAllocUseStatement | ReturnStatement | BreakStatement | ContinueStatement | SwitchStatement | WhileStatement | IfStatement | RValue;
 
 export type StatementsStatement = {
     type: 'statements',
@@ -86,6 +86,14 @@ export type RegAllocUseStatement = {
 export type ReturnStatement = {
     type: 'return',
     value: Token<RValue | null>
+};
+
+export type BreakStatement = {
+    type: 'break'
+};
+
+export type ContinueStatement = {
+    type: 'continue'
 };
 
 export type SwitchStatement = {

@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.0]
+- Added support for `break` and `continue` keywords
+
 ## [0.5.15]
 - Added `get_ssd_size` built-in method support
 

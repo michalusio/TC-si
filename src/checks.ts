@@ -795,6 +795,12 @@ export const checkVariableExistence = (
       case 'type-definition': {
         break;
       }
+      case 'break': {
+        break;
+      }
+      case 'continue': {
+        break;
+      }
       default: {
         diagnostics.push(...processRValue(document, environments, scope));
         break;
