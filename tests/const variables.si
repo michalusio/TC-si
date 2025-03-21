@@ -3,5 +3,5 @@ const B = 12
 const C = "Hi!"
 const D = B * 2
 const E = C + B
-//# 0:6-0:7 -Error -Constants have to use only uppercase letters
-//# 4:11-4:14 -Error -Cannot find binary operator + for types String and Int
+//# 1:7-1:8 -Error -Constants have to use only uppercase letters
+//# 5:12-5:15 -Error -Cannot find binary operator + for types String and Int

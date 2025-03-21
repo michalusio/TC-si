@@ -26,4 +26,4 @@ def check_output($scratch_space: [Int], tick: Int, inputs: [Int], outputs: [Int]
     }
 
 }
-//# 10:82-10:92 -Warning -A function with return type has to return a value
+//# 11:83-11:93 -Warning -A function with return type has to return a value

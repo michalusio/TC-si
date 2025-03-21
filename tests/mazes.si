@@ -248,4 +248,4 @@ def arch_check_output($scratch_space: [Int], test: Int, input: Int, output: Int)
     }
 
 }
-//# 237:81-237:91 -Warning -A function with return type has to return a value
+//# 238:82-238:92 -Warning -A function with return type has to return a value

@@ -67,7 +67,7 @@ const numericBase2Literal = map(
     })
 );
 const numericBase10Literal = map(
-    regex(/[0-9][_0-9]*/, 'Numeric literal'),
+    regex(/-?[0-9][_0-9]*/, 'Numeric literal'),
     (str) => (<NumberRValue>{
         type: 'number',
         value: parseInt(str.replaceAll('_', ''), 10)
@@ -211,12 +211,10 @@ export function rValue(): Parser<Token<RValue>> {
         seq(
             token(any<RValue>(
                 castedRValue,
-                unaryRValue,
                 stringLiteral,
                 stringInterpolatedLiteral,
-                numericBase16Literal,
-                numericBase2Literal,
-                numericBase10Literal,
+                anyNumericLiteral,
+                unaryRValue,
                 parenthesisedRValue,
                 arrayLiteral,
                 defaultRValue,

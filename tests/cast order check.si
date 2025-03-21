@@ -294,6 +294,6 @@ def check_output($scratch_space: [Int], tick: Int, inputs: [Int], outputs: [Int]
     }
 
 }
-//# 10:41-10:47 -Warning -A function with return type has to return a value
-//# 65:18-65:25 -Warning -You should not redeclare variables: 'COUNTER'
-//# 250:82-250:92 -Warning -A function with return type has to return a value
+//# 11:42-11:48 -Warning -A function with return type has to return a value
+//# 66:19-66:26 -Warning -You should not redeclare variables: 'COUNTER'
+//# 251:83-251:93 -Warning -A function with return type has to return a value

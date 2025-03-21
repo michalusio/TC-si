@@ -48,12 +48,12 @@ const diagnosticParser = map(
             ),
             ([[sl, _, sc], __, [el, ___, ec], [____, _____, severity], [______, _______, message]]) => ({
                 start: {
-                    line: sl,
-                    character: sc
+                    line: sl-1,
+                    character: sc-1
                 },
                 end: {
-                    line: el,
-                    character: ec
+                    line: el-1,
+                    character: ec-1
                 },
                 message,
                 severity: severity === 'Error'

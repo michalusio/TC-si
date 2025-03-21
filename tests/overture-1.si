@@ -1,0 +1,99 @@
+const INPUT  = 0b110_000
+const OUTPUT = 0b000_110
+
+var instructions = array(256, 0)
+var registers    = [0,0,0,0,0,0]
+
+def on_reset($scratch_space: [Int], test: Int) {
+    var h = 0
+    while h < 6 {
+        .registers[h] = 0
+        h += 1
+    }
+    var s = 0
+    var d = 0
+    .instructions[0] = INPUT | OUTPUT
+    .instructions[1] = INPUT | 0
+    .instructions[2] = INPUT | 1
+    .instructions[3] = INPUT | 2
+    .instructions[4] = INPUT | 3
+    .instructions[5] = INPUT | 4
+    .instructions[6] = INPUT | 5
+    var i = 7
+    while s <= 6 {
+        d = 0
+        .instructions[i] = INPUT | s
+        i += 1
+        while d <= 6 {
+            .instructions[i] = (s << 3) | d
+            i += 1
+            d += 1
+        }
+        s += 1
+    }
+}
+
+def get_input($scratch_space: [Int], tick: Int, $inputs: [Int]) {
+
+    let instruction = .instructions[tick]
+    let operands    = instruction & 0b0011_1111
+
+    let src = operands >> 3
+    let dst = operands & 0b111
+
+    if src == 0b110 && dst == OUTPUT {
+        set_custom_input_text(`mov in, out`) 
+    } elif src == 0b110 {
+        set_custom_input_text(`mov in, r{dst}`)
+    } elif dst == OUTPUT {
+        set_custom_input_text(`mov r{src} out`) 
+    } else {
+        set_custom_input_text(`mov r{src}, r{dst}`)
+    }
+
+    inputs[0] = instruction
+    inputs[1] = random(256)
+
+}
+
+def check_output($scratch_space: [Int], tick: Int, inputs: [Int], outputs: [Int]) TestResult {
+
+    let instruction = inputs[0]
+    let from = instruction >> 3
+    let to   = instruction & 0b111
+
+    var value = 0
+    if from <= 5 {
+        value = .registers[from]
+    } elif from == 6 {
+        value = inputs[1]
+    }
+    if to <= 5 {
+        .registers[to] = value
+    } elif to == 6 {
+        if (outputs[2] & 1) != 1 {
+            set_error("Output not enabled.")
+            return fail    
+        }
+        if outputs[1] != value {
+            set_error(`Expected output: {value}.`)
+            return fail
+        }    
+    }
+
+    var reg_i = 0
+    while reg_i < 6 {
+        let value = get_level_memory(`reg {reg_i}`) & 0xff
+        if value != -1 && .registers[reg_i] != value {
+            set_error(`Register {reg_i} should have value {.registers[reg_i]}.`)
+            return fail
+        }
+
+        reg_i += 1
+    }
+    if tick == 63 {
+        return win
+    }
+}
+//# 59:83-59:93 -Warning -A function with return type has to return a value
+//# 86:13-86:18 -Warning -You should not redeclare variables: 'value'

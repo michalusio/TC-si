@@ -493,7 +493,7 @@ var import_path = require("path");
 var import_parser_combinators8 = __toESM(require_dist());
 
 // src/checks.ts
-var import_vscode3 = require("vscode");
+var import_vscode4 = require("vscode");
 
 // src/parsers/base.ts
 var import_parser_combinators2 = __toESM(require_dist());
@@ -508,6 +508,18 @@ var tokenTypes = ["type", "parameter", "variable"];
 var tokenModifiers = ["declaration", "definition", "readonly"];
 var legend = new import_vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
 var tokensData = [];
+var lastTokensData = [];
+var clearTokensData = () => {
+  if (tokensData.length > 0) {
+    lastTokensData = [...tokensData];
+  }
+  tokensData.length = 0;
+};
+var finalizeTokensData = () => {
+  if (tokensData.length > 0) {
+    lastTokensData = [...tokensData];
+  }
+};
 var diagnostics = import_vscode.languages.createDiagnosticCollection("si");
 var baseEnvironment = {
   type: "scope",
@@ -520,6 +532,7 @@ var baseEnvironment = {
 var precedence = {
   "||": 3,
   "&&": 4,
+  "===": 5,
   "==": 5,
   "!=": 5,
   "<=": 5,
@@ -692,61 +705,58 @@ var typeName = token((0, import_parser_combinators2.regex)(/@?[A-Z]\w*/, "Type n
 var functionName = token(
   (0, import_parser_combinators2.ref)((0, import_parser_combinators2.regex)(/\w+/, "Function name"), (p) => !disallowedNames.includes(p))
 );
-var unaryOperator = (0, import_parser_combinators2.any)((0, import_parser_combinators2.str)("-"), (0, import_parser_combinators2.str)("~"), (0, import_parser_combinators2.str)("!"), (0, import_parser_combinators2.str)("+"));
+var operatable = [
+  "-",
+  "=",
+  "<",
+  ">",
+  "*",
+  "%",
+  "+",
+  "~",
+  "|",
+  "^",
+  "!",
+  "&",
+  "?"
+];
+var unaryOperator = (0, import_parser_combinators2.any)(
+  ...operatable.flatMap((o) => [
+    ...operatable.map((o2) => (0, import_parser_combinators2.str)(o + o2)),
+    (0, import_parser_combinators2.str)(o)
+  ]),
+  (0, import_parser_combinators2.regex)(/\/(?!\/)/, "/")
+);
 var functionBinaryOperator = (0, import_parser_combinators2.any)(
-  (0, import_parser_combinators2.str)("+="),
-  (0, import_parser_combinators2.str)("-="),
-  (0, import_parser_combinators2.str)("&&="),
-  (0, import_parser_combinators2.str)("&="),
-  (0, import_parser_combinators2.str)("||="),
-  (0, import_parser_combinators2.str)("|="),
-  (0, import_parser_combinators2.str)("^="),
-  (0, import_parser_combinators2.str)("*="),
-  (0, import_parser_combinators2.str)("%="),
-  (0, import_parser_combinators2.str)("+"),
-  (0, import_parser_combinators2.str)("-"),
-  (0, import_parser_combinators2.str)("&&"),
-  (0, import_parser_combinators2.str)("&"),
-  (0, import_parser_combinators2.str)("||"),
-  (0, import_parser_combinators2.str)("|"),
-  (0, import_parser_combinators2.str)("^"),
-  (0, import_parser_combinators2.str)("*"),
-  (0, import_parser_combinators2.str)("%"),
-  (0, import_parser_combinators2.str)("<="),
-  (0, import_parser_combinators2.str)(">="),
-  (0, import_parser_combinators2.str)("!="),
-  (0, import_parser_combinators2.str)("=="),
-  (0, import_parser_combinators2.str)("<<"),
-  (0, import_parser_combinators2.str)(">>"),
-  (0, import_parser_combinators2.str)("<"),
-  (0, import_parser_combinators2.str)(">"),
+  ...operatable.flatMap((o) => [
+    ...operatable.flatMap((o2) => [
+      ...operatable.map((o3) => (0, import_parser_combinators2.str)(o + o2 + o3)),
+      (0, import_parser_combinators2.str)(o + o2)
+    ]),
+    (0, import_parser_combinators2.str)(o)
+  ]),
+  (0, import_parser_combinators2.str)("/="),
   (0, import_parser_combinators2.regex)(/\/(?!\/)/, "/")
 );
 var binaryOperator = (0, import_parser_combinators2.any)(
-  (0, import_parser_combinators2.str)("+"),
-  (0, import_parser_combinators2.str)("-"),
-  (0, import_parser_combinators2.str)("&&"),
-  (0, import_parser_combinators2.str)("&"),
-  (0, import_parser_combinators2.str)("||"),
-  (0, import_parser_combinators2.str)("|"),
-  (0, import_parser_combinators2.str)("^"),
-  (0, import_parser_combinators2.str)("*"),
-  (0, import_parser_combinators2.str)("%"),
-  (0, import_parser_combinators2.str)("<="),
   (0, import_parser_combinators2.str)("<u"),
   (0, import_parser_combinators2.str)("<s"),
-  (0, import_parser_combinators2.str)(">="),
-  (0, import_parser_combinators2.str)("!="),
-  (0, import_parser_combinators2.str)("=="),
-  (0, import_parser_combinators2.str)("<<"),
-  (0, import_parser_combinators2.str)(">>"),
-  (0, import_parser_combinators2.str)("<"),
-  (0, import_parser_combinators2.str)(">"),
+  (0, import_parser_combinators2.str)("==="),
   (0, import_parser_combinators2.str)("rol"),
   (0, import_parser_combinators2.str)("ror"),
   (0, import_parser_combinators2.str)("asr"),
-  (0, import_parser_combinators2.map)((0, import_parser_combinators2.regex)(/\/(?!\/)/, "/"), (r) => r)
+  (0, import_parser_combinators2.regex)(/\/(?!\/)/, "/"),
+  ...operatable.flatMap((o) => o === "?" ? [] : [
+    ...operatable.flatMap((o2) => [
+      ...operatable.map((o3) => (0, import_parser_combinators2.str)(o + o2 + o3)),
+      (0, import_parser_combinators2.str)(o + o2)
+    ]),
+    (0, import_parser_combinators2.str)(o)
+  ]),
+  (0, import_parser_combinators2.str)("/=")
 );
+var lineComment = (0, import_parser_combinators2.regex)(/\s*\/\/.*?\r?\n/s, "Line comment");
+var blockComment = (0, import_parser_combinators2.regex)(/\s*\/\*.*?\*\//s, "Block comment");
 var newline = (0, import_parser_combinators2.regex)(/[ \t]*\r?\n/, "End of line");
 var functionKind = (0, import_parser_combinators2.any)((0, import_parser_combinators2.str)("def"), (0, import_parser_combinators2.str)("dot"));
 var typeDefinition = (0, import_parser_combinators2.any)(
@@ -756,22 +766,23 @@ var typeDefinition = (0, import_parser_combinators2.any)(
     token(
       (0, import_parser_combinators2.map)(
         (0, import_parser_combinators2.seq)(
-          import_parser_combinators2.spaces,
+          import_parser_combinators2.wspaces,
           (0, import_parser_combinators2.regex)(/\w+/, "Variable name"),
           (0, import_parser_combinators2.exhaust)(
             (0, import_parser_combinators2.seq)(
-              import_parser_combinators2.spaces,
+              import_parser_combinators2.wspaces,
               (0, import_parser_combinators2.str)(","),
-              import_parser_combinators2.spaces,
+              (0, import_parser_combinators2.opt)((0, import_parser_combinators2.any)(lineComment, blockComment)),
+              import_parser_combinators2.wspaces,
               (0, import_parser_combinators2.regex)(/\w+/, "Variable name")
             ),
-            (0, import_parser_combinators2.seq)(import_parser_combinators2.spaces, rstr(">", false))
+            (0, import_parser_combinators2.seq)(import_parser_combinators2.wspaces, rstr(">", false))
           )
         ),
-        ([_, variant, variants]) => [variant, ...variants.map((p) => p[3])]
+        ([_, variant, variants]) => [variant, ...variants.map((p) => p[4])]
       )
     ),
-    (0, import_parser_combinators2.seq)(import_parser_combinators2.spaces, rstr(">"))
+    (0, import_parser_combinators2.seq)(import_parser_combinators2.wspaces, rstr(">"))
   )
 );
 function typeAliasDefinition() {
@@ -785,8 +796,6 @@ function typeAliasDefinition() {
     )
   )(ctx);
 }
-var lineComment = (0, import_parser_combinators2.regex)(/\s*\/\/.*?\r?\n/s, "Line comment");
-var blockComment = (0, import_parser_combinators2.regex)(/\s*\/\*.*?\*\//s, "Block comment");
 
 // src/parser.ts
 var import_parser_combinators6 = __toESM(require_dist());
@@ -942,17 +951,17 @@ var numericBase2Literal = (0, import_parser_combinators4.map)(
   })
 );
 var numericBase10Literal = (0, import_parser_combinators4.map)(
-  (0, import_parser_combinators4.expect)(import_parser_combinators4.intP, "Numeric literal"),
-  (value) => ({
+  (0, import_parser_combinators4.regex)(/-?[0-9][_0-9]*/, "Numeric literal"),
+  (str8) => ({
     type: "number",
-    value
+    value: parseInt(str8.replaceAll("_", ""), 10)
   })
 );
 var numericBase16Literal = (0, import_parser_combinators4.map)(
-  (0, import_parser_combinators4.regex)(/0x[0-9a-zA-Z]+/, "Numeric literal"),
+  (0, import_parser_combinators4.regex)(/0x[0-9a-zA-Z][_0-9a-zA-Z]*/, "Numeric literal"),
   (str8) => ({
     type: "number",
-    value: parseInt(str8, 16)
+    value: parseInt(str8.replaceAll("_", ""), 16)
   })
 );
 var anyNumericLiteral = (0, import_parser_combinators4.any)(
@@ -1041,6 +1050,16 @@ var castedRValue = (0, import_parser_combinators4.map)((0, import_parser_combina
     value
   };
 });
+var defaultRValue = (0, import_parser_combinators4.map)((0, import_parser_combinators4.seq)(
+  (0, import_parser_combinators4.str)("_default(:"),
+  typeAliasDefinition(),
+  rpr
+), ([_, typeValue, __]) => {
+  return {
+    type: "_default",
+    typeValue
+  };
+});
 var unaryRValue = (0, import_parser_combinators4.map)((0, import_parser_combinators4.seq)(
   unaryOperator,
   import_parser_combinators4.spaces,
@@ -1064,15 +1083,14 @@ function rValue() {
   return (ctx) => (0, import_parser_combinators4.map)(
     (0, import_parser_combinators4.seq)(
       token((0, import_parser_combinators4.any)(
-        unaryRValue,
         castedRValue,
         stringLiteral,
         stringInterpolatedLiteral,
-        numericBase16Literal,
-        numericBase2Literal,
-        numericBase10Literal,
+        anyNumericLiteral,
+        unaryRValue,
         parenthesisedRValue,
         arrayLiteral,
+        defaultRValue,
         functionCall,
         variableLiteral
       )),
@@ -1098,12 +1116,10 @@ function rValue() {
           ))
         ),
         (0, import_parser_combinators4.seq)(
-          (0, import_parser_combinators4.opt)(
-            (0, import_parser_combinators4.seq)(
-              (0, import_parser_combinators4.str)("."),
-              (0, import_parser_combinators4.surely)(functionCall)
-            )
-          ),
+          (0, import_parser_combinators4.many)((0, import_parser_combinators4.seq)(
+            (0, import_parser_combinators4.str)("."),
+            (0, import_parser_combinators4.surely)(functionCall)
+          )),
           (0, import_parser_combinators4.opt)(
             (0, import_parser_combinators4.seq)(
               (0, import_parser_combinators4.between)(
@@ -1165,18 +1181,18 @@ function rValue() {
       } else {
         const op = operation;
         const functionCall2 = op[0];
-        if (functionCall2) {
+        functionCall2.forEach(([_2, call]) => {
           actualValue = {
             start: actualValue.start,
-            end: (functionCall2[1].parameters[functionCall2[1].parameters.length - 1]?.end ?? actualValue.end + 1) + 1,
+            end: (call.parameters[call.parameters.length - 1]?.end ?? actualValue.end + 1) + 1,
             value: {
               type: "dotMethod",
               object: actualValue,
-              value: functionCall2[1].value,
-              parameters: functionCall2[1].parameters
+              value: call.value,
+              parameters: call.parameters
             }
           };
-        }
+        });
         const binaryOperator2 = op[1];
         if (binaryOperator2) {
           const right = binaryOperator2[1];
@@ -1242,7 +1258,7 @@ function rValue() {
 var variableModification = (0, import_parser_combinators4.map)(
   (0, import_parser_combinators4.expect)(
     (0, import_parser_combinators4.seq)(
-      token(variableLiteral),
+      token((0, import_parser_combinators4.any)(variableLiteral, (0, import_parser_combinators4.between)(lpr, castedRValue, rpr))),
       (0, import_parser_combinators4.many)((0, import_parser_combinators4.between)(
         lbr,
         recoverByAddingChars("0", rValue(), true, "value"),
@@ -1343,7 +1359,7 @@ var variableDeclaration = (0, import_parser_combinators4.map)(
   })
 );
 
-// src/parsers/types.ts
+// src/parsers/declaration.ts
 var import_parser_combinators5 = __toESM(require_dist());
 var typeDeclaration = (0, import_parser_combinators5.map)((0, import_parser_combinators5.seq)(
   (0, import_parser_combinators5.opt)((0, import_parser_combinators5.str)("pub ")),
@@ -1366,18 +1382,25 @@ var typeDeclaration = (0, import_parser_combinators5.map)((0, import_parser_comb
 // src/parser.ts
 var getPositionInfo = (document, position) => {
   const index = document.offsetAt(position);
-  const token2 = tokensData.find((token3) => token3.position.start <= index && token3.position.end >= index);
+  const token2 = lastTokensData.find((token3) => token3.position.start <= index && token3.position.end >= index);
   if (!token2) return null;
-  const definitionToken = typeof token2.definition !== "string" ? tokensData.find((t) => t.position.start === token2.definition.start && t.position.end === token2.definition.end) : void 0;
-  const allTokens = tokensData.filter(
+  const definitionToken = typeof token2.definition !== "string" ? lastTokensData.find((t) => t.position.start === token2.definition.start && t.position.end === token2.definition.end) : void 0;
+  const allTokens = lastTokensData.filter(
     (t) => typeof t.definition === "string" && typeof token2.definition === "string" && t.definition === token2.definition || typeof t.definition !== "string" && typeof token2.definition !== "string" && t.definition.start === token2.definition.start && t.definition.end === token2.definition.end
   );
   return {
     current: token2.position,
     definition: token2.definition,
     info: definitionToken?.info ?? {},
-    all: allTokens.map((t) => t.position)
+    all: allTokens.map((t) => t.position),
+    dotFunctionSuggestions: token2.info.dotFunctionSuggestions ?? []
   };
+};
+var getDeclarations = () => {
+  return lastTokensData.filter((td) => {
+    if (typeof td.definition === "string" || !td.info.type) return false;
+    return td.position.start == td.definition.start && td.position.end == td.definition.end && td.position.end == td.info.range?.end;
+  });
 };
 var returnStatement = (0, import_parser_combinators6.map)(
   (0, import_parser_combinators6.seq)(
@@ -1395,6 +1418,22 @@ var returnStatement = (0, import_parser_combinators6.map)(
     value
   })
 );
+var breakStatement = (0, import_parser_combinators6.map)(
+  (0, import_parser_combinators6.seq)(
+    (0, import_parser_combinators6.str)("break")
+  ),
+  ([_]) => ({
+    type: "break"
+  })
+);
+var continueStatement = (0, import_parser_combinators6.map)(
+  (0, import_parser_combinators6.seq)(
+    (0, import_parser_combinators6.str)("continue")
+  ),
+  ([_]) => ({
+    type: "continue"
+  })
+);
 var regAllocUse = (0, import_parser_combinators6.map)(
   (0, import_parser_combinators6.seq)(
     (0, import_parser_combinators6.str)("_reg_alloc_use"),
@@ -1405,6 +1444,50 @@ var regAllocUse = (0, import_parser_combinators6.map)(
     type: "_reg_alloc_use",
     value
   })
+);
+var asmDeclaration = (0, import_parser_combinators6.map)(
+  (0, import_parser_combinators6.seq)(
+    (0, import_parser_combinators6.str)("asm"),
+    import_parser_combinators6.spacesPlus,
+    (0, import_parser_combinators6.regex)(/\w+/, "architecture"),
+    import_parser_combinators6.spacesPlus,
+    (0, import_parser_combinators6.surely)(
+      (0, import_parser_combinators6.seq)(
+        rstr("{"),
+        (0, import_parser_combinators6.exhaust)((0, import_parser_combinators6.regex)(/[^}]/, "any character"), (0, import_parser_combinators6.str)("}")),
+        (0, import_parser_combinators6.str)("}")
+      )
+    )
+  ),
+  () => "asm block"
+);
+var callConvDeclaration = (0, import_parser_combinators6.map)(
+  (0, import_parser_combinators6.seq)(
+    (0, import_parser_combinators6.str)("call_conv"),
+    import_parser_combinators6.spacesPlus,
+    (0, import_parser_combinators6.regex)(/\w+/, "architecture"),
+    import_parser_combinators6.spacesPlus,
+    (0, import_parser_combinators6.regex)(/\w+/, "os"),
+    import_parser_combinators6.spacesPlus,
+    (0, import_parser_combinators6.surely)(
+      (0, import_parser_combinators6.seq)(
+        rstr("("),
+        (0, import_parser_combinators6.exhaust)((0, import_parser_combinators6.regex)(/[^)]/, "any character"), (0, import_parser_combinators6.str)(")")),
+        (0, import_parser_combinators6.str)(")")
+      )
+    )
+  ),
+  () => "call_conv block"
+);
+var externDeclaration = (0, import_parser_combinators6.map)(
+  (0, import_parser_combinators6.seq)(
+    (0, import_parser_combinators6.str)("extern"),
+    import_parser_combinators6.spacesPlus,
+    (0, import_parser_combinators6.regex)(/\w+/, "os"),
+    import_parser_combinators6.spacesPlus,
+    (0, import_parser_combinators6.regex)(/\w+/, "varName")
+  ),
+  () => "extern block"
 );
 function statementsBlock() {
   return (ctx) => (0, import_parser_combinators6.map)(
@@ -1418,9 +1501,12 @@ function statementsBlock() {
                 lineComment,
                 blockComment,
                 newline,
+                asmDeclaration,
                 typeDeclaration,
                 regAllocUse,
                 returnStatement,
+                breakStatement,
+                continueStatement,
                 whileBlock(),
                 ifBlock(),
                 switchBlock(),
@@ -1619,6 +1705,8 @@ var languageParser = (0, import_parser_combinators6.map)(
         lineComment,
         blockComment,
         newline,
+        callConvDeclaration,
+        externDeclaration,
         (0, import_parser_combinators6.map)((0, import_parser_combinators6.seq)(topmostVariableDeclaration, (0, import_parser_combinators6.any)(newline, lineComment, import_parser_combinators6.spacesPlus, eof)), ([v]) => v.value),
         (0, import_parser_combinators6.map)(
           (0, import_parser_combinators6.seq)(
@@ -1654,8 +1742,43 @@ var SimplexDiagnostic = class extends import_vscode2.Diagnostic {
   }
 };
 
-// src/checks.ts
-var import_vscode4 = require("vscode");
+// src/levenshtein.ts
+function levenshtein(a, b) {
+  const an = a ? a.length : 0;
+  const bn = b ? b.length : 0;
+  if (an === 0) {
+    return bn;
+  }
+  if (bn === 0) {
+    return an;
+  }
+  const matrix = new Array(bn + 1);
+  for (let i = 0; i <= bn; ++i) {
+    let row = matrix[i] = new Array(an + 1);
+    row[0] = i;
+  }
+  const firstRow = matrix[0];
+  for (let j = 1; j <= an; ++j) {
+    firstRow[j] = j;
+  }
+  for (let i = 1; i <= bn; ++i) {
+    for (let j = 1; j <= an; ++j) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1],
+          // substitution
+          matrix[i][j - 1],
+          // insertion
+          matrix[i - 1][j]
+          // deletion
+        ) + 1;
+      }
+    }
+  }
+  return matrix[bn][an];
+}
 
 // src/typeSetup.ts
 var typeStringToTypeToken = (value) => {
@@ -1701,6 +1824,17 @@ var tryGetVariable = (inScope, environments, name) => {
   }
   return null;
 };
+var getCloseVariable = (environments, name) => {
+  for (let index = environments.length - 1; index >= 1; index--) {
+    const variableKeys = Array.from(environments[index].variables.keys());
+    const variable = variableKeys.filter((vk) => levenshtein(vk, name) < 3).sort((a, b) => levenshtein(a, name) - levenshtein(b, name))[0];
+    if (variable === void 0) {
+      continue;
+    }
+    return variable;
+  }
+  return null;
+};
 var tryGetDotFunction = (environments, name, params) => {
   for (let index = environments.length - 1; index >= 0; index--) {
     for (let func of environments[index].functions.filter(
@@ -1716,6 +1850,32 @@ var tryGetDotFunction = (environments, name, params) => {
   }
   return null;
 };
+var getCloseDot = (environments, name, params) => {
+  for (let index = environments.length - 1; index >= 0; index--) {
+    for (let func of environments[index].functions.filter(
+      (f) => levenshtein(f.name, name) < 3 && f.kind === "dot"
+    ).sort((a, b) => levenshtein(a.name, name) - levenshtein(b.name, name))) {
+      if (params.length === func.parameterTypes.length && func.parameterTypes.every((toMatch, i) => {
+        const type = params[i];
+        return doesTypeMatch(type, toMatch);
+      })) {
+        return func.name;
+      }
+    }
+  }
+  return null;
+};
+var getDotFunctionsFor = (environments, type) => {
+  const results = [];
+  for (let index = environments.length - 1; index >= 0; index--) {
+    for (let func of environments[index].functions.filter((f) => f.kind === "dot")) {
+      if (func.parameterTypes[0] === type) {
+        results.push([func.name, func.data]);
+      }
+    }
+  }
+  return results;
+};
 var tryGetDefFunction = (environments, name, params) => {
   for (let index = environments.length - 1; index >= 0; index--) {
     for (let func of environments[index].functions.filter(
@@ -1726,6 +1886,21 @@ var tryGetDefFunction = (environments, name, params) => {
         return doesTypeMatch(type, toMatch);
       })) {
         return func;
+      }
+    }
+  }
+  return null;
+};
+var getCloseDef = (environments, name, params) => {
+  for (let index = environments.length - 1; index >= 0; index--) {
+    for (let func of environments[index].functions.filter(
+      (f) => levenshtein(f.name, name) < 3 && f.kind === "def"
+    ).sort((a, b) => levenshtein(a.name, name) - levenshtein(b.name, name))) {
+      if (params.length === func.parameterTypes.length && func.parameterTypes.every((toMatch, i) => {
+        const type = params[i];
+        return doesTypeMatch(type, toMatch);
+      })) {
+        return func.name;
       }
     }
   }
@@ -1802,6 +1977,21 @@ var tryGetType = (environments, name) => {
   }
   return null;
 };
+var getCloseType = (environments, name) => {
+  if (name.startsWith("@")) return "@";
+  if (name.startsWith("*")) {
+    const found = getCloseType(environments, name.slice(1));
+    return found ? "*" + found : null;
+  }
+  for (let index = environments.length - 1; index >= 0; index--) {
+    const typeKeys = Array.from(environments[index].types.keys());
+    const type = typeKeys.filter((vk) => levenshtein(vk, name) < 3).sort((a, b) => levenshtein(a, name) - levenshtein(b, name))[0];
+    if (type !== void 0) {
+      return type;
+    }
+  }
+  return null;
+};
 var transformGenericType = (func, types) => {
   if (!func?.returnType) return "?";
   if (!func.returnType.includes("@")) return func.returnType;
@@ -1842,6 +2032,32 @@ var getAfterIndexType = (type, environments) => {
 };
 var isIntegerType = (type) => {
   return type === "Int" || isUnsignedIntegerType(type) || isSignedIntegerType(type);
+};
+var getIntSigned = (type) => {
+  if (type.startsWith("S")) return true;
+  return false;
+};
+var getIntSize = (type) => {
+  const typeValue = getIntBitSize(type);
+  return (BigInt(1) << BigInt(typeValue)) - BigInt(1);
+};
+var getIntBitSize = (type) => {
+  if (type === "Int") return 2048;
+  if (type === "SInt") return 2048;
+  if (type === "UInt") return 2048;
+  let typeValue = parseInt(type.slice(1), 10);
+  if (getIntSigned(type)) {
+    typeValue -= 1;
+  }
+  return typeValue;
+};
+var isIntAssignableTo = (to, from) => {
+  if (to === "Int") return true;
+  if (to === "UInt" && isUnsignedIntegerType(from)) return true;
+  if (to === "SInt" && isSignedIntegerType(from)) return true;
+  const toBitSize = getIntBitSize(to);
+  const fromBitSize = getIntBitSize(from);
+  return toBitSize >= fromBitSize;
 };
 var isUnsignedIntegerType = (type) => {
   return type === "UInt" || /^U\d+$/.test(type);
@@ -1974,32 +2190,1383 @@ var addEnum = (name, description, values, boolType2) => {
   );
   return type;
 };
+var anyType = addType("@", "Any type");
+var arr = getArrayType.bind(null, [baseEnvironment]);
+
+// src/workspace.ts
+var import_vscode3 = require("vscode");
+var setting = (name, defaultValue) => {
+  if (import_vscode3.workspace.getConfiguration("tcsi").get(name) == null) {
+    try {
+      import_vscode3.workspace.getConfiguration("tcsi").update(name, defaultValue);
+    } catch (e) {
+    }
+  }
+  return () => import_vscode3.workspace.getConfiguration("tcsi").get(name);
+};
+var explicitReturn = setting("warnOnMissingExplicitReturn", false);
+var typeCheck = setting("showTypeCheckingErrors", true);
+var showInlayTypeHints = setting("showInlayTypeHints", true);
+
+// src/checks.ts
+var useParser = (text, parser, path = "") => {
+  const res = parser({ text, path, index: 0 });
+  if ((0, import_parser_combinators7.isFailure)(res)) {
+    throw new import_parser_combinators7.ParseError(
+      `Parse error, expected ${[...res.history].pop()} at char ${res.ctx.index}`,
+      res.ctx.text,
+      res.ctx.index,
+      res.history
+    );
+  }
+  if (res.ctx.index !== res.ctx.text.length) {
+    throw new import_parser_combinators7.ParseError(
+      `Parse error at index ${res.ctx.index}`,
+      res.ctx.text,
+      res.ctx.index,
+      []
+    );
+  }
+  return res.value;
+};
+var performParsing = (document) => {
+  const fullText = document.getText();
+  const diags = [];
+  const startTime = Date.now();
+  let parseResult = null;
+  try {
+    parseResult = useParser(fullText, languageParser);
+  } catch (p) {
+    if (p instanceof import_parser_combinators7.ParseError) {
+      const position = document.positionAt(p.index);
+      diags.push(
+        new SimplexDiagnostic(
+          document.getWordRangeAtPosition(position) ?? new import_vscode4.Range(position, position),
+          p.message,
+          import_vscode4.DiagnosticSeverity.Error
+        )
+      );
+    } else if (p instanceof Error) {
+      log.appendLine(p.stack ?? p.message);
+    } else log.appendLine("Error: " + p);
+  }
+  const issues = getRecoveryIssues();
+  for (const issue of issues) {
+    if (issue.type === "skipped") {
+      diags.push(
+        new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(issue.index),
+            document.positionAt(issue.index + issue.text.length)
+          ),
+          `Unknown characters found: \`${issue.text}\``,
+          issue.kind === "warning" ? import_vscode4.DiagnosticSeverity.Warning : import_vscode4.DiagnosticSeverity.Error
+        )
+      );
+    } else {
+      diags.push(
+        new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(issue.index),
+            document.positionAt(issue.index)
+          ),
+          `Missing ${issue.text}`,
+          issue.kind === "warning" ? import_vscode4.DiagnosticSeverity.Warning : import_vscode4.DiagnosticSeverity.Error
+        )
+      );
+    }
+  }
+  logg(`Time spent parsing: ${Date.now() - startTime}ms`);
+  return [parseResult, diags];
+};
+var logging = false;
+var logg = (v) => logging && log.appendLine(v);
+var newScope = () => ({
+  type: "scope",
+  switchTypes: /* @__PURE__ */ new Map(),
+  functions: [],
+  operators: [],
+  types: /* @__PURE__ */ new Map(),
+  variables: /* @__PURE__ */ new Map()
+});
+var newFunction = (returnType) => ({
+  type: "function",
+  switchTypes: /* @__PURE__ */ new Map(),
+  functions: [],
+  operators: [],
+  types: /* @__PURE__ */ new Map(),
+  variables: /* @__PURE__ */ new Map(),
+  returnType
+});
+var checkVariableExistence = (document, result, environments, diagnostics2) => {
+  result.forEach((scope) => {
+    switch (scope.type) {
+      case "type-definition": {
+        const kind = tryGetType(environments, scope.name.value);
+        if (kind !== null) {
+          diagnostics2.push(new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(scope.name.start),
+              document.positionAt(scope.name.end)
+            ),
+            `You should not redeclare types: '${scope.name.value}'`,
+            import_vscode4.DiagnosticSeverity.Warning
+          ));
+        } else {
+          const currentEnv = environments[environments.length - 1];
+          currentEnv.types.set(scope.name.value, {
+            type: "user-defined",
+            data: scope
+          });
+          if (Array.isArray(scope.definition.value)) {
+            scope.definition.value.forEach((v) => {
+              currentEnv.variables.set(v, {
+                type: "built-in",
+                kind: "const",
+                data: `A \`${v}\` value of enum ${scope.name.value}`,
+                varType: scope.name.value
+              });
+            });
+            currentEnv.operators.push({
+              type: "built-in",
+              kind: "binary",
+              name: "==",
+              data: `Checks if the first ${scope.name.value} value is equal to the second`,
+              parameterTypes: [scope.name.value, scope.name.value],
+              returnType: "Bool"
+            });
+            currentEnv.operators.push({
+              type: "built-in",
+              kind: "binary",
+              name: "!=",
+              data: `Checks if the first ${scope.name.value} value is not equal to the second`,
+              parameterTypes: [scope.name.value, scope.name.value],
+              returnType: "Bool"
+            });
+          } else {
+            currentEnv.types.set(scope.name.value, {
+              type: "user-defined",
+              data: scope
+            });
+          }
+          tokensData.push({
+            definition: scope.definition,
+            position: scope.name,
+            info: {
+              range: scope.definition
+            }
+          });
+        }
+        break;
+      }
+    }
+  });
+  result.forEach((scope) => {
+    switch (scope.type) {
+      case "function-declaration": {
+        if (scope.definition.type === "function") {
+          const paramTypes = scope.definition.parameters.map((param) => checkType(param.type, document, environments, diagnostics2) ?? "?");
+          const kind = scope.definition.kind === "def" ? tryGetDefFunction(environments, scope.definition.name.value, paramTypes) : tryGetDotFunction(environments, scope.definition.name.value, paramTypes);
+          if (kind !== null) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(scope.definition.name.start),
+                document.positionAt(scope.definition.name.end)
+              ),
+              `You should not redeclare functions: '${scope.definition.name.value}'`,
+              import_vscode4.DiagnosticSeverity.Warning
+            ));
+          } else {
+            const currentEnv = environments[environments.length - 1];
+            const returnType = checkType(scope.definition.returnType, document, environments, diagnostics2);
+            currentEnv.functions.push({
+              type: "user-defined",
+              kind: scope.definition.kind,
+              name: scope.definition.name.value,
+              data: scope.definition.name,
+              parameterTypes: paramTypes,
+              returnType
+            });
+            tokensData.push({
+              definition: scope.definition.name,
+              position: scope.definition.name,
+              info: {
+                range: scope.definition.name
+              }
+            });
+          }
+        } else {
+          const paramTypes = scope.definition.parameters.map((param) => checkType(param.type, document, environments, diagnostics2) ?? "?");
+          const kind = scope.definition.kind === "binary" ? tryGetBinaryOperator(environments, scope.definition.name.value, paramTypes) : tryGetUnaryOperator(environments, scope.definition.name.value, paramTypes);
+          if (kind !== null) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(scope.definition.name.start),
+                document.positionAt(scope.definition.name.end)
+              ),
+              `You should not redeclare operators: '${scope.definition.name.value}'`,
+              import_vscode4.DiagnosticSeverity.Warning
+            ));
+          } else {
+            const currentEnv = environments[environments.length - 1];
+            const returnType = checkType(scope.definition.returnType, document, environments, diagnostics2);
+            currentEnv.operators.push({
+              type: "user-defined",
+              kind: scope.definition.kind,
+              name: scope.definition.name.value,
+              data: scope.definition.name,
+              parameterTypes: paramTypes,
+              returnType: returnType ?? "?"
+            });
+            tokensData.push({
+              definition: scope.definition.name,
+              position: scope.definition.name,
+              info: {
+                range: scope.definition.name
+              }
+            });
+          }
+        }
+        break;
+      }
+    }
+  });
+  result.forEach((scope) => {
+    switch (scope.type) {
+      case "declaration": {
+        diagnostics2.push(...processRValue(document, environments, scope.value.value));
+        if (scope.kind.value === "const") {
+          if (scope.name.value.name.search(/[a-z]/) >= 0) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(scope.name.start),
+                document.positionAt(scope.name.end)
+              ),
+              `Constants have to use only uppercase letters`,
+              import_vscode4.DiagnosticSeverity.Error
+            ));
+          }
+        } else {
+          if (scope.name.value.name.substring(0, 1).search(/[A-Z]/) >= 0) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(scope.name.start),
+                document.positionAt(scope.name.end)
+              ),
+              `Variables have to start with a lowercase letter`,
+              import_vscode4.DiagnosticSeverity.Error
+            ));
+          }
+        }
+        const variable = tryGetVariable(true, environments, scope.name.value.name);
+        if (variable !== null) {
+          diagnostics2.push(new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(scope.name.start),
+              document.positionAt(scope.name.end)
+            ),
+            `You should not redeclare variables: '${scope.name.value.name}'`,
+            import_vscode4.DiagnosticSeverity.Warning
+          ));
+        } else {
+          const varType = getType(
+            scope.value,
+            document,
+            scope.kind.value === "const" ? filterOnlyConst(environments) : environments,
+            diagnostics2
+          );
+          environments[environments.length - 1].variables.set(scope.name.value.name, {
+            type: "user-defined",
+            kind: scope.kind.value,
+            data: scope.name,
+            varType
+          });
+          tokensData.push({
+            definition: scope.name,
+            position: scope.name,
+            info: {
+              range: {
+                start: scope.kind.start,
+                end: scope.name.end
+              },
+              type: varType
+            }
+          });
+        }
+        break;
+      }
+      case "modification": {
+        diagnostics2.push(...processRValue(document, environments, scope.value.value));
+        const left = getType(scope.name, document, environments, diagnostics2);
+        const right = getType(scope.value, document, environments, diagnostics2);
+        if (typeCheck() && left !== right) {
+          if (!isIntegerType(left) || scope.value.value.type !== "number") {
+            if (isIntegerType(left) && isIntegerType(right)) {
+              if (!isIntAssignableTo(left, right)) {
+                diagnostics2.push(new SimplexDiagnostic(
+                  new import_vscode4.Range(
+                    document.positionAt(scope.value.start),
+                    document.positionAt(scope.value.end)
+                  ),
+                  `Cannot assign a value of type ${typeTokenToTypeString(right)} to a variable of type ${typeTokenToTypeString(left)} - it will not fit!`
+                ));
+              }
+            } else {
+              diagnostics2.push(new SimplexDiagnostic(
+                new import_vscode4.Range(
+                  document.positionAt(scope.value.start),
+                  document.positionAt(scope.value.end)
+                ),
+                `Cannot assign a value of type ${typeTokenToTypeString(right)} to a variable of type ${typeTokenToTypeString(left)}`
+              ));
+            }
+          } else {
+            const signed = getIntSigned(left);
+            const size = getIntSize(left);
+            if (!signed && scope.value.value.value < 0) {
+              diagnostics2.push(new SimplexDiagnostic(
+                new import_vscode4.Range(
+                  document.positionAt(scope.value.start),
+                  document.positionAt(scope.value.end)
+                ),
+                `A negative value cannot be assigned to ${typeTokenToTypeString(left)}`
+              ));
+            }
+            if (size < BigInt(scope.value.value.value)) {
+              diagnostics2.push(new SimplexDiagnostic(
+                new import_vscode4.Range(
+                  document.positionAt(scope.value.start),
+                  document.positionAt(scope.value.end)
+                ),
+                `This value is too large to be assigned to ${typeTokenToTypeString(left)}`
+              ));
+            }
+          }
+        }
+        if (scope.name.value.type === "variable") {
+          const variable = tryGetVariable(!scope.name.value.value.value.front.includes("."), environments, scope.name.value.value.value.name);
+          if (variable === null) {
+            const variableSecondTry = tryGetVariable(false, environments, scope.name.value.value.value.name);
+            if (variableSecondTry != null) {
+              return [
+                new SimplexDiagnostic(
+                  new import_vscode4.Range(
+                    document.positionAt(scope.name.start),
+                    document.positionAt(scope.name.end)
+                  ),
+                  `Cannot find name '${scope.name.value.value.value.name}' - maybe you should access it using '.'?`
+                )
+              ];
+            } else {
+              const closeVariable = getCloseVariable(environments, scope.name.value.value.value.name);
+              if (closeVariable) {
+                return [
+                  new SimplexDiagnostic(
+                    new import_vscode4.Range(
+                      document.positionAt(scope.name.start),
+                      document.positionAt(scope.name.end)
+                    ),
+                    `Cannot find name '${scope.name.value.value.value.name}' - did you mean '${closeVariable}'?`
+                  )
+                ];
+              } else {
+                return [
+                  new SimplexDiagnostic(
+                    new import_vscode4.Range(
+                      document.positionAt(scope.name.start),
+                      document.positionAt(scope.name.end)
+                    ),
+                    `Cannot find name '${scope.name.value.value.value.name}'`
+                  )
+                ];
+              }
+            }
+          } else {
+            tokensData.push({
+              definition: variable.data,
+              position: scope.name,
+              info: {}
+            });
+            if (variable.kind !== "var") {
+              diagnostics2.push(new SimplexDiagnostic(
+                new import_vscode4.Range(
+                  document.positionAt(scope.name.start),
+                  document.positionAt(scope.name.end)
+                ),
+                `Cannot assign to '${scope.name.value.value.value.name}' because it is a constant`
+              ));
+            }
+          }
+        } else if (scope.name.value.type === "cast") {
+          const cast2 = scope.name.value;
+          const newType = checkType(cast2.to, document, environments, diagnostics2);
+          diagnostics2.push(...processRValue(document, environments, cast2.value.value));
+          diagnostics2.push(new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(scope.name.start),
+              document.positionAt(scope.name.end)
+            ),
+            newType?.startsWith("*") ? `Cannot assign to a casted value - did you mean to assign to an element of it?` : `Cannot assign to a casted value`
+          ));
+        } else {
+          const index = scope.name.value;
+          diagnostics2.push(...processRValue(document, environments, index.parameter.value));
+          diagnostics2.push(...processRValue(document, environments, index.value.value));
+        }
+        break;
+      }
+      case "return": {
+        if (scope.value.value) {
+          diagnostics2.push(...processRValue(document, environments, scope.value.value));
+          const varType = getType(scope.value, document, environments, diagnostics2);
+          const funcType = tryGetReturnType(environments);
+          if (typeCheck() && varType !== funcType) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(scope.value.start),
+                document.positionAt(scope.value.end)
+              ),
+              funcType ? `Returned type is not the function's declared return type - was ${typeTokenToTypeString(varType)} - should be ${typeTokenToTypeString(funcType)}` : `Returned ${typeTokenToTypeString(varType)}, but the function was declared to not return anything`
+            ));
+          }
+        }
+        break;
+      }
+      case "statements": {
+        const nextEnvironments = [...environments, newScope()];
+        checkVariableExistence(
+          document,
+          scope.statements,
+          nextEnvironments,
+          diagnostics2
+        );
+        break;
+      }
+      case "_reg_alloc_use": {
+        diagnostics2.push(...checkVariable(scope.value, document, environments));
+        break;
+      }
+      case "function-declaration": {
+        if (scope.definition.type === "function") {
+          if (scope.definition.kind === "dot") {
+            if (scope.definition.parameters.length === 0) {
+              diagnostics2.push(new SimplexDiagnostic(
+                new import_vscode4.Range(
+                  document.positionAt(scope.definition.name.end),
+                  document.positionAt(scope.definition.returnType.start)
+                ),
+                `Dot function should have at least one parameter`
+              ));
+            }
+          }
+        } else {
+          if (scope.definition.kind === "binary") {
+            if (scope.definition.parameters.length > 2) {
+              scope.definition.parameters.slice(2).forEach((param) => {
+                diagnostics2.push(new SimplexDiagnostic(
+                  new import_vscode4.Range(
+                    document.positionAt(param.name.start),
+                    document.positionAt(param.type.end)
+                  ),
+                  `Binary operators should have two parameters`
+                ));
+              });
+            } else if (scope.definition.parameters.length < 2) {
+              diagnostics2.push(new SimplexDiagnostic(
+                new import_vscode4.Range(
+                  document.positionAt(scope.definition.name.end),
+                  document.positionAt(scope.definition.returnType.start)
+                ),
+                `Binary operators should have two parameters`
+              ));
+            }
+          } else {
+            if (scope.definition.parameters.length > 1) {
+              scope.definition.parameters.slice(1).forEach((param) => {
+                diagnostics2.push(new SimplexDiagnostic(
+                  new import_vscode4.Range(
+                    document.positionAt(param.name.start),
+                    document.positionAt(param.type.end)
+                  ),
+                  `Unary operators should have one parameter`
+                ));
+              });
+            } else if (scope.definition.parameters.length < 1) {
+              diagnostics2.push(new SimplexDiagnostic(
+                new import_vscode4.Range(
+                  document.positionAt(scope.definition.name.end),
+                  document.positionAt(scope.definition.returnType.start)
+                ),
+                `Unary operators should have one parameter`
+              ));
+            }
+          }
+          if (!scope.definition.name.value.startsWith("=") && scope.definition.name.value.endsWith("=")) {
+            if (scope.definition.returnType.value) {
+              diagnostics2.push(new SimplexDiagnostic(
+                new import_vscode4.Range(
+                  document.positionAt(scope.definition.returnType.start),
+                  document.positionAt(scope.definition.returnType.end)
+                ),
+                `Assignment operators should not return anything`
+              ));
+            }
+            if (scope.definition.parameters.length > 0) {
+              if (scope.definition.parameters[0].name.value.front !== "$") {
+                diagnostics2.push(new SimplexDiagnostic(
+                  new import_vscode4.Range(
+                    document.positionAt(scope.definition.parameters[0].name.start),
+                    document.positionAt(scope.definition.parameters[0].name.end)
+                  ),
+                  `The first parameter of an assignment operator should be mutable`
+                ));
+              }
+            }
+          } else {
+            if (!scope.definition.returnType.value) {
+              diagnostics2.push(new SimplexDiagnostic(
+                new import_vscode4.Range(
+                  document.positionAt(scope.definition.returnType.start),
+                  document.positionAt(scope.definition.returnType.end)
+                ),
+                `Missing return type`
+              ));
+            }
+          }
+        }
+        const nextEnvironments = [...environments, newFunction(scope.definition.returnType.value)];
+        scope.definition.parameters.forEach((parameter2) => {
+          const env = nextEnvironments[nextEnvironments.length - 1];
+          const variableName2 = parameter2.name.value;
+          const varType = checkType(parameter2.type, document, environments, diagnostics2);
+          if (typeCheck() && !varType) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(parameter2.type.start),
+                document.positionAt(parameter2.type.end)
+              ),
+              `Missing type: '${parameter2.type.value}'`
+            ));
+          }
+          if (variableName2.front === "$") {
+            env.variables.set(variableName2.name, {
+              type: "user-defined",
+              kind: "var",
+              data: parameter2.name,
+              varType
+            });
+            tokensData.push({
+              definition: parameter2.name,
+              position: parameter2.name,
+              info: {
+                range: {
+                  start: parameter2.name.start,
+                  end: parameter2.type.end
+                },
+                type: varType ?? void 0
+              }
+            });
+          } else {
+            env.variables.set(variableName2.name, {
+              type: "user-defined",
+              kind: "const",
+              data: parameter2.name,
+              varType
+            });
+            tokensData.push({
+              definition: parameter2.name,
+              position: parameter2.name,
+              info: {
+                range: {
+                  start: parameter2.name.start,
+                  end: parameter2.type.end
+                },
+                type: varType ?? void 0
+              }
+            });
+          }
+        });
+        checkVariableExistence(
+          document,
+          scope.statements,
+          nextEnvironments,
+          diagnostics2
+        );
+        if (explicitReturn() && scope.definition.returnType.value) {
+          if (!doesReturn(document, scope.statements, nextEnvironments, diagnostics2)) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(scope.definition.returnType.start),
+                document.positionAt(scope.definition.returnType.end)
+              ),
+              `A function with return type has to return a value`,
+              import_vscode4.DiagnosticSeverity.Warning
+            ));
+          }
+        }
+        break;
+      }
+      case "if": {
+        diagnostics2.push(...processRValue(document, environments, scope.value.value));
+        const nextIfEnvironments = [...environments, newScope()];
+        checkVariableExistence(
+          document,
+          scope.ifBlock,
+          nextIfEnvironments,
+          diagnostics2
+        );
+        const varType = getType(scope.value, document, environments, diagnostics2);
+        if (typeCheck() && varType !== "Bool") {
+          diagnostics2.push(new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(scope.value.start),
+              document.positionAt(scope.value.end)
+            ),
+            `An if block condition has to be a boolean type - was ${typeTokenToTypeString(varType)}`
+          ));
+        }
+        scope.elifBlocks.forEach((elif) => {
+          diagnostics2.push(...processRValue(document, environments, elif.value.value));
+          const nextElifEnvironments = [...environments, newScope()];
+          checkVariableExistence(
+            document,
+            elif.statements,
+            nextElifEnvironments,
+            diagnostics2
+          );
+          const varType2 = getType(elif.value, document, environments, diagnostics2);
+          if (typeCheck() && varType2 !== "Bool") {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(scope.value.start),
+                document.positionAt(scope.value.end)
+              ),
+              `An elif block condition has to be a boolean type - was ${typeTokenToTypeString(varType2)}`
+            ));
+          }
+        });
+        const nextElseEnvironments = [...environments, newScope()];
+        checkVariableExistence(
+          document,
+          scope.elseBlock,
+          nextElseEnvironments,
+          diagnostics2
+        );
+        break;
+      }
+      case "switch": {
+        const varType = getType(scope.value, document, environments, diagnostics2);
+        const caseValues = [];
+        scope.cases.forEach((oneCase) => {
+          if (typeof oneCase.caseName.value !== "string") {
+            if (oneCase.caseName.value.type === "variable") {
+              diagnostics2.push(...checkVariable(oneCase.caseName.value.value, document, environments));
+            }
+          }
+          if (oneCase.caseName.value === "default") {
+            if (typeCheck() && caseValues.includes(null)) {
+              diagnostics2.push(new SimplexDiagnostic(
+                new import_vscode4.Range(
+                  document.positionAt(oneCase.caseName.start),
+                  document.positionAt(oneCase.caseName.end)
+                ),
+                `The switch block already has a default case`
+              ));
+            }
+            caseValues.push(null);
+          } else {
+            const caseName = oneCase.caseName;
+            const caseType = getType(caseName, document, environments, diagnostics2);
+            const caseValue = caseName.value.type === "variable" ? `v'${caseName.value.value.value.front}${caseName.value.value.value.name}` : caseName.value.type === "number" ? `n'${caseName.value.value}` : `s'${caseName.value.value}`;
+            if (typeCheck()) {
+              if (varType !== caseType) {
+                if (!isIntegerType(varType) || caseName.value.type !== "number") {
+                  diagnostics2.push(new SimplexDiagnostic(
+                    new import_vscode4.Range(
+                      document.positionAt(caseName.start),
+                      document.positionAt(caseName.end)
+                    ),
+                    `The switch block condition is of type ${typeTokenToTypeString(varType)} but the case value is of type ${typeTokenToTypeString(caseType)}`
+                  ));
+                }
+              }
+              if (caseValues.includes(caseValue)) {
+                diagnostics2.push(new SimplexDiagnostic(
+                  new import_vscode4.Range(
+                    document.positionAt(oneCase.caseName.start),
+                    document.positionAt(oneCase.caseName.end)
+                  ),
+                  `This switch block already has this case specified`
+                ));
+              }
+            }
+            caseValues.push(caseValue);
+          }
+          const nextCaseEnvironments = [...environments, newScope()];
+          checkVariableExistence(
+            document,
+            oneCase.statements,
+            nextCaseEnvironments,
+            diagnostics2
+          );
+        });
+        diagnostics2.push(...processRValue(document, environments, scope.value.value));
+        environments[environments.length - 1].switchTypes.set(`${scope.value.start}_${scope.value.end}`, [varType, caseValues]);
+        break;
+      }
+      case "while": {
+        diagnostics2.push(...processRValue(document, environments, scope.value.value));
+        const nextEnvironments = [...environments, newScope()];
+        checkVariableExistence(
+          document,
+          scope.statements,
+          nextEnvironments,
+          diagnostics2
+        );
+        const varType = getType(scope.value, document, environments, diagnostics2);
+        if (typeCheck() && varType !== "Bool") {
+          diagnostics2.push(new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(scope.value.start),
+              document.positionAt(scope.value.end)
+            ),
+            `A while block condition has to be a boolean type - was ${typeTokenToTypeString(varType)}`
+          ));
+        }
+        break;
+      }
+      case "type-definition": {
+        break;
+      }
+      case "break": {
+        break;
+      }
+      case "continue": {
+        break;
+      }
+      default: {
+        diagnostics2.push(...processRValue(document, environments, scope));
+        break;
+      }
+    }
+  });
+};
+var processRValue = (document, environments, rValue2) => {
+  const results = [];
+  switch (rValue2.type) {
+    case "number":
+    case "string": {
+      break;
+    }
+    case "interpolated": {
+      rValue2.inserts.forEach((i) => {
+        results.push(...processRValue(document, environments, i.value.value));
+      });
+      break;
+    }
+    case "variable": {
+      results.push(...checkVariable(rValue2.value, document, environments));
+      break;
+    }
+    case "cast": {
+      results.push(...processRValue(document, environments, rValue2.value.value));
+      break;
+    }
+    case "array": {
+      rValue2.values.forEach((v) => {
+        results.push(...processRValue(document, environments, v.value));
+      });
+      break;
+    }
+    case "index": {
+      results.push(...processRValue(document, environments, rValue2.value.value));
+      results.push(...processRValue(document, environments, rValue2.parameter.value));
+      break;
+    }
+    case "unary": {
+      results.push(...processRValue(document, environments, rValue2.value.value));
+      break;
+    }
+    case "binary": {
+      results.push(...processRValue(document, environments, rValue2.left.value));
+      results.push(...processRValue(document, environments, rValue2.right.value));
+      break;
+    }
+    case "ternary": {
+      results.push(...processRValue(document, environments, rValue2.condition.value));
+      results.push(...processRValue(document, environments, rValue2.ifTrue.value));
+      results.push(...processRValue(document, environments, rValue2.ifFalse.value));
+      break;
+    }
+    case "dotMethod": {
+      results.push(...processRValue(document, environments, rValue2.object.value));
+      rValue2.parameters.forEach((p) => {
+        results.push(...processRValue(document, environments, p.value));
+      });
+      const kind = tryGetDotFunction(
+        environments,
+        rValue2.value.value,
+        [rValue2.object, ...rValue2.parameters].map((p) => getType(p, document, environments, results))
+      );
+      if (kind === null) {
+        const closeDot = getCloseDot(
+          environments,
+          rValue2.value.value,
+          [rValue2.object, ...rValue2.parameters].map((p) => getType(p, document, environments, results))
+        );
+        if (closeDot) {
+          results.push(
+            new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(rValue2.value.start),
+                document.positionAt(rValue2.value.end)
+              ),
+              `Cannot find name '${rValue2.value.value}' - did you mean '${closeDot}'?`
+            )
+          );
+        } else {
+          results.push(
+            new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(rValue2.value.start),
+                document.positionAt(rValue2.value.end)
+              ),
+              `Cannot find name '${rValue2.value.value}'`
+            )
+          );
+        }
+      } else {
+        tokensData.push({
+          definition: kind.data,
+          position: {
+            start: rValue2.value.start,
+            end: rValue2.parameters.reduce((c, n) => Math.max(c, n.end), rValue2.value.end + 1) + 1
+          },
+          info: {
+            dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? "?")
+          }
+        });
+      }
+      break;
+    }
+    case "function": {
+      rValue2.parameters.forEach((p) => {
+        results.push(...processRValue(document, environments, p.value));
+      });
+      getType({
+        start: rValue2.value.start,
+        end: (rValue2.parameters[rValue2.parameters.length - 1]?.end ?? rValue2.value.end + 1) + 1,
+        value: rValue2
+      }, document, environments, results);
+      const kind = tryGetDefFunction(
+        environments,
+        rValue2.value.value,
+        rValue2.parameters.map((p) => getType(p, document, environments, results))
+      );
+      if (kind !== null) {
+        tokensData.push({
+          definition: kind.data,
+          position: {
+            start: rValue2.value.start,
+            end: rValue2.parameters.reduce((c, n) => Math.max(c, n.end), rValue2.value.end + 1) + 1
+          },
+          info: {
+            type: kind.returnType ?? void 0,
+            dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? "?")
+          }
+        });
+      }
+      break;
+    }
+    case "parenthesis": {
+      results.push(...processRValue(document, environments, rValue2.value.value));
+      break;
+    }
+    case "_default": {
+      getType({
+        start: rValue2.typeValue.start,
+        end: rValue2.typeValue.end,
+        value: rValue2
+      }, document, environments, results);
+      break;
+    }
+    default: {
+      const x = rValue2;
+      throw x;
+    }
+  }
+  return results;
+};
+var checkVariable = (nameToken, document, environments) => {
+  const kind = tryGetVariable(
+    !nameToken.value.front.includes("."),
+    environments,
+    nameToken.value.name
+  );
+  if (kind === null) {
+    const secondKind = tryGetVariable(false, environments, nameToken.value.name);
+    if (secondKind != null) {
+      return [
+        new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(nameToken.start),
+            document.positionAt(nameToken.end)
+          ),
+          `Cannot find name '${nameToken.value.name}' - maybe you should access it using '.'?`
+        )
+      ];
+    } else {
+      const closeVariable = getCloseVariable(environments, nameToken.value.name);
+      if (closeVariable) {
+        return [
+          new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(nameToken.start),
+              document.positionAt(nameToken.end)
+            ),
+            `Cannot find name '${nameToken.value.name}' - did you mean '${closeVariable}'?`
+          )
+        ];
+      } else {
+        return [
+          new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(nameToken.start),
+              document.positionAt(nameToken.end)
+            ),
+            `Cannot find name '${nameToken.value.name}'`
+          )
+        ];
+      }
+    }
+  } else {
+    tokensData.push({
+      definition: kind.data,
+      position: nameToken,
+      info: {
+        type: kind.varType ?? "?",
+        dotFunctionSuggestions: getDotFunctionsFor(environments, kind.varType ?? "?")
+      }
+    });
+  }
+  return [];
+};
+var checkType = (typeToken, document, environments, diagnostics2) => {
+  if (!typeToken.value) return null;
+  const typeName2 = typeStringToTypeToken(typeToken.value);
+  const envType = tryGetType(environments, typeName2);
+  if (!envType) {
+    const closeType = getCloseType(environments, typeName2);
+    if (closeType) {
+      diagnostics2.push(new SimplexDiagnostic(
+        new import_vscode4.Range(
+          document.positionAt(typeToken.start),
+          document.positionAt(typeToken.end)
+        ),
+        `Cannot find type: '${typeToken.value}' - did you mean '${closeType}'?`
+      ));
+    } else {
+      diagnostics2.push(new SimplexDiagnostic(
+        new import_vscode4.Range(
+          document.positionAt(typeToken.start),
+          document.positionAt(typeToken.end)
+        ),
+        `Cannot find type: '${typeToken.value}'`
+      ));
+    }
+  }
+  return typeName2;
+};
+var doesReturn = (document, statements, environments, diagnostics2) => {
+  for (let index = statements.length - 1; index >= 0; index--) {
+    const statement = statements[index];
+    switch (statement.type) {
+      case "return": {
+        if (statement.value.value) {
+          return true;
+        } else {
+          diagnostics2.push(new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(statement.value.start),
+              document.positionAt(statement.value.end)
+            ),
+            `A return in a function with specified return type must return a value`,
+            import_vscode4.DiagnosticSeverity.Warning
+          ));
+        }
+        break;
+      }
+      case "if": {
+        if (doesReturn(document, statement.ifBlock, environments, diagnostics2) && doesReturn(document, statement.elseBlock, environments, diagnostics2) && statement.elifBlocks.every((b) => doesReturn(document, b.statements, environments, diagnostics2))) {
+          return true;
+        }
+        break;
+      }
+      case "switch": {
+        if (statement.cases.every((c) => doesReturn(document, c.statements, environments, diagnostics2))) {
+          if (statement.cases.some((c) => c.caseName.value === "default")) {
+            return true;
+          }
+          const currentEnv = environments[environments.length - 1];
+          const switchData = currentEnv.switchTypes.get(`${statement.value.start}_${statement.value.end}`);
+          if (switchData) {
+            const enumData = isEnumType(switchData[0], environments);
+            if (enumData) {
+              if (switchData[1].every((s) => s?.startsWith("v"))) {
+                if (new Set(switchData[1]).size === enumData.length) {
+                  return true;
+                } else {
+                  diagnostics2.push(new SimplexDiagnostic(
+                    new import_vscode4.Range(
+                      document.positionAt(statement.value.start),
+                      document.positionAt(statement.value.end)
+                    ),
+                    `The switch block over an enum does not check all the cases. Did you miss a default case?`,
+                    import_vscode4.DiagnosticSeverity.Warning
+                  ));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return false;
+};
+var getType = (value, document, environments, diagnostics2) => {
+  const rValue2 = value.value;
+  switch (rValue2.type) {
+    case "number":
+      logg(`Number: Int`);
+      tokensData.push({
+        definition: rValue2.value.toString(),
+        position: value,
+        info: {
+          type: "Int",
+          dotFunctionSuggestions: getDotFunctionsFor(environments, "Int")
+        }
+      });
+      return "Int";
+    case "string":
+    case "interpolated":
+      logg(`String: String`);
+      tokensData.push({
+        definition: rValue2.value.toString(),
+        position: value,
+        info: {
+          type: "String",
+          dotFunctionSuggestions: getDotFunctionsFor(environments, "String")
+        }
+      });
+      return "String";
+    case "parenthesis": {
+      const type = getType(rValue2.value, document, environments, diagnostics2);
+      logg(`Parenthesis: ${type}`);
+      tokensData.push({
+        definition: "",
+        position: value,
+        info: {
+          type,
+          dotFunctionSuggestions: getDotFunctionsFor(environments, type)
+        }
+      });
+      return type;
+    }
+    case "unary": {
+      const type = getType(rValue2.value, document, environments, diagnostics2);
+      const operator = tryGetUnaryOperator(environments, rValue2.operator, [type]);
+      if (typeCheck() && !operator) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(rValue2.value.start - 1),
+            document.positionAt(rValue2.value.start)
+          ),
+          `Cannot find unary operator ${rValue2.operator} for type ${typeTokenToTypeString(type)}`
+        ));
+      }
+      logg(`Unary: ${operator?.returnType ?? "?"}`);
+      return transformGenericType(operator, [type]);
+    }
+    case "binary": {
+      const leftType = getType(rValue2.left, document, environments, diagnostics2);
+      const rightType = getType(rValue2.right, document, environments, diagnostics2);
+      let operator = tryGetBinaryOperator(environments, rValue2.operator, [leftType, rightType]);
+      if (!operator && isIntegerType(leftType) && rValue2.right.value.type === "number") {
+        operator = tryGetBinaryOperator(environments, rValue2.operator, [leftType, leftType]);
+      }
+      if (!operator && isIntegerType(rightType) && rValue2.left.value.type === "number") {
+        operator = tryGetBinaryOperator(environments, rValue2.operator, [rightType, rightType]);
+      }
+      if (typeCheck() && !operator) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(rValue2.left.end),
+            document.positionAt(rValue2.right.start)
+          ),
+          `Cannot find binary operator ${rValue2.operator} for types ${typeTokenToTypeString(leftType)} and ${typeTokenToTypeString(rightType)}`
+        ));
+      }
+      logg(`Binary: ${operator?.returnType ?? "?"}`);
+      return transformGenericType(operator, [leftType, rightType]);
+    }
+    case "ternary": {
+      const conditionType = getType(rValue2.condition, document, environments, diagnostics2);
+      const ifTrueType = getType(rValue2.ifTrue, document, environments, diagnostics2);
+      const ifFalseType = getType(rValue2.ifFalse, document, environments, diagnostics2);
+      if (typeCheck() && conditionType !== "Bool") {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(rValue2.condition.start),
+            document.positionAt(rValue2.condition.end)
+          ),
+          `A ternary condition has to be a boolean type - was ${typeTokenToTypeString(conditionType)}`
+        ));
+      }
+      if (typeCheck() && ifTrueType !== ifFalseType) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(rValue2.ifFalse.start),
+            document.positionAt(rValue2.ifFalse.end)
+          ),
+          `Both ternary branches must have the same type - was ${typeTokenToTypeString(ifTrueType)} and ${typeTokenToTypeString(ifFalseType)}`
+        ));
+      }
+      logg(`Ternary: ${ifTrueType}`);
+      return ifTrueType;
+    }
+    case "dotMethod": {
+      const paramTypes = [
+        getType(rValue2.object, document, environments, diagnostics2),
+        ...rValue2.parameters.map((param) => getType(param, document, environments, diagnostics2))
+      ];
+      const dotFunction = tryGetDotFunction(environments, rValue2.value.value, paramTypes);
+      dotFunction?.parameterTypes.forEach((type, index) => {
+        const actualType = paramTypes[index];
+        const pos = index === 0 ? rValue2.object : rValue2.parameters[index - 1];
+        if (!actualType) {
+          if (typeCheck()) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(pos.start),
+                document.positionAt(pos.end)
+              ),
+              `Too many parameters - Function takes ${dotFunction.parameterTypes.length - 1} parameters`
+            ));
+          }
+        } else {
+          if (typeCheck() && !doesTypeMatch(actualType, type)) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(pos.start),
+                document.positionAt(pos.end)
+              ),
+              `Invalid function parameter type - was ${typeTokenToTypeString(actualType)} - should be ${typeTokenToTypeString(type)}`
+            ));
+          }
+        }
+      });
+      logg(`Dot Method: ${dotFunction?.returnType ?? "?"}`);
+      return transformGenericType(dotFunction, paramTypes);
+    }
+    case "function": {
+      const paramTypes = rValue2.parameters.map((param) => getType(param, document, environments, diagnostics2));
+      const func = tryGetDefFunction(environments, rValue2.value.value, paramTypes);
+      if (typeCheck() && !func) {
+        const closeFunc = getCloseDef(environments, rValue2.value.value, paramTypes);
+        if (closeFunc) {
+          diagnostics2.push(
+            new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(rValue2.value.start),
+                document.positionAt(rValue2.value.end)
+              ),
+              `Cannot find function '${rValue2.value.value}(${paramTypes.map(typeTokenToTypeString).join(", ")})' - did you mean '${closeFunc}(${paramTypes.map(typeTokenToTypeString).join(", ")})'?`
+            )
+          );
+        } else {
+          diagnostics2.push(
+            new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(rValue2.value.start),
+                document.positionAt(rValue2.value.end)
+              ),
+              `Cannot find function '${rValue2.value.value}(${paramTypes.map(typeTokenToTypeString).join(", ")})'`
+            )
+          );
+        }
+      }
+      func?.parameterTypes.forEach((type, index) => {
+        const actualType = paramTypes[index];
+        const pos = rValue2.parameters[index];
+        if (!actualType) {
+          if (typeCheck()) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(pos.start),
+                document.positionAt(pos.end)
+              ),
+              `Too many parameters - Function takes ${func.parameterTypes.length} parameters`
+            ));
+          }
+        } else {
+          if (typeCheck() && !doesTypeMatch(actualType, type)) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(pos.start),
+                document.positionAt(pos.end)
+              ),
+              `Invalid function parameter type - was ${typeTokenToTypeString(actualType)} - should be ${typeTokenToTypeString(type)}`
+            ));
+          }
+        }
+      });
+      logg(`Def Method: ${func?.returnType ?? "?"}`);
+      return transformGenericType(func, paramTypes);
+    }
+    case "cast": {
+      getType(rValue2.value, document, environments, diagnostics2);
+      const newType = typeStringToTypeToken(rValue2.to.value);
+      if (isIntegerType(newType) && rValue2.value.value.type === "number") {
+        const signed = getIntSigned(newType);
+        const size = getIntSize(newType);
+        if (!signed && rValue2.value.value.value < 0) {
+          diagnostics2.push(new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(rValue2.value.start),
+              document.positionAt(rValue2.value.end)
+            ),
+            `A negative value cannot be casted to ${typeTokenToTypeString(newType)}`
+          ));
+        }
+        if (size < BigInt(rValue2.value.value.value)) {
+          diagnostics2.push(new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(rValue2.value.start),
+              document.positionAt(rValue2.value.end)
+            ),
+            `This value is too large to be casted to ${typeTokenToTypeString(newType)}`
+          ));
+        }
+      }
+      logg(`Cast: ${newType}`);
+      return newType;
+    }
+    case "array": {
+      const valuesTypes = rValue2.values.map((v) => [v, getType(v, document, environments, diagnostics2)]);
+      const type = valuesTypes[0];
+      if (typeCheck() && !type) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(value.start),
+            document.positionAt(value.end)
+          ),
+          `Cannot infer the array type because it has no values`
+        ));
+      }
+      const typeName2 = type?.[1] ?? "?";
+      if (valuesTypes.some(([token2, t]) => {
+        if (t !== typeName2) {
+          if (typeCheck()) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(token2.start),
+                document.positionAt(token2.end)
+              ),
+              `Array type inferred as ${typeTokenToTypeString(typeName2)}, but encountered value of type ${typeTokenToTypeString(t)}`
+            ));
+          }
+          return true;
+        }
+        return false;
+      })) {
+        logg(`Array: *?`);
+        return "*?";
+      }
+      logg(`Array: *${typeName2}`);
+      return `*${typeName2}`;
+    }
+    case "variable": {
+      const variableData = tryGetVariable(false, environments, rValue2.value.value.name);
+      if (typeCheck() && (!variableData?.varType || variableData.varType.endsWith("?"))) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(rValue2.value.start),
+            document.positionAt(rValue2.value.end)
+          ),
+          `Unknown variable type`
+        ));
+      }
+      logg(`Variable: ${variableData?.varType ?? "?"}`);
+      return variableData?.varType ?? "?";
+    }
+    case "index": {
+      const parameterType = getType(rValue2.parameter, document, environments, diagnostics2);
+      const variableType = getType(rValue2.value, document, environments, diagnostics2);
+      if (typeCheck() && !isIntegerType(parameterType)) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(rValue2.parameter.start),
+            document.positionAt(rValue2.parameter.end)
+          ),
+          `An index parameter has to be an integer type - was ${typeTokenToTypeString(parameterType)}`
+        ));
+      }
+      const afterIndexType = getAfterIndexType(variableType, environments);
+      if (typeCheck() && !afterIndexType) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(rValue2.value.start),
+            document.positionAt(rValue2.value.end)
+          ),
+          `An indexed value has to be an array type - was ${typeTokenToTypeString(variableType)}`
+        ));
+      }
+      logg(`Index: ${afterIndexType ?? "?"}`);
+      return afterIndexType ?? "?";
+    }
+    case "_default": {
+      const type = checkType(rValue2.typeValue, document, environments, diagnostics2);
+      if (typeCheck() && (!type || type.endsWith("?"))) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(rValue2.typeValue.start),
+            document.positionAt(rValue2.typeValue.end)
+          ),
+          `Unknown type`
+        ));
+      }
+      logg(`Type: ${type ?? "?"}`);
+      tokensData.push({
+        definition: "",
+        position: value,
+        info: {
+          type: type ?? "?",
+          dotFunctionSuggestions: getDotFunctionsFor(environments, type ?? "?")
+        }
+      });
+      return type ?? "?";
+    }
+    default: {
+      const x = rValue2;
+      throw x;
+    }
+  }
+};
+
+// src/test.ts
+var import_vscode6 = require("vscode");
+
+// src/extension.ts
+var import_vscode5 = require("vscode");
+
+// src/definitions/bool.ts
 var boolType = addEnum("Bool", "A boolean value", ["false", "true"]);
 addUnary("!", "Negates the boolean", boolType, boolType);
 addBinary("||", "ORs two booleans", boolType, [boolType, boolType]);
 addBinary("&&", "ANDs two booleans", boolType, [boolType, boolType]);
-addEnum(
-  "TestResult",
-  "Describes whether the test passes, fails, or wins the level",
-  ["pass", "fail", "win"],
-  boolType
-);
-var anyType = addType("@", "Any type");
-var stringType = addType("String", "A string type");
-addBinary("+", "Adds two strings together", stringType, [
-  stringType,
-  stringType
-]);
-addBinary("==", "Checks if the first array is equal to the second", boolType, [
-  stringType,
-  stringType
-]);
-addBinary(
-  "!=",
-  "Checks if the first array is not equal to the second",
-  boolType,
-  [stringType, stringType]
-);
+
+// src/definitions/int.ts
 var intType = addType("Int", "A type allowing any integer to be passed in");
 var addIntOperations = (iType) => {
   addUnary("~", "Inverts the bits of the integer", iType, iType);
@@ -2096,13 +3663,6 @@ var addIntOperations = (iType) => {
     [iType, iType]
   );
 };
-var seedType = addType(
-  "Seed",
-  "A type used for seeding the random generator"
-);
-addDef("get_random_seed", "pub def get_random_seed() Seed {", seedType, []);
-addDef("next", "pub dot next($s: Seed) Int {", intType, [seedType]);
-addDef("random", "pub def random(max: Int) Int {", intType, [intType]);
 var sintType = addType(
   "SInt",
   "A type allowing any signed integer to be passed in"
@@ -2120,12 +3680,357 @@ for (let width = 1; width <= 2048; width++) {
 addIntOperations(sintType);
 addIntOperations(uintType);
 addIntOperations(intType);
-var arr = getArrayType.bind(null, [baseEnvironment]);
+addConst(
+  "Z_STATE",
+  "Constant denoting the `Hi-Z` state of the wire.\n\nEquivalent to `0x8000_0000_0000_0000`.",
+  intType
+);
+addDef("random", "pub def random(max: Int) Int {", intType, [intType]);
+addDef("min", "pub def min(a: Int, b: Int) Int {", intType, [intType, intType]);
+addDef("max", "pub def max(a: Int, b: Int) Int {", intType, [intType, intType]);
+addDef("clz", "pub def clz(value: Int) Int {", intType, [intType]);
+addDef("ctz", "pub def ctz(value: Int) Int {", intType, [intType]);
+addDef("log10", "pub def log10(a: Int) Int {", intType, [intType]);
+
+// src/definitions/seed.ts
+var seedType = addType(
+  "Seed",
+  "A type used for seeding the random generator"
+);
+addDef("get_random_seed", "pub def get_random_seed() Seed {", seedType, []);
+addDef("next", "pub dot next($s: Seed) Int {", intType, [seedType]);
+addDef("random", "pub def random(max: Int) Int {", intType, [intType]);
+
+// src/definitions/testResult.ts
+addEnum(
+  "TestResult",
+  "Describes whether the test passes, fails, or wins the level",
+  ["pass", "fail", "win"],
+  boolType
+);
+
+// src/definitions/char.ts
+var charType = addEnum(
+  "Char",
+  "Type denoting a single character",
+  [
+    "char_null",
+    "char_soh",
+    "char_stx",
+    "char_etx",
+    "char_eot",
+    "char_enq",
+    "char_ack",
+    "char_bel",
+    "char_bs",
+    "char_ht",
+    "char_lf",
+    "char_vt",
+    "char_ff",
+    "char_cr",
+    "char_so",
+    "char_si",
+    "char_dle",
+    "char_dc1",
+    "char_dc2",
+    "char_dc3",
+    "char_dc4",
+    "char_nak",
+    "char_syn",
+    "char_etb",
+    "char_can",
+    "char_em",
+    "char_sub",
+    "char_esc",
+    "char_fs",
+    "char_gs",
+    "char_rs",
+    "char_us",
+    "char_space",
+    "char_excl",
+    "char_quote",
+    "char_num",
+    "char_dollar",
+    "char_percent",
+    "char_amp",
+    "char_apos",
+    "char_lparen",
+    "char_rparen",
+    "char_ast",
+    "char_plus",
+    "char_comma",
+    "char_minus",
+    "char_dot",
+    "char_sol",
+    "char_0",
+    "char_1",
+    "char_2",
+    "char_3",
+    "char_4",
+    "char_5",
+    "char_6",
+    "char_7",
+    "char_8",
+    "char_9",
+    "char_color",
+    "char_semi",
+    "char_lt",
+    "char_equals",
+    "char_gt",
+    "char_quest",
+    "char_at",
+    "char_A",
+    "char_B",
+    "char_C",
+    "char_D",
+    "char_E",
+    "char_F",
+    "char_G",
+    "char_H",
+    "char_I",
+    "char_J",
+    "char_K",
+    "char_L",
+    "char_M",
+    "char_N",
+    "char_O",
+    "char_P",
+    "char_Q",
+    "char_R",
+    "char_S",
+    "char_T",
+    "char_U",
+    "char_V",
+    "char_W",
+    "char_X",
+    "char_Y",
+    "char_Z",
+    "char_lsqb",
+    "char_bsol",
+    "char_rsqb",
+    "char_hat",
+    "char_lowbar",
+    "char_grave",
+    "char_a",
+    "char_b",
+    "char_c",
+    "char_d",
+    "char_e",
+    "char_f",
+    "char_g",
+    "char_h",
+    "char_i",
+    "char_j",
+    "char_k",
+    "char_l",
+    "char_m",
+    "char_n",
+    "char_o",
+    "char_p",
+    "char_q",
+    "char_r",
+    "char_s",
+    "char_t",
+    "char_u",
+    "char_v",
+    "char_w",
+    "char_x",
+    "char_y",
+    "char_z",
+    "char_lcub",
+    "char_verbar",
+    "char_rcub",
+    "char_tilde",
+    "char_del",
+    "char_128",
+    "char_128",
+    "char_129",
+    "char_130",
+    "char_131",
+    "char_132",
+    "char_133",
+    "char_134",
+    "char_135",
+    "char_136",
+    "char_137",
+    "char_138",
+    "char_139",
+    "char_140",
+    "char_141",
+    "char_142",
+    "char_143",
+    "char_144",
+    "char_145",
+    "char_146",
+    "char_147",
+    "char_148",
+    "char_149",
+    "char_150",
+    "char_151",
+    "char_152",
+    "char_153",
+    "char_154",
+    "char_155",
+    "char_156",
+    "char_157",
+    "char_158",
+    "char_159",
+    "char_160",
+    "char_161",
+    "char_162",
+    "char_163",
+    "char_164",
+    "char_165",
+    "char_166",
+    "char_167",
+    "char_168",
+    "char_169",
+    "char_170",
+    "char_171",
+    "char_172",
+    "char_173",
+    "char_174",
+    "char_175",
+    "char_176",
+    "char_177",
+    "char_178",
+    "char_179",
+    "char_180",
+    "char_181",
+    "char_182",
+    "char_183",
+    "char_184",
+    "char_185",
+    "char_186",
+    "char_187",
+    "char_188",
+    "char_189",
+    "char_190",
+    "char_191",
+    "char_192",
+    "char_193",
+    "char_194",
+    "char_195",
+    "char_196",
+    "char_197",
+    "char_198",
+    "char_199",
+    "char_200",
+    "char_201",
+    "char_202",
+    "char_203",
+    "char_204",
+    "char_205",
+    "char_206",
+    "char_207",
+    "char_208",
+    "char_209",
+    "char_210",
+    "char_211",
+    "char_212",
+    "char_213",
+    "char_214",
+    "char_215",
+    "char_216",
+    "char_217",
+    "char_218",
+    "char_219",
+    "char_220",
+    "char_221",
+    "char_222",
+    "char_223",
+    "char_224",
+    "char_225",
+    "char_226",
+    "char_227",
+    "char_228",
+    "char_229",
+    "char_230",
+    "char_231",
+    "char_232",
+    "char_233",
+    "char_234",
+    "char_235",
+    "char_236",
+    "char_237",
+    "char_238",
+    "char_239",
+    "char_240",
+    "char_241",
+    "char_242",
+    "char_243",
+    "char_244",
+    "char_245",
+    "char_246",
+    "char_247",
+    "char_248",
+    "char_249",
+    "char_250",
+    "char_251",
+    "char_252",
+    "char_253",
+    "char_254",
+    "char_255"
+  ],
+  boolType
+);
+
+// src/definitions/string.ts
+var stringType = addType("String", "A string type");
+addDot("len", "pub dot len(string: String) Int {", intType, [stringType]);
+addBinary("+", "Adds two strings together", stringType, [
+  stringType,
+  stringType
+]);
+addBinary("==", "Checks if the first string is equal to the second", boolType, [
+  stringType,
+  stringType
+]);
+addBinary(
+  "!=",
+  "Checks if the first string is not equal to the second",
+  boolType,
+  [stringType, stringType]
+);
+addDef("int", "pub def int(value: String) Int {", intType, [stringType]);
+
+// src/definitions/time.ts
+var timeType = addType(
+  "Time",
+  "Type used for denoting time (in microseconds)"
+);
+addDot("sec", "pub dot sec(amount: Int) Time {", timeType, [intType]);
+addDot("ms", "pub dot ms(amount: Int) Time {", timeType, [intType]);
+addDot("us", "pub dot us(amount: Int) Time {", timeType, [intType]);
+addDot("ns", "pub dot ns(amount: Int) Time {", timeType, [intType]);
+addDot("min", "pub dot min(amount: Int) Time {", timeType, [intType]);
+addDot("hour", "pub dot hour(amount: Int) Time {", timeType, [intType]);
+addDot("day", "pub dot day(amount: Int) Time {", timeType, [intType]);
+addBinary("+", "Adds two times together", timeType, [timeType, timeType]);
+addBinary("-", "Subtracts one time from another", timeType, [timeType, timeType]);
+addBinary("*", "Multiplies two times together", timeType, [timeType, timeType]);
+addBinary("+=", "Adds a time to another", timeType, [timeType, timeType]);
+addBinary("-=", "Subtracts a time from another", timeType, [timeType, timeType]);
+addBinary("<", "Checks if the first time is less than the second one", boolType, [timeType, timeType]);
+addBinary(">", "Checks if the first time is greater than the second one", boolType, [timeType, timeType]);
+addBinary("<=", "Checks if the first time is less than or equal to the second one", boolType, [timeType, timeType]);
+addBinary(">=", "Checks if the first time is greater than or equal to the second one", boolType, [timeType, timeType]);
+addDef("sleep", "pub def sleep(duration: Time) {", null, [timeType]);
+addDef("get_time", "pub def get_time() Time {", timeType, []);
+
+// src/definitions/file.ts
+var fileType = addType(
+  "File",
+  "Type used for operating on files"
+);
+addDot("write", "pub dot write(file: File, data: [U8]) {", null, [fileType, arr("U8")]);
+addDot("write", "pub dot write(file: File, text: String) {", null, [fileType, "String"]);
+
+// src/definitions/array.ts
 addDot("find", "pub dot find(array: [@Any], value: @Any) Int {", intType, [
   arr(anyType),
   anyType
 ]);
-addDot("len", "pub dot len(string: String) Int {", intType, [stringType]);
 addDot("len", "pub dot len(array: [@Any]) Int {", intType, [arr(anyType)]);
 addDot(
   "contains",
@@ -2166,1282 +4071,64 @@ addDef(
   arr(anyType),
   [intType, anyType]
 );
-addDef("random", "pub def random(max: Int) Int {", intType, [intType]);
-addDef("min", "pub def min(a: Int, b: Int) Int {", intType, [intType, intType]);
-addDef("max", "pub def max(a: Int, b: Int) Int {", intType, [intType, intType]);
-addDef("log10", "pub def log10(a: Int) Int {", intType, [intType]);
-addDef("int", "pub def int(value: String) Int {", intType, [stringType]);
-addDef("str", "pub def str(value: @Any) String {", stringType, [anyType]);
+addDot("push", "pub dot push(arr: [@Any], value: @Any) {", null, [arr(anyType), anyType]);
+addDot("pop", "pub dot pop(arr: [@Any]) @Any {", anyType, [arr(anyType)]);
+
+// src/definitions/special.ts
+addDef("_default", "pub def _default(type: @Any) @Any {", anyType, [anyType]);
+addDef("assert", "pub def assert(condition: Bool, error_code: Int) {", null, [boolType, intType]);
+addDef("breakpoint", "pub def breakpoint() {", null, []);
 addDef("exit", "pub def exit() {", null, []);
 addDef("exit", "pub def exit(code: Int) {", null, [intType]);
 addDef("get_tick", "pub def get_tick() Int {", intType, []);
 addDef("get_last_time", "pub def get_last_time() Int {", intType, []);
-addDef(
-  "get_register_value",
-  "pub def get_register_value(register: Int) Int {",
-  intType,
-  [intType]
-);
+addDef("get_register_value", "pub def get_register_value(register: Int) Int {", intType, [intType]);
 addDef("has_ram", "pub def has_ram() Bool {", boolType, []);
-addDef("get_ram_value", "pub def get_ram_value(address: Int) Int {", intType, [
-  intType
-]);
+addDef("has_dual_load_ram", "pub def has_dual_load_ram() Bool {", boolType, []);
+addDef("get_ram_count", "pub def get_ram_count() Int {", intType, []);
+addDef("get_ram_width", "pub def get_ram_width() Int {", intType, []);
+addDef("get_ram_width_2", "pub def get_ram_width_2() Int {", intType, []);
+addDef("get_ram_value", "pub def get_ram_value(address: Int) Int {", intType, [intType]);
+addDef("get_ssd_value", "pub def get_ssd_value(address: Int) Int {", intType, [intType]);
+addDef("get_ssd_size", "pub def get_ssd_size() Int {", intType, []);
 addDef("get_ram_size", "pub def get_ram_size() Int {", intType, []);
 addDef("get_delay_score", "pub def get_delay_score() Int {", intType, []);
-addDef(
-  "get_component_count",
-  "pub def get_component_count() Int {",
-  intType,
-  []
-);
-addDef(
-  "get_program_address",
-  "pub def get_program_address() Int {",
-  intType,
-  []
-);
+addDef("get_component_count", "pub def get_component_count() Int {", intType, []);
+addDef("get_program_address", "pub def get_program_address() Int {", intType, []);
 addDef("get_program_output", "pub def get_program_output() Int {", intType, []);
-addDef(
-  "get_level_memory",
-  "pub def get_level_memory(id: String) Int {",
-  intType,
-  [stringType]
-);
-addDef(
-  "set_custom_input_text",
-  "pub def set_custom_input_text(text: String) {",
-  null,
-  [stringType]
-);
-addDef(
-  "ui_set_hidden",
-  "pub def ui_set_hidden(id: String, hidden: Bool) {",
-  null,
-  [stringType, boolType]
-);
-addDef("ui_set_text", "pub def ui_set_text(id: String, text: String) {", null, [
-  stringType,
-  stringType
-]);
-addDef(
-  "ui_set_position",
-  "pub def ui_set_position(id: String, x: Int, y: Int) {",
-  null,
-  [stringType, intType, intType]
-);
+addDef("get_level_memory", "pub def get_level_memory(id: String) Int {", intType, [stringType]);
+addDef("set_custom_input_text", "pub def set_custom_input_text(text: String) {", null, [stringType]);
+addDef("ui_set_hidden", "pub def ui_set_hidden(id: String, hidden: Bool) {", null, [stringType, boolType]);
+addDef("ui_set_text", "pub def ui_set_text(id: String, text: String) {", null, [stringType, stringType]);
+addDef("ui_set_position", "pub def ui_set_position(id: String, x: Int, y: Int) {", null, [stringType, intType, intType]);
 addDef("set_error", "pub def set_error(text: String) {", null, [stringType]);
 addDef("output", "pub def output(text: String) {", null, [stringType]);
-addDef("add_keyboard_value", "pub def add_keyboard_value(value: Int) {", null, [
-  intType
-]);
-addDef(
-  "has_time_component",
-  "pub def has_time_component() Bool {",
-  boolType,
-  []
-);
-addDef(
-  "has_keyboard_component",
-  "pub def has_keyboard_component() Bool {",
-  boolType,
-  []
-);
-addDef(
-  "has_console_component",
-  "pub def has_console_component() Bool {",
-  boolType,
-  []
-);
-addDef(
-  "get_assembler_register_count",
-  "pub def get_assembler_register_count() Int {",
-  intType,
-  []
-);
+addDef("add_keyboard_value", "pub def add_keyboard_value(value: Int) {", null, [intType]);
+addDef("has_time_component", "pub def has_time_component() Bool {", boolType, []);
+addDef("has_keyboard_component", "pub def has_keyboard_component() Bool {", boolType, []);
+addDef("has_console_component", "pub def has_console_component() Bool {", boolType, []);
+addDef("get_assembler_register_count", "pub def get_assembler_register_count() Int {", intType, []);
 addDef("get_console_offset", "pub def get_console_offset() Int {", intType, []);
-addDef(
-  "get_assembler_width",
-  "pub def get_assembler_width() Int {",
-  intType,
-  []
-);
-addDef(
-  "get_latency_ram_is_busy",
-  "pub def get_latency_ram_is_busy() Bool {",
-  boolType,
-  []
-);
-addDef("set_address_text", "pub def set_address_text(text: String) {", null, [
-  stringType
-]);
-addDef("set_value_text", "pub def set_value_text(text: String) {", null, [
-  stringType
-]);
+addDef("get_assembler_width", "pub def get_assembler_width() Int {", intType, []);
+addDef("get_assembler_little_endian", "pub def get_assembler_little_endian() Bool {", boolType, []);
+addDef("get_latency_ram_is_busy", "pub def get_latency_ram_is_busy() Bool {", boolType, []);
+addDef("set_address_text", "pub def set_address_text(text: String) {", null, [stringType]);
+addDef("set_value_text", "pub def set_value_text(text: String) {", null, [stringType]);
 addDef("get_cycle_count", "pub def get_cycle_count() Int {", intType, []);
 addDef("get_probe_value", "pub def get_probe_value() Int {", intType, []);
 addDef("get_gate_score", "pub def get_gate_score() Int {", intType, []);
 addDef("print", "pub def print(input: @Any) {", null, [anyType]);
-addConst(
-  "Z_STATE",
-  "Constant denoting the `Hi-Z` state of the wire.\n\nEquivalent to `0x8000_0000_0000_0000`.",
-  intType
-);
-
-// src/checks.ts
-var useParser = (text, parser, path = "") => {
-  const res = parser({ text, path, index: 0 });
-  if ((0, import_parser_combinators7.isFailure)(res)) {
-    throw new import_parser_combinators7.ParseError(
-      `Parse error, expected ${[...res.history].pop()} at char ${res.ctx.index}`,
-      res.ctx.text,
-      res.ctx.index,
-      res.history
-    );
-  }
-  if (res.ctx.index !== res.ctx.text.length) {
-    throw new import_parser_combinators7.ParseError(
-      `Parse error at index ${res.ctx.index}`,
-      res.ctx.text,
-      res.ctx.index,
-      []
-    );
-  }
-  return res.value;
-};
-var performParsing = (document) => {
-  const fullText = document.getText();
-  const diags = [];
-  const startTime = Date.now();
-  let parseResult = null;
-  try {
-    parseResult = useParser(fullText, languageParser);
-  } catch (p) {
-    if (p instanceof import_parser_combinators7.ParseError) {
-      const position = document.positionAt(p.index);
-      diags.push(
-        new SimplexDiagnostic(
-          document.getWordRangeAtPosition(position) ?? new import_vscode3.Range(position, position),
-          p.message,
-          import_vscode3.DiagnosticSeverity.Error
-        )
-      );
-    } else if (p instanceof Error) {
-      log.appendLine(p.stack ?? p.message);
-    } else log.appendLine("Error: " + p);
-  }
-  const issues = getRecoveryIssues();
-  for (const issue of issues) {
-    if (issue.type === "skipped") {
-      diags.push(
-        new SimplexDiagnostic(
-          new import_vscode3.Range(
-            document.positionAt(issue.index),
-            document.positionAt(issue.index + issue.text.length)
-          ),
-          `Unknown characters found: \`${issue.text}\``,
-          issue.kind === "warning" ? import_vscode3.DiagnosticSeverity.Warning : import_vscode3.DiagnosticSeverity.Error
-        )
-      );
-    } else {
-      diags.push(
-        new SimplexDiagnostic(
-          new import_vscode3.Range(
-            document.positionAt(issue.index),
-            document.positionAt(issue.index)
-          ),
-          `Missing ${issue.text}`,
-          issue.kind === "warning" ? import_vscode3.DiagnosticSeverity.Warning : import_vscode3.DiagnosticSeverity.Error
-        )
-      );
-    }
-  }
-  log.appendLine(`Time spent parsing: ${Date.now() - startTime}ms`);
-  return [parseResult, diags];
-};
-var typeCheck = () => import_vscode4.workspace.getConfiguration("tcsi").get("showTypeCheckingErrors");
-var explicitReturn = () => import_vscode4.workspace.getConfiguration("tcsi").get("warnOnMissingExplicitReturn");
-if (typeCheck() == null) {
-  try {
-    import_vscode4.workspace.getConfiguration("tcsi").update("showTypeCheckingErrors", true);
-  } catch (e) {
-  }
-}
-var logging = false;
-var logg = (v) => logging && log.appendLine(v);
-var newScope = () => ({
-  type: "scope",
-  switchTypes: /* @__PURE__ */ new Map(),
-  functions: [],
-  operators: [],
-  types: /* @__PURE__ */ new Map(),
-  variables: /* @__PURE__ */ new Map()
-});
-var newFunction = (returnType) => ({
-  type: "function",
-  switchTypes: /* @__PURE__ */ new Map(),
-  functions: [],
-  operators: [],
-  types: /* @__PURE__ */ new Map(),
-  variables: /* @__PURE__ */ new Map(),
-  returnType
-});
-var checkVariableExistence = (document, result, environments, diagnostics2) => {
-  result.forEach((scope) => {
-    switch (scope.type) {
-      case "type-definition": {
-        const kind = tryGetType(environments, scope.name.value);
-        if (kind !== null) {
-          diagnostics2.push(new SimplexDiagnostic(
-            new import_vscode3.Range(
-              document.positionAt(scope.name.start),
-              document.positionAt(scope.name.end)
-            ),
-            `You should not redeclare types: '${scope.name.value}'`,
-            import_vscode3.DiagnosticSeverity.Warning
-          ));
-        } else {
-          const currentEnv = environments[environments.length - 1];
-          currentEnv.types.set(scope.name.value, {
-            type: "user-defined",
-            data: scope
-          });
-          if (Array.isArray(scope.definition.value)) {
-            scope.definition.value.forEach((v) => {
-              currentEnv.variables.set(v, {
-                type: "built-in",
-                kind: "const",
-                data: `A \`${v}\` value of enum ${scope.name.value}`,
-                varType: scope.name.value
-              });
-            });
-            currentEnv.operators.push({
-              type: "built-in",
-              kind: "binary",
-              name: "==",
-              data: `Checks if the first ${scope.name.value} value is equal to the second`,
-              parameterTypes: [scope.name.value, scope.name.value],
-              returnType: "Bool"
-            });
-            currentEnv.operators.push({
-              type: "built-in",
-              kind: "binary",
-              name: "!=",
-              data: `Checks if the first ${scope.name.value} value is not equal to the second`,
-              parameterTypes: [scope.name.value, scope.name.value],
-              returnType: "Bool"
-            });
-          } else {
-            currentEnv.types.set(scope.name.value, {
-              type: "user-defined",
-              data: scope
-            });
-          }
-          tokensData.push({
-            definition: scope.definition,
-            position: scope.name,
-            info: {
-              range: scope.definition
-            }
-          });
-        }
-        break;
-      }
-    }
-  });
-  result.forEach((scope) => {
-    switch (scope.type) {
-      case "function-declaration": {
-        if (scope.definition.type === "function") {
-          const paramTypes = scope.definition.parameters.map((param) => checkType(param.type, document, environments, diagnostics2) ?? "?");
-          const kind = scope.definition.kind === "def" ? tryGetDefFunction(environments, scope.definition.name.value, paramTypes) : tryGetDotFunction(environments, scope.definition.name.value, paramTypes);
-          if (kind !== null) {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(scope.definition.name.start),
-                document.positionAt(scope.definition.name.end)
-              ),
-              `You should not redeclare functions: '${scope.definition.name.value}'`,
-              import_vscode3.DiagnosticSeverity.Warning
-            ));
-          } else {
-            const currentEnv = environments[environments.length - 1];
-            const returnType = checkType(scope.definition.returnType, document, environments, diagnostics2);
-            currentEnv.functions.push({
-              type: "user-defined",
-              kind: scope.definition.kind,
-              name: scope.definition.name.value,
-              data: scope.definition.name,
-              parameterTypes: paramTypes,
-              returnType
-            });
-            tokensData.push({
-              definition: scope.definition.name,
-              position: scope.definition.name,
-              info: {
-                range: scope.definition.name
-              }
-            });
-          }
-        } else {
-          const paramTypes = scope.definition.parameters.map((param) => checkType(param.type, document, environments, diagnostics2) ?? "?");
-          const kind = scope.definition.kind === "binary" ? tryGetBinaryOperator(environments, scope.definition.name.value, paramTypes) : tryGetUnaryOperator(environments, scope.definition.name.value, paramTypes);
-          if (kind !== null) {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(scope.definition.name.start),
-                document.positionAt(scope.definition.name.end)
-              ),
-              `You should not redeclare operators: '${scope.definition.name.value}'`,
-              import_vscode3.DiagnosticSeverity.Warning
-            ));
-          } else {
-            const currentEnv = environments[environments.length - 1];
-            const returnType = checkType(scope.definition.returnType, document, environments, diagnostics2);
-            currentEnv.operators.push({
-              type: "user-defined",
-              kind: scope.definition.kind,
-              name: scope.definition.name.value,
-              data: scope.definition.name,
-              parameterTypes: paramTypes,
-              returnType: returnType ?? "?"
-            });
-            tokensData.push({
-              definition: scope.definition.name,
-              position: scope.definition.name,
-              info: {
-                range: scope.definition.name
-              }
-            });
-          }
-        }
-        break;
-      }
-    }
-  });
-  result.forEach((scope) => {
-    switch (scope.type) {
-      case "declaration": {
-        diagnostics2.push(...processRValue(document, environments, scope.value.value));
-        if (scope.kind.value === "const") {
-          if (scope.name.value.name.search(/[a-z]/) >= 0) {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(scope.name.start),
-                document.positionAt(scope.name.end)
-              ),
-              `Constants have to use only uppercase letters`,
-              import_vscode3.DiagnosticSeverity.Error
-            ));
-          }
-        } else {
-          if (scope.name.value.name.search(/[A-Z]/) >= 0) {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(scope.name.start),
-                document.positionAt(scope.name.end)
-              ),
-              `Variables have to use only lowercase letters`,
-              import_vscode3.DiagnosticSeverity.Error
-            ));
-          }
-        }
-        const variable = tryGetVariable(true, environments, scope.name.value.name);
-        if (variable !== null) {
-          diagnostics2.push(new SimplexDiagnostic(
-            new import_vscode3.Range(
-              document.positionAt(scope.name.start),
-              document.positionAt(scope.name.end)
-            ),
-            `You should not redeclare variables: '${scope.name.value.name}'`,
-            import_vscode3.DiagnosticSeverity.Warning
-          ));
-        } else {
-          const varType = getType(
-            scope.value,
-            document,
-            scope.kind.value === "const" ? filterOnlyConst(environments) : environments,
-            diagnostics2
-          );
-          environments[environments.length - 1].variables.set(scope.name.value.name, {
-            type: "user-defined",
-            kind: scope.kind.value,
-            data: scope.name,
-            varType
-          });
-          tokensData.push({
-            definition: scope.name,
-            position: scope.name,
-            info: {
-              range: {
-                start: scope.kind.start,
-                end: scope.name.end
-              },
-              type: varType
-            }
-          });
-        }
-        break;
-      }
-      case "modification": {
-        diagnostics2.push(...processRValue(document, environments, scope.value.value));
-        const left = getType(scope.name, document, environments, diagnostics2);
-        const right = getType(scope.value, document, environments, diagnostics2);
-        if (typeCheck() && left !== right) {
-          if (!isIntegerType(left) || scope.value.value.type !== "number") {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(scope.value.start),
-                document.positionAt(scope.value.end)
-              ),
-              `Cannot assign a value of type ${typeTokenToTypeString(right)} to a variable of type ${typeTokenToTypeString(left)}`
-            ));
-          }
-        }
-        if (scope.name.value.type === "variable") {
-          const variable = tryGetVariable(!scope.name.value.value.value.front.includes("."), environments, scope.name.value.value.value.name);
-          if (variable === null) {
-            const variableSecondTry = tryGetVariable(false, environments, scope.name.value.value.value.name);
-            if (variableSecondTry != null) {
-              return [
-                new SimplexDiagnostic(
-                  new import_vscode3.Range(
-                    document.positionAt(scope.name.start),
-                    document.positionAt(scope.name.end)
-                  ),
-                  `Cannot find name '${scope.name.value.value.value.name}' - maybe you should access it using '.'?`
-                )
-              ];
-            } else {
-              return [
-                new SimplexDiagnostic(
-                  new import_vscode3.Range(
-                    document.positionAt(scope.name.start),
-                    document.positionAt(scope.name.end)
-                  ),
-                  `Cannot find name '${scope.name.value.value.value.name}'`
-                )
-              ];
-            }
-          } else {
-            tokensData.push({
-              definition: variable.data,
-              position: scope.name,
-              info: {}
-            });
-            if (variable.kind !== "var") {
-              diagnostics2.push(new SimplexDiagnostic(
-                new import_vscode3.Range(
-                  document.positionAt(scope.name.start),
-                  document.positionAt(scope.name.end)
-                ),
-                `Cannot assign to '${scope.name.value.value.value.name}' because it is a constant`
-              ));
-            }
-          }
-        } else {
-          const index = scope.name.value;
-          diagnostics2.push(...processRValue(document, environments, index.parameter.value));
-          diagnostics2.push(...processRValue(document, environments, index.value.value));
-        }
-        break;
-      }
-      case "return": {
-        if (scope.value.value) {
-          diagnostics2.push(...processRValue(document, environments, scope.value.value));
-          const varType = getType(scope.value, document, environments, diagnostics2);
-          const funcType = tryGetReturnType(environments);
-          if (typeCheck() && varType !== funcType) {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(scope.value.start),
-                document.positionAt(scope.value.end)
-              ),
-              funcType ? `Returned type is not the function's declared return type - was ${typeTokenToTypeString(varType)} - should be ${typeTokenToTypeString(funcType)}` : `Returned ${typeTokenToTypeString(varType)}, but the function was declared to not return anything`
-            ));
-          }
-        }
-        break;
-      }
-      case "statements": {
-        const nextEnvironments = [...environments, newScope()];
-        checkVariableExistence(
-          document,
-          scope.statements,
-          nextEnvironments,
-          diagnostics2
-        );
-        break;
-      }
-      case "_reg_alloc_use": {
-        diagnostics2.push(...checkVariable(scope.value, document, environments));
-        break;
-      }
-      case "function-declaration": {
-        if (scope.definition.type === "function") {
-          if (scope.definition.kind === "dot") {
-            if (scope.definition.parameters.length === 0) {
-              diagnostics2.push(new SimplexDiagnostic(
-                new import_vscode3.Range(
-                  document.positionAt(scope.definition.name.end),
-                  document.positionAt(scope.definition.returnType.start)
-                ),
-                `Dot function should have at least one parameter`
-              ));
-            }
-          }
-        } else {
-          if (scope.definition.kind === "binary") {
-            if (scope.definition.parameters.length > 2) {
-              scope.definition.parameters.slice(2).forEach((param) => {
-                diagnostics2.push(new SimplexDiagnostic(
-                  new import_vscode3.Range(
-                    document.positionAt(param.name.start),
-                    document.positionAt(param.type.end)
-                  ),
-                  `Binary operators should have two parameters`
-                ));
-              });
-            } else if (scope.definition.parameters.length < 2) {
-              diagnostics2.push(new SimplexDiagnostic(
-                new import_vscode3.Range(
-                  document.positionAt(scope.definition.name.end),
-                  document.positionAt(scope.definition.returnType.start)
-                ),
-                `Binary operators should have two parameters`
-              ));
-            }
-          } else {
-            if (scope.definition.parameters.length > 1) {
-              scope.definition.parameters.slice(1).forEach((param) => {
-                diagnostics2.push(new SimplexDiagnostic(
-                  new import_vscode3.Range(
-                    document.positionAt(param.name.start),
-                    document.positionAt(param.type.end)
-                  ),
-                  `Unary operators should have one parameter`
-                ));
-              });
-            } else if (scope.definition.parameters.length < 1) {
-              diagnostics2.push(new SimplexDiagnostic(
-                new import_vscode3.Range(
-                  document.positionAt(scope.definition.name.end),
-                  document.positionAt(scope.definition.returnType.start)
-                ),
-                `Unary operators should have one parameter`
-              ));
-            }
-          }
-          if (!scope.definition.name.value.startsWith("=") && scope.definition.name.value.endsWith("=")) {
-            if (scope.definition.returnType.value) {
-              diagnostics2.push(new SimplexDiagnostic(
-                new import_vscode3.Range(
-                  document.positionAt(scope.definition.returnType.start),
-                  document.positionAt(scope.definition.returnType.end)
-                ),
-                `Assignment operators should not return anything`
-              ));
-            }
-            if (scope.definition.parameters.length > 0) {
-              if (scope.definition.parameters[0].name.value.front !== "$") {
-                diagnostics2.push(new SimplexDiagnostic(
-                  new import_vscode3.Range(
-                    document.positionAt(scope.definition.parameters[0].name.start),
-                    document.positionAt(scope.definition.parameters[0].name.end)
-                  ),
-                  `The first parameter of an assignment operator should be mutable`
-                ));
-              }
-            }
-          } else {
-            if (!scope.definition.returnType.value) {
-              diagnostics2.push(new SimplexDiagnostic(
-                new import_vscode3.Range(
-                  document.positionAt(scope.definition.returnType.start),
-                  document.positionAt(scope.definition.returnType.end)
-                ),
-                `Missing return type`
-              ));
-            }
-          }
-        }
-        const nextEnvironments = [...environments, newFunction(scope.definition.returnType.value)];
-        scope.definition.parameters.forEach((parameter2) => {
-          const env = nextEnvironments[nextEnvironments.length - 1];
-          const variableName2 = parameter2.name.value;
-          const varType = checkType(parameter2.type, document, environments, diagnostics2);
-          if (typeCheck() && !varType) {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(parameter2.type.start),
-                document.positionAt(parameter2.type.end)
-              ),
-              `Missing type: '${parameter2.type.value}'`
-            ));
-          }
-          if (variableName2.front === "$") {
-            env.variables.set(variableName2.name, {
-              type: "user-defined",
-              kind: "var",
-              data: parameter2.name,
-              varType
-            });
-            tokensData.push({
-              definition: parameter2.name,
-              position: parameter2.name,
-              info: {
-                range: {
-                  start: parameter2.name.start,
-                  end: parameter2.type.end
-                },
-                type: varType ?? void 0
-              }
-            });
-          } else {
-            env.variables.set(variableName2.name, {
-              type: "user-defined",
-              kind: "const",
-              data: parameter2.name,
-              varType
-            });
-            tokensData.push({
-              definition: parameter2.name,
-              position: parameter2.name,
-              info: {
-                range: {
-                  start: parameter2.name.start,
-                  end: parameter2.type.end
-                },
-                type: varType ?? void 0
-              }
-            });
-          }
-        });
-        checkVariableExistence(
-          document,
-          scope.statements,
-          nextEnvironments,
-          diagnostics2
-        );
-        if (explicitReturn() && scope.definition.returnType.value) {
-          if (!doesReturn(document, scope.statements, nextEnvironments, diagnostics2)) {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(scope.definition.returnType.start),
-                document.positionAt(scope.definition.returnType.end)
-              ),
-              `A function with return type has to return a value`,
-              import_vscode3.DiagnosticSeverity.Warning
-            ));
-          }
-        }
-        break;
-      }
-      case "if": {
-        diagnostics2.push(...processRValue(document, environments, scope.value.value));
-        const nextIfEnvironments = [...environments, newScope()];
-        checkVariableExistence(
-          document,
-          scope.ifBlock,
-          nextIfEnvironments,
-          diagnostics2
-        );
-        const varType = getType(scope.value, document, environments, diagnostics2);
-        if (typeCheck() && varType !== "Bool") {
-          diagnostics2.push(new SimplexDiagnostic(
-            new import_vscode3.Range(
-              document.positionAt(scope.value.start),
-              document.positionAt(scope.value.end)
-            ),
-            `An if block condition has to be a boolean type - was ${typeTokenToTypeString(varType)}`
-          ));
-        }
-        scope.elifBlocks.forEach((elif) => {
-          diagnostics2.push(...processRValue(document, environments, elif.value.value));
-          const nextElifEnvironments = [...environments, newScope()];
-          checkVariableExistence(
-            document,
-            elif.statements,
-            nextElifEnvironments,
-            diagnostics2
-          );
-          const varType2 = getType(elif.value, document, environments, diagnostics2);
-          if (typeCheck() && varType2 !== "Bool") {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(scope.value.start),
-                document.positionAt(scope.value.end)
-              ),
-              `An elif block condition has to be a boolean type - was ${typeTokenToTypeString(varType2)}`
-            ));
-          }
-        });
-        const nextElseEnvironments = [...environments, newScope()];
-        checkVariableExistence(
-          document,
-          scope.elseBlock,
-          nextElseEnvironments,
-          diagnostics2
-        );
-        break;
-      }
-      case "switch": {
-        const varType = getType(scope.value, document, environments, diagnostics2);
-        const caseValues = [];
-        scope.cases.forEach((oneCase) => {
-          if (typeof oneCase.caseName.value !== "string") {
-            if (oneCase.caseName.value.type === "variable") {
-              diagnostics2.push(...checkVariable(oneCase.caseName.value.value, document, environments));
-            }
-          }
-          if (oneCase.caseName.value === "default") {
-            if (typeCheck() && caseValues.includes(null)) {
-              diagnostics2.push(new SimplexDiagnostic(
-                new import_vscode3.Range(
-                  document.positionAt(oneCase.caseName.start),
-                  document.positionAt(oneCase.caseName.end)
-                ),
-                `The switch block already has a default case`
-              ));
-            }
-            caseValues.push(null);
-          } else {
-            const caseName = oneCase.caseName;
-            const caseType = getType(caseName, document, environments, diagnostics2);
-            const caseValue = caseName.value.type === "variable" ? `v'${caseName.value.value.value.front}${caseName.value.value.value.name}` : caseName.value.type === "number" ? `n'${caseName.value.value}` : `s'${caseName.value.value}`;
-            if (typeCheck()) {
-              if (varType !== caseType) {
-                if (!isIntegerType(varType) || caseName.value.type !== "number") {
-                  diagnostics2.push(new SimplexDiagnostic(
-                    new import_vscode3.Range(
-                      document.positionAt(caseName.start),
-                      document.positionAt(caseName.end)
-                    ),
-                    `The switch block condition is of type ${typeTokenToTypeString(varType)} but the case value is of type ${typeTokenToTypeString(caseType)}`
-                  ));
-                }
-              }
-              if (caseValues.includes(caseValue)) {
-                diagnostics2.push(new SimplexDiagnostic(
-                  new import_vscode3.Range(
-                    document.positionAt(oneCase.caseName.start),
-                    document.positionAt(oneCase.caseName.end)
-                  ),
-                  `This switch block already has this case specified`
-                ));
-              }
-            }
-            caseValues.push(caseValue);
-          }
-          const nextCaseEnvironments = [...environments, newScope()];
-          checkVariableExistence(
-            document,
-            oneCase.statements,
-            nextCaseEnvironments,
-            diagnostics2
-          );
-        });
-        diagnostics2.push(...processRValue(document, environments, scope.value.value));
-        environments[environments.length - 1].switchTypes.set(`${scope.value.start}_${scope.value.end}`, [varType, caseValues]);
-        break;
-      }
-      case "while": {
-        diagnostics2.push(...processRValue(document, environments, scope.value.value));
-        const nextEnvironments = [...environments, newScope()];
-        checkVariableExistence(
-          document,
-          scope.statements,
-          nextEnvironments,
-          diagnostics2
-        );
-        const varType = getType(scope.value, document, environments, diagnostics2);
-        if (typeCheck() && varType !== "Bool") {
-          diagnostics2.push(new SimplexDiagnostic(
-            new import_vscode3.Range(
-              document.positionAt(scope.value.start),
-              document.positionAt(scope.value.end)
-            ),
-            `A while block condition has to be a boolean type - was ${typeTokenToTypeString(varType)}`
-          ));
-        }
-        break;
-      }
-      case "type-definition": {
-        break;
-      }
-      default: {
-        diagnostics2.push(...processRValue(document, environments, scope));
-        break;
-      }
-    }
-  });
-};
-var processRValue = (document, environments, rValue2) => {
-  const results = [];
-  switch (rValue2.type) {
-    case "number":
-    case "string": {
-      break;
-    }
-    case "interpolated": {
-      rValue2.inserts.forEach((i) => {
-        results.push(...processRValue(document, environments, i.value.value));
-      });
-      break;
-    }
-    case "variable": {
-      results.push(...checkVariable(rValue2.value, document, environments));
-      break;
-    }
-    case "cast": {
-      results.push(...processRValue(document, environments, rValue2.value.value));
-      break;
-    }
-    case "array": {
-      rValue2.values.forEach((v) => {
-        results.push(...processRValue(document, environments, v.value));
-      });
-      break;
-    }
-    case "index": {
-      results.push(...processRValue(document, environments, rValue2.value.value));
-      results.push(...processRValue(document, environments, rValue2.parameter.value));
-      break;
-    }
-    case "unary": {
-      results.push(...processRValue(document, environments, rValue2.value.value));
-      break;
-    }
-    case "binary": {
-      results.push(...processRValue(document, environments, rValue2.left.value));
-      results.push(...processRValue(document, environments, rValue2.right.value));
-      break;
-    }
-    case "ternary": {
-      results.push(...processRValue(document, environments, rValue2.condition.value));
-      results.push(...processRValue(document, environments, rValue2.ifTrue.value));
-      results.push(...processRValue(document, environments, rValue2.ifFalse.value));
-      break;
-    }
-    case "dotMethod": {
-      results.push(...processRValue(document, environments, rValue2.object.value));
-      rValue2.parameters.forEach((p) => {
-        results.push(...processRValue(document, environments, p.value));
-      });
-      const kind = tryGetDotFunction(
-        environments,
-        rValue2.value.value,
-        [rValue2.object, ...rValue2.parameters].map((p) => getType(p, document, environments, results))
-      );
-      if (kind === null) {
-        results.push(
-          new SimplexDiagnostic(
-            new import_vscode3.Range(
-              document.positionAt(rValue2.value.start),
-              document.positionAt(rValue2.value.end)
-            ),
-            `Cannot find name '${rValue2.value.value}'`
-          )
-        );
-      } else {
-        tokensData.push({
-          definition: kind.data,
-          position: rValue2.value,
-          info: {}
-        });
-      }
-      break;
-    }
-    case "function": {
-      rValue2.parameters.forEach((p) => {
-        results.push(...processRValue(document, environments, p.value));
-      });
-      getType({
-        start: rValue2.value.start,
-        end: (rValue2.parameters[rValue2.parameters.length - 1]?.end ?? rValue2.value.end + 1) + 1,
-        value: rValue2
-      }, document, environments, results);
-      const kind = tryGetDefFunction(
-        environments,
-        rValue2.value.value,
-        rValue2.parameters.map((p) => getType(p, document, environments, results))
-      );
-      if (kind !== null) {
-        tokensData.push({
-          definition: kind.data,
-          position: rValue2.value,
-          info: {
-            type: kind.returnType ?? void 0
-          }
-        });
-      }
-      break;
-    }
-    case "parenthesis": {
-      results.push(...processRValue(document, environments, rValue2.value.value));
-      break;
-    }
-    default: {
-      const x = rValue2;
-      throw x;
-    }
-  }
-  return results;
-};
-var checkVariable = (nameToken, document, environments) => {
-  const kind = tryGetVariable(
-    !nameToken.value.front.includes("."),
-    environments,
-    nameToken.value.name
-  );
-  if (kind === null) {
-    const secondKind = tryGetVariable(false, environments, nameToken.value.name);
-    if (secondKind != null) {
-      return [
-        new SimplexDiagnostic(
-          new import_vscode3.Range(
-            document.positionAt(nameToken.start),
-            document.positionAt(nameToken.end)
-          ),
-          `Cannot find name '${nameToken.value.name}' - maybe you should access it using '.'?`
-        )
-      ];
-    } else {
-      return [
-        new SimplexDiagnostic(
-          new import_vscode3.Range(
-            document.positionAt(nameToken.start),
-            document.positionAt(nameToken.end)
-          ),
-          `Cannot find name '${nameToken.value.name}'`
-        )
-      ];
-    }
-  } else {
-    tokensData.push({
-      definition: kind.data,
-      position: nameToken,
-      info: {
-        type: kind.varType ?? "?"
-      }
-    });
-  }
-  return [];
-};
-var checkType = (typeToken, document, environments, diagnostics2) => {
-  if (!typeToken.value) return null;
-  const typeName2 = typeStringToTypeToken(typeToken.value);
-  const envType = tryGetType(environments, typeName2);
-  if (!envType) {
-    diagnostics2.push(new SimplexDiagnostic(
-      new import_vscode3.Range(
-        document.positionAt(typeToken.start),
-        document.positionAt(typeToken.end)
-      ),
-      `Cannot find type: '${typeToken.value}'`
-    ));
-  }
-  return typeName2;
-};
-var doesReturn = (document, statements, environments, diagnostics2) => {
-  for (let index = statements.length - 1; index >= 0; index--) {
-    const statement = statements[index];
-    switch (statement.type) {
-      case "return": {
-        if (statement.value.value) {
-          return true;
-        } else {
-          diagnostics2.push(new SimplexDiagnostic(
-            new import_vscode3.Range(
-              document.positionAt(statement.value.start),
-              document.positionAt(statement.value.end)
-            ),
-            `A return in a function with specified return type must return a value`,
-            import_vscode3.DiagnosticSeverity.Warning
-          ));
-        }
-        break;
-      }
-      case "if": {
-        if (doesReturn(document, statement.ifBlock, environments, diagnostics2) && doesReturn(document, statement.elseBlock, environments, diagnostics2) && statement.elifBlocks.every((b) => doesReturn(document, b.statements, environments, diagnostics2))) {
-          return true;
-        }
-        break;
-      }
-      case "switch": {
-        if (statement.cases.every((c) => doesReturn(document, c.statements, environments, diagnostics2))) {
-          if (statement.cases.some((c) => c.caseName.value === "default")) {
-            return true;
-          }
-          const currentEnv = environments[environments.length - 1];
-          const switchData = currentEnv.switchTypes.get(`${statement.value.start}_${statement.value.end}`);
-          if (switchData) {
-            const enumData = isEnumType(switchData[0], environments);
-            if (enumData) {
-              if (switchData[1].every((s) => s?.startsWith("v"))) {
-                if (new Set(switchData[1]).size === enumData.length) {
-                  return true;
-                } else {
-                  diagnostics2.push(new SimplexDiagnostic(
-                    new import_vscode3.Range(
-                      document.positionAt(statement.value.start),
-                      document.positionAt(statement.value.end)
-                    ),
-                    `The switch block over an enum does not check all the cases. Did you miss a default case?`,
-                    import_vscode3.DiagnosticSeverity.Warning
-                  ));
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  return false;
-};
-var getType = (value, document, environments, diagnostics2) => {
-  const rValue2 = value.value;
-  switch (rValue2.type) {
-    case "number":
-      logg(`Number: Int`);
-      return "Int";
-    case "string":
-    case "interpolated":
-      logg(`String: String`);
-      return "String";
-    case "parenthesis": {
-      const type = getType(rValue2.value, document, environments, diagnostics2);
-      logg(`Parenthesis: ${type}`);
-      return type;
-    }
-    case "unary": {
-      const type = getType(rValue2.value, document, environments, diagnostics2);
-      const operator = tryGetUnaryOperator(environments, rValue2.operator, [type]);
-      if (typeCheck() && !operator) {
-        diagnostics2.push(new SimplexDiagnostic(
-          new import_vscode3.Range(
-            document.positionAt(rValue2.value.start - 1),
-            document.positionAt(rValue2.value.start)
-          ),
-          `Cannot find unary operator ${rValue2.operator} for type ${typeTokenToTypeString(type)}`
-        ));
-      }
-      logg(`Unary: ${operator?.returnType ?? "?"}`);
-      return transformGenericType(operator, [type]);
-    }
-    case "binary": {
-      const leftType = getType(rValue2.left, document, environments, diagnostics2);
-      const rightType = getType(rValue2.right, document, environments, diagnostics2);
-      let operator = tryGetBinaryOperator(environments, rValue2.operator, [leftType, rightType]);
-      if (!operator && isIntegerType(leftType) && rValue2.right.value.type === "number") {
-        operator = tryGetBinaryOperator(environments, rValue2.operator, [leftType, leftType]);
-      }
-      if (!operator && isIntegerType(rightType) && rValue2.left.value.type === "number") {
-        operator = tryGetBinaryOperator(environments, rValue2.operator, [rightType, rightType]);
-      }
-      if (typeCheck() && !operator) {
-        diagnostics2.push(new SimplexDiagnostic(
-          new import_vscode3.Range(
-            document.positionAt(rValue2.left.end),
-            document.positionAt(rValue2.right.start)
-          ),
-          `Cannot find binary operator ${rValue2.operator} for types ${typeTokenToTypeString(leftType)} and ${typeTokenToTypeString(rightType)}`
-        ));
-      }
-      logg(`Binary: ${operator?.returnType ?? "?"}`);
-      return transformGenericType(operator, [leftType, rightType]);
-    }
-    case "ternary": {
-      const conditionType = getType(rValue2.condition, document, environments, diagnostics2);
-      const ifTrueType = getType(rValue2.ifTrue, document, environments, diagnostics2);
-      const ifFalseType = getType(rValue2.ifFalse, document, environments, diagnostics2);
-      if (typeCheck() && conditionType !== "Bool") {
-        diagnostics2.push(new SimplexDiagnostic(
-          new import_vscode3.Range(
-            document.positionAt(rValue2.condition.start),
-            document.positionAt(rValue2.condition.end)
-          ),
-          `A ternary condition has to be a boolean type - was ${typeTokenToTypeString(conditionType)}`
-        ));
-      }
-      if (typeCheck() && ifTrueType !== ifFalseType) {
-        diagnostics2.push(new SimplexDiagnostic(
-          new import_vscode3.Range(
-            document.positionAt(rValue2.ifFalse.start),
-            document.positionAt(rValue2.ifFalse.end)
-          ),
-          `Both ternary branches must have the same type - was ${typeTokenToTypeString(ifTrueType)} and ${typeTokenToTypeString(ifFalseType)}`
-        ));
-      }
-      logg(`Ternary: ${ifTrueType}`);
-      return ifTrueType;
-    }
-    case "dotMethod": {
-      const paramTypes = [
-        getType(rValue2.object, document, environments, diagnostics2),
-        ...rValue2.parameters.map((param) => getType(param, document, environments, diagnostics2))
-      ];
-      const dotFunction = tryGetDotFunction(environments, rValue2.value.value, paramTypes);
-      dotFunction?.parameterTypes.forEach((type, index) => {
-        const actualType = paramTypes[index];
-        const pos = index === 0 ? rValue2.object : rValue2.parameters[index - 1];
-        if (!actualType) {
-          if (typeCheck()) {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(pos.start),
-                document.positionAt(pos.end)
-              ),
-              `Too many parameters - Function takes ${dotFunction.parameterTypes.length - 1} parameters`
-            ));
-          }
-        } else {
-          if (typeCheck() && !doesTypeMatch(actualType, type)) {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(pos.start),
-                document.positionAt(pos.end)
-              ),
-              `Invalid function parameter type - was ${typeTokenToTypeString(actualType)} - should be ${typeTokenToTypeString(type)}`
-            ));
-          }
-        }
-      });
-      logg(`Dot Method: ${dotFunction?.returnType ?? "?"}`);
-      return transformGenericType(dotFunction, paramTypes);
-    }
-    case "function": {
-      const paramTypes = rValue2.parameters.map((param) => getType(param, document, environments, diagnostics2));
-      const func = tryGetDefFunction(environments, rValue2.value.value, paramTypes);
-      if (typeCheck() && !func) {
-        diagnostics2.push(
-          new SimplexDiagnostic(
-            new import_vscode3.Range(
-              document.positionAt(rValue2.value.start),
-              document.positionAt(rValue2.value.end)
-            ),
-            `Cannot find function '${rValue2.value.value}(${paramTypes.map(typeTokenToTypeString).join(", ")})'`
-          )
-        );
-      }
-      func?.parameterTypes.forEach((type, index) => {
-        const actualType = paramTypes[index];
-        const pos = rValue2.parameters[index];
-        if (!actualType) {
-          if (typeCheck()) {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(pos.start),
-                document.positionAt(pos.end)
-              ),
-              `Too many parameters - Function takes ${func.parameterTypes.length} parameters`
-            ));
-          }
-        } else {
-          if (typeCheck() && !doesTypeMatch(actualType, type)) {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(pos.start),
-                document.positionAt(pos.end)
-              ),
-              `Invalid function parameter type - was ${typeTokenToTypeString(actualType)} - should be ${typeTokenToTypeString(type)}`
-            ));
-          }
-        }
-      });
-      logg(`Def Method: ${func?.returnType ?? "?"}`);
-      return transformGenericType(func, paramTypes);
-    }
-    case "cast": {
-      getType(rValue2.value, document, environments, diagnostics2);
-      logg(`Cast: ${rValue2.to.value}`);
-      return typeStringToTypeToken(rValue2.to.value);
-    }
-    case "array": {
-      const valuesTypes = rValue2.values.map((v) => [v, getType(v, document, environments, diagnostics2)]);
-      const type = valuesTypes[0];
-      if (typeCheck() && !type) {
-        diagnostics2.push(new SimplexDiagnostic(
-          new import_vscode3.Range(
-            document.positionAt(value.start),
-            document.positionAt(value.end)
-          ),
-          `Cannot infer the array type because it has no values`
-        ));
-      }
-      const typeName2 = type?.[1] ?? "?";
-      if (valuesTypes.some(([token2, t]) => {
-        if (t !== typeName2) {
-          if (typeCheck()) {
-            diagnostics2.push(new SimplexDiagnostic(
-              new import_vscode3.Range(
-                document.positionAt(token2.start),
-                document.positionAt(token2.end)
-              ),
-              `Array type inferred as ${typeTokenToTypeString(typeName2)}, but encountered value of type ${typeTokenToTypeString(t)}`
-            ));
-          }
-          return true;
-        }
-        return false;
-      })) {
-        logg(`Array: *?`);
-        return "*?";
-      }
-      logg(`Array: *${typeName2}`);
-      return `*${typeName2}`;
-    }
-    case "variable": {
-      const variableData = tryGetVariable(false, environments, rValue2.value.value.name);
-      if (typeCheck() && (!variableData?.varType || variableData.varType.endsWith("?"))) {
-        diagnostics2.push(new SimplexDiagnostic(
-          new import_vscode3.Range(
-            document.positionAt(rValue2.value.start),
-            document.positionAt(rValue2.value.end)
-          ),
-          `Unknown variable type`
-        ));
-      }
-      logg(`Variable: *${variableData?.varType ?? "?"}`);
-      return variableData?.varType ?? "?";
-    }
-    case "index": {
-      const parameterType = getType(rValue2.parameter, document, environments, diagnostics2);
-      const variableType = getType(rValue2.value, document, environments, diagnostics2);
-      if (typeCheck() && !isIntegerType(parameterType)) {
-        diagnostics2.push(new SimplexDiagnostic(
-          new import_vscode3.Range(
-            document.positionAt(rValue2.parameter.start),
-            document.positionAt(rValue2.parameter.end)
-          ),
-          `An index parameter has to be an integer type - was ${typeTokenToTypeString(parameterType)}`
-        ));
-      }
-      const afterIndexType = getAfterIndexType(variableType, environments);
-      if (typeCheck() && !afterIndexType) {
-        diagnostics2.push(new SimplexDiagnostic(
-          new import_vscode3.Range(
-            document.positionAt(rValue2.value.start),
-            document.positionAt(rValue2.value.end)
-          ),
-          `An indexed value has to be an array type - was ${typeTokenToTypeString(variableType)}`
-        ));
-      }
-      logg(`Index: ${afterIndexType ?? "?"}`);
-      return afterIndexType ?? "?";
-    }
-    default: {
-      const x = rValue2;
-      throw x;
-    }
-  }
-};
-
-// src/test.ts
-var import_vscode6 = require("vscode");
+addDef("str", "pub def str(value: String) String {", stringType, [stringType]);
+addDef("str", "pub def str(value: Bool) String {", stringType, [boolType]);
+addDef("str", "pub def str(value: Uint) String {", stringType, ["Uint"]);
+addDef("str", "pub def str(value: Sint) String {", stringType, ["Sint"]);
+addDef("str", "pub def str(value: Int) String {", stringType, ["Int"]);
+addDef("str", "pub def str(value: Char) String {", stringType, ["Char"]);
+addDef("str", "pub def str(value: [@Type]) String {", stringType, [arr(anyType)]);
+addBinary("===", "pub binary ===(a: @A, b: @B) Bool {", boolType, [anyType, anyType]);
+addDef("_memory_copy", "def _memory_copy(source: Int, destination: Int, length: Int) {", null, [intType, intType, intType]);
 
 // src/extension.ts
-var import_vscode5 = require("vscode");
 var selector = { language: "si", scheme: "file" };
 var renameProvider = {
   prepareRename(document, position) {
@@ -3498,32 +4185,37 @@ var hoverProvider = {
       document.positionAt(data.current.start),
       document.positionAt(data.current.end)
     );
-    const label = new import_vscode5.MarkdownString();
-    if (data.info.type) {
-      label.appendCodeblock(
-        `${document.getText(range)}: ${typeTokenToTypeString(
-          data.info.type ?? "?"
-        )}`
-      );
-    } else {
-      label.appendCodeblock(document.getText(range));
-    }
-    label.appendMarkdown("---");
     if (typeof data.definition === "string") {
-      label.appendCodeblock("\n" + data.definition, "si");
-      return new import_vscode5.Hover(
-        label,
-        new import_vscode5.Range(
-          document.positionAt(data.current.start),
-          document.positionAt(data.current.end)
-        )
-      );
+      const label2 = new import_vscode5.MarkdownString();
+      label2.appendCodeblock(data.definition, "si");
+      return new import_vscode5.Hover(label2, range);
     }
     if (!data.info.range) return;
     const startPosition = document.positionAt(data.info.range.start);
     const line = document.lineAt(startPosition.line);
-    label.appendCodeblock("\n" + line.text.trim(), "si");
+    const label = new import_vscode5.MarkdownString();
+    label.appendCodeblock(line.text.trim(), "si");
     return new import_vscode5.Hover(label, range);
+  }
+};
+var inlayProvider = {
+  provideInlayHints(document, range) {
+    if (!showInlayTypeHints()) return [];
+    const declarations = getDeclarations();
+    return declarations.filter((d) => range.contains(document.positionAt(d.position.end))).map((d) => new import_vscode5.InlayHint(document.positionAt(d.position.end), ": " + typeTokenToTypeString(d.info.type), import_vscode5.InlayHintKind.Type));
+  }
+};
+var dotCompletionProvider = {
+  provideCompletionItems(document, position, token2, context) {
+    const info = getPositionInfo(document, position.translate(0, -1));
+    if (!info || info.current.end !== document.offsetAt(position) - 1) return [];
+    return info.dotFunctionSuggestions.map((s) => new import_vscode5.CompletionItem({
+      label: s[0],
+      description: typeof s[1] === "string" ? s[1] : document.getText(new import_vscode5.Range(
+        document.positionAt(s[1].start),
+        document.positionAt(s[1].end)
+      ))
+    }, import_vscode5.CompletionItemKind.Method));
   }
 };
 var diagnosticsPerFile = {};
@@ -3538,38 +4230,60 @@ var deduplicateDiagnostics = (diags) => {
   });
   return Object.values(container);
 };
+var statusItem = import_vscode5.languages.createLanguageStatusItem("si", selector);
+statusItem.name = "TC Simplex Language status";
 var tokenProvider = {
-  provideDocumentSemanticTokens(document) {
+  provideDocumentSemanticTokens(document, token2) {
+    statusItem.busy = true;
+    statusItem.text = "TC Simplex is parsing the file";
+    statusItem.severity = import_vscode5.LanguageStatusSeverity.Information;
     log.clear();
-    tokensData.length = 0;
+    clearTokensData();
     getRecoveryIssues().length = 0;
     diagnostics.clear();
-    const tokensBuilder = new import_vscode5.SemanticTokensBuilder(legend);
-    const [parseResult, diags] = performParsing(document);
-    if (parseResult) {
-      checkVariableExistence(
-        document,
-        parseResult,
-        [
-          baseEnvironment,
-          {
-            type: "scope",
-            switchTypes: /* @__PURE__ */ new Map(),
-            functions: [],
-            operators: [],
-            types: /* @__PURE__ */ new Map(),
-            variables: /* @__PURE__ */ new Map()
-          }
-        ],
-        diags
-      );
-    }
-    log.appendLine(`Tokens: ${tokensData.length}`);
-    diagnosticsPerFile[document.uri.toString()] = deduplicateDiagnostics(diags);
-    Object.entries(diagnosticsPerFile).forEach(([key, value]) => {
-      diagnostics.set(import_vscode5.Uri.parse(key, true), value);
+    return new Promise((res) => {
+      const startTime = Date.now();
+      const tokensBuilder = new import_vscode5.SemanticTokensBuilder(legend);
+      if (token2.isCancellationRequested) {
+        statusItem.busy = false;
+        statusItem.text = "TC Simplex stopped parsing the file";
+      }
+      const [parseResult, diags] = performParsing(document);
+      if (token2.isCancellationRequested) {
+        statusItem.busy = false;
+        statusItem.text = "TC Simplex stopped parsing the file";
+      }
+      if (parseResult) {
+        checkVariableExistence(
+          document,
+          parseResult,
+          [
+            baseEnvironment,
+            {
+              type: "scope",
+              switchTypes: /* @__PURE__ */ new Map(),
+              functions: [],
+              operators: [],
+              types: /* @__PURE__ */ new Map(),
+              variables: /* @__PURE__ */ new Map()
+            }
+          ],
+          diags
+        );
+        statusItem.busy = false;
+        statusItem.text = `TC Simplex parsed the file (in ${Date.now() - startTime}ms)`;
+      } else {
+        statusItem.busy = false;
+        statusItem.severity = import_vscode5.LanguageStatusSeverity.Warning;
+        statusItem.text = `TC Simplex failed to parse the file (in ${Date.now() - startTime}ms)`;
+      }
+      diagnosticsPerFile[document.uri.toString()] = deduplicateDiagnostics(diags);
+      Object.entries(diagnosticsPerFile).forEach(([key, value]) => {
+        diagnostics.set(import_vscode5.Uri.parse(key, true), value);
+      });
+      finalizeTokensData();
+      res(tokensBuilder.build());
     });
-    return tokensBuilder.build();
   }
 };
 import_vscode5.languages.registerDocumentSemanticTokensProvider(
@@ -3579,7 +4293,9 @@ import_vscode5.languages.registerDocumentSemanticTokensProvider(
 );
 import_vscode5.languages.registerDeclarationProvider(selector, declarationProvider);
 import_vscode5.languages.registerHoverProvider(selector, hoverProvider);
+import_vscode5.languages.registerInlayHintsProvider(selector, inlayProvider);
 import_vscode5.languages.registerRenameProvider(selector, renameProvider);
+import_vscode5.languages.registerCompletionItemProvider(selector, dotCompletionProvider, ".");
 
 // src/test.ts
 var diagnosticParser = (0, import_parser_combinators8.map)(
@@ -3621,12 +4337,12 @@ var diagnosticParser = (0, import_parser_combinators8.map)(
       ),
       ([[sl, _, sc], __, [el, ___, ec], [____, _____, severity], [______, _______, message]]) => ({
         start: {
-          line: sl,
-          character: sc
+          line: sl - 1,
+          character: sc - 1
         },
         end: {
-          line: el,
-          character: ec
+          line: el - 1,
+          character: ec - 1
         },
         message,
         severity: severity === "Error" ? import_vscode6.DiagnosticSeverity.Error : severity === "Warning" ? import_vscode6.DiagnosticSeverity.Warning : severity === "Information" ? import_vscode6.DiagnosticSeverity.Information : import_vscode6.DiagnosticSeverity.Hint

@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.1]
+- Fixed issues with parsing negative number literals
+
 ## [0.6.0]
 - Added support for `break` and `continue` keywords
 
