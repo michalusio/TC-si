@@ -114,14 +114,19 @@ const hoverProvider: HoverProvider = {
     );
     if (typeof data.definition === "string") {
       const label = new MarkdownString();
-      label.appendCodeblock(data.definition, "si");
+      if (data.definition.startsWith(';')) {
+        label.appendText(data.definition.slice(1));
+      } else {
+        label.appendCodeblock(data.definition, 'si');
+      }
       return new Hover(label, range);
     }
+    
     if (!data.info.range) return;
-
+    
+    const label = new MarkdownString();
     const startPosition = document.positionAt(data.info.range.start);
     const line = document.lineAt(startPosition.line);
-    const label = new MarkdownString();
     label.appendCodeblock(line.text.trim(), "si");
     
     return new Hover(label, range);

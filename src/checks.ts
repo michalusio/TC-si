@@ -13,7 +13,7 @@ import {
 import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { NumberRValue, RValue, StringRValue, VariableRValue } from "./parsers/types/rvalue";
 import { Environment } from "./environment";
-import { doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntSize, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
+import { composeTypeDefinition, doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntSize, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
 import { explicitReturn, typeCheck } from "./workspace";
 
 const useParser = <T>(
@@ -951,6 +951,24 @@ const processRValue = (
         end: rValue.typeValue.end,
         value: rValue
       }, document, environments, results);
+      const kind = tryGetDefFunction(
+        environments,
+        rValue.type,
+        ['@']
+      );
+      if (kind !== null) {
+        tokensData.push({
+          definition: kind.data,
+          position: {
+            start: rValue.typeValue.start - 9,
+            end: rValue.typeValue.end + 1
+          },
+          info: {
+            type: kind.returnType ?? undefined,
+            dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? '?')
+          }
+        });
+      }
       break;
     }
     default: {
@@ -1039,6 +1057,16 @@ const checkType = (typeToken: Token<string | null>, document: TextDocument, envi
         `Cannot find type: '${typeToken.value}'`
       ));
     }
+  } else {
+    tokensData.push({
+      definition: envType.type === 'built-in'
+        ? ';' + envType.data
+        : composeTypeDefinition(envType.data),
+      position: typeToken,
+      info: {
+        type: envType?.type,
+      }
+    });
   }
   return typeName;
 }

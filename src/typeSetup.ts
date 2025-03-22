@@ -6,7 +6,7 @@ import type {
   EnvironmentVariable,
 } from "./environment";
 import { levenshtein } from "./levenshtein";
-import { TokenRange } from "./parsers/types/ast";
+import { TokenRange, TypeDefinition } from "./parsers/types/ast";
 import { baseEnvironment } from "./storage";
 
 /**
@@ -35,6 +35,13 @@ export const typeTokenToTypeString = (value: string): string => {
     } else break;
   }
   return `${'['.repeat(numberOfArrays)}${value.slice(numberOfArrays)}${']'.repeat(numberOfArrays)}`;
+}
+
+export const composeTypeDefinition = (definition: TypeDefinition): string => {
+  if (Array.isArray(definition.definition.value)) {
+    return `${definition.public ? 'pub ' : ''}type ${definition.name.value} <${definition.definition.value.join(', ')}>`;
+  }
+  return `${definition.public ? 'pub ' : ''}type ${definition.name.value} ${definition.definition.value}`;
 }
 
 export const tryGetVariable = (

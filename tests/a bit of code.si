@@ -1,6 +1,6 @@
 def on_reset($scratch_space: [Int], test: Int) {
 
-    var text = ""
+    var text = _default(:String)
 
     let len = text.len()
 
