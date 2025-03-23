@@ -11,8 +11,9 @@ def on_reset($scratch_space: [Int], test: Int) {
     }
 }
 
+///assume dot do_magic(a: @Any, b: @Any) String
 binary -> (a: Int, b: Int) String {
-    return ""
+    return a.do_magic(b)
 }
 
 const A = <U64>0

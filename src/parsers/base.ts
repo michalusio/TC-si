@@ -14,6 +14,7 @@ import {
 } from "parser-combinators";
 import { rstr, token } from "./utils";
 import { ParseReturnType, Token, VariableName } from "./types/ast";
+import { log } from "../storage";
 
 const recoveryIssues: {
   type: "added" | "skipped";

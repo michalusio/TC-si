@@ -1,6 +1,6 @@
 import { Position, TextDocument } from "vscode";
 import { any, between, Context, exhaust, map, oneOrMany, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators";
-import { functionDeclaration as functionDefinition } from "./parsers/functions";
+import { functionDeclaration } from "./parsers/functions";
 import { blockComment, lcb, lineComment, newline, variableName } from "./parsers/base";
 import { anyNumericLiteral, rValue, stringLiteral, topmostVariableDeclaration, variableDeclaration, variableLiteral, variableModification } from "./parsers/variables";
 import { typeDeclaration } from "./parsers/declaration";
@@ -156,7 +156,6 @@ function statementsBlock(): Parser<StatementsBlock> {
 					recoverBySkipping(
 						map(
 							any<string | Statement>(
-								lineComment,
 								blockComment,
 								newline,
 								asmDeclaration,
@@ -181,7 +180,7 @@ function statementsBlock(): Parser<StatementsBlock> {
 								),
 								map(
 									seq(
-										functionDefinition,
+										functionDeclaration,
 										opt(newline),
 										statementsBlock(),
 										wspaces,
@@ -194,6 +193,7 @@ function statementsBlock(): Parser<StatementsBlock> {
 										statements
 									})
 								),
+								lineComment,
 								map(seq(variableDeclaration, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
 								map(seq(variableModification, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
 								map(seq(rValue(), any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value)
@@ -364,7 +364,6 @@ export const languageParser = map(
 			spaces,
 			any(
 				eof,
-				lineComment,
 				blockComment,
 				newline,
 				callConvDeclaration,
@@ -372,7 +371,7 @@ export const languageParser = map(
 				map(seq(topmostVariableDeclaration, any(newline, lineComment, spacesPlus, eof)), ([v]) => v.value),
 				map(
 					seq(
-						functionDefinition,
+						functionDeclaration,
 						opt(newline),
 						statementsBlock(),
 						wspaces,
@@ -385,6 +384,7 @@ export const languageParser = map(
 						statements
 					})
 				),
+				lineComment,
 				map(seq(typeDeclaration, any(newline, lineComment, spacesPlus, eof)), ([v]) => v)
 			)
 		)

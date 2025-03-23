@@ -4,6 +4,7 @@ import { log, tokensData } from "./storage";
 import { languageParser } from "./parser";
 import { isFailure, ParseError, Parser } from "parser-combinators";
 import {
+  FunctionDefinition,
   ParserOutput,
   Statement,
   StatementsBlock,
@@ -497,93 +498,7 @@ export const checkVariableExistence = (
         break;
       }
       case "function-declaration": {
-        if (scope.definition.type === 'function') {
-          if (scope.definition.kind === 'dot') {
-            if (scope.definition.parameters.length === 0) {
-              diagnostics.push(new SimplexDiagnostic(
-                new Range(
-                  document.positionAt(scope.definition.name.end),
-                  document.positionAt(scope.definition.returnType.start)
-                ),
-                `Dot function should have at least one parameter`
-              ));
-            }
-          }
-        } else {
-          if (scope.definition.kind === 'binary') {
-            if (scope.definition.parameters.length > 2) {
-              scope.definition.parameters.slice(2).forEach(param => {
-                diagnostics.push(new SimplexDiagnostic(
-                  new Range(
-                    document.positionAt(param.name.start),
-                    document.positionAt(param.type.end)
-                  ),
-                  `Binary operators should have two parameters`
-                ));
-              });
-            } else if (scope.definition.parameters.length < 2) {
-              diagnostics.push(new SimplexDiagnostic(
-                new Range(
-                  document.positionAt(scope.definition.name.end),
-                  document.positionAt(scope.definition.returnType.start)
-                ),
-                `Binary operators should have two parameters`
-              ));
-            }
-          } else {
-            if (scope.definition.parameters.length > 1) {
-              scope.definition.parameters.slice(1).forEach(param => {
-                diagnostics.push(new SimplexDiagnostic(
-                  new Range(
-                    document.positionAt(param.name.start),
-                    document.positionAt(param.type.end)
-                  ),
-                  `Unary operators should have one parameter`
-                ));
-              });
-            } else if (scope.definition.parameters.length < 1) {
-              diagnostics.push(new SimplexDiagnostic(
-                new Range(
-                  document.positionAt(scope.definition.name.end),
-                  document.positionAt(scope.definition.returnType.start)
-                ),
-                `Unary operators should have one parameter`
-              ));
-            }
-          }
-          if (!scope.definition.name.value.startsWith('=') && scope.definition.name.value.endsWith('=')) {
-            if (scope.definition.returnType.value) {
-              diagnostics.push(new SimplexDiagnostic(
-                new Range(
-                  document.positionAt(scope.definition.returnType.start),
-                  document.positionAt(scope.definition.returnType.end)
-                ),
-                `Assignment operators should not return anything`
-              ));
-            }
-            if (scope.definition.parameters.length > 0) {
-              if (scope.definition.parameters[0].name.value.front !== '$') {
-                diagnostics.push(new SimplexDiagnostic(
-                  new Range(
-                    document.positionAt(scope.definition.parameters[0].name.start),
-                    document.positionAt(scope.definition.parameters[0].name.end)
-                  ),
-                  `The first parameter of an assignment operator should be mutable`
-                ));
-              }
-            }
-          } else {
-            if (!scope.definition.returnType.value) {
-              diagnostics.push(new SimplexDiagnostic(
-                new Range(
-                  document.positionAt(scope.definition.returnType.start),
-                  document.positionAt(scope.definition.returnType.end)
-                ),
-                `Missing return type`
-              ));
-            }
-          }
-        }
+        checkMethodConstraints(scope.definition, diagnostics, document);
         const nextEnvironments: Environment[] = [...environments, newFunction(scope.definition.returnType.value)];
         scope.definition.parameters.forEach((parameter) => {
           const env = nextEnvironments[nextEnvironments.length - 1];
@@ -636,6 +551,7 @@ export const checkVariableExistence = (
             });
           }
         });
+        addAssumptions(document, nextEnvironments, scope.definition.assumptions, diagnostics);
         checkVariableExistence(
           document,
           scope.statements,
@@ -808,6 +724,64 @@ export const checkVariableExistence = (
     }
   });
 };
+
+const addAssumptions = (document: TextDocument, environments: Environment[], assumptions: FunctionDefinition[], diagnostics: SimplexDiagnostic[]): void => {
+  const env = environments[environments.length - 1];
+  assumptions.forEach(a => {
+    checkMethodConstraints(a, diagnostics, document);
+    const paramTypes = a.parameters.map((parameter) => {
+      const varType = checkType(parameter.type, document, environments, diagnostics);
+      if (typeCheck() && !varType) {
+        diagnostics.push(new SimplexDiagnostic(
+          new Range(
+            document.positionAt(parameter.type.start),
+            document.positionAt(parameter.type.end)
+          ),
+          `Missing type: '${parameter.type.value}'`
+        ));
+      }
+      return varType ?? '?';
+    });
+
+    const returnType = checkType(a.returnType, document, environments, diagnostics);
+    if (typeCheck() && a.returnType.value && !returnType) {
+      diagnostics.push(new SimplexDiagnostic(
+        new Range(
+          document.positionAt(a.returnType.start),
+          document.positionAt(a.returnType.end)
+        ),
+        `Missing type: '${a.returnType.value}'`
+      ));
+    }
+
+    if (a.type === 'function') {
+      env.functions.push({
+        type: 'user-defined',
+        kind: a.kind,
+        name: a.name.value,
+        data: a.name,
+        parameterTypes: paramTypes,
+        returnType: returnType
+      });
+    } else {
+      env.operators.push({
+        type: 'user-defined',
+        kind: a.kind,
+        name: a.name.value,
+        data: a.name,
+        parameterTypes: paramTypes,
+        returnType: returnType ?? '?'
+      });
+    }
+    tokensData.push({
+      definition: a.name,
+      position: a.name,
+      info: {
+        range: a.name
+      }
+    });
+  });
+}
 
 const processRValue = (
   document: TextDocument,
@@ -1451,6 +1425,96 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
     default: {
       const x: never = rValue;
       throw x;
+    }
+  }
+}
+
+function checkMethodConstraints(definition: FunctionDefinition, diagnostics: SimplexDiagnostic[], document: TextDocument) {
+  if (definition.type === 'function') {
+    if (definition.kind === 'dot') {
+      if (definition.parameters.length === 0) {
+        diagnostics.push(new SimplexDiagnostic(
+          new Range(
+            document.positionAt(definition.name.end),
+            document.positionAt(definition.returnType.start)
+          ),
+          `Dot function should have at least one parameter`
+        ));
+      }
+    }
+  } else {
+    if (definition.kind === 'binary') {
+      if (definition.parameters.length > 2) {
+        definition.parameters.slice(2).forEach(param => {
+          diagnostics.push(new SimplexDiagnostic(
+            new Range(
+              document.positionAt(param.name.start),
+              document.positionAt(param.type.end)
+            ),
+            `Binary operators should have two parameters`
+          ));
+        });
+      } else if (definition.parameters.length < 2) {
+        diagnostics.push(new SimplexDiagnostic(
+          new Range(
+            document.positionAt(definition.name.end),
+            document.positionAt(definition.returnType.start)
+          ),
+          `Binary operators should have two parameters`
+        ));
+      }
+    } else {
+      if (definition.parameters.length > 1) {
+        definition.parameters.slice(1).forEach(param => {
+          diagnostics.push(new SimplexDiagnostic(
+            new Range(
+              document.positionAt(param.name.start),
+              document.positionAt(param.type.end)
+            ),
+            `Unary operators should have one parameter`
+          ));
+        });
+      } else if (definition.parameters.length < 1) {
+        diagnostics.push(new SimplexDiagnostic(
+          new Range(
+            document.positionAt(definition.name.end),
+            document.positionAt(definition.returnType.start)
+          ),
+          `Unary operators should have one parameter`
+        ));
+      }
+    }
+    if (!definition.name.value.startsWith('=') && definition.name.value.endsWith('=')) {
+      if (definition.returnType.value) {
+        diagnostics.push(new SimplexDiagnostic(
+          new Range(
+            document.positionAt(definition.returnType.start),
+            document.positionAt(definition.returnType.end)
+          ),
+          `Assignment operators should not return anything`
+        ));
+      }
+      if (definition.parameters.length > 0) {
+        if (definition.parameters[0].name.value.front !== '$') {
+          diagnostics.push(new SimplexDiagnostic(
+            new Range(
+              document.positionAt(definition.parameters[0].name.start),
+              document.positionAt(definition.parameters[0].name.end)
+            ),
+            `The first parameter of an assignment operator should be mutable`
+          ));
+        }
+      }
+    } else {
+      if (!definition.returnType.value) {
+        diagnostics.push(new SimplexDiagnostic(
+          new Range(
+            document.positionAt(definition.returnType.start),
+            document.positionAt(definition.returnType.end)
+          ),
+          `Missing return type`
+        ));
+      }
     }
   }
 }

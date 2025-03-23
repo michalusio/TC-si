@@ -38,14 +38,16 @@ export type FunctionDefinition = {
     public: boolean,
     name: Token<string>,
     parameters: Parameter[],
-    returnType: Token<string | null>
+    returnType: Token<string | null>,
+    assumptions: FunctionDefinition[]
 } | {
     type: 'operator',
     kind: OperatorKind,
     public: boolean,
     name: Token<string>,
     parameters: Parameter[],
-    returnType: Token<string | null>
+    returnType: Token<string | null>,
+    assumptions: FunctionDefinition[]
 }
 
 export type FunctionDeclaration = {

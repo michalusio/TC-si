@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.3]
+- Allowed defining assumptions for function existence
+
 ## [0.6.2]
 - Fixed descriptions when hovering over types
 - Fixed hover description for `_default` built-in function

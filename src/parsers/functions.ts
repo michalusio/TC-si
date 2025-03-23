@@ -1,7 +1,15 @@
-import { any, between, exhaust, map, opt, seq, spaces, spacesPlus, str, surely } from "parser-combinators";
-import { functionBinaryOperator, functionKind, functionName, lpr, typeAliasDefinition, unaryOperator, variableName } from "./base";
+import { any, between, exhaust, many, map, opt, Parser, regex, seq, spaces, spacesPlus, str, surely } from "parser-combinators";
+import { functionBinaryOperator, functionKind, functionName, lpr, newline, typeAliasDefinition, unaryOperator, variableName } from "./base";
 import { FunctionDefinition, Parameter } from "./types/ast";
 import { recoverByAddingChars, rstr, token } from "./utils";
+
+function assumption(): Parser<FunctionDefinition> {
+	return (ctx) => map(seq(
+		regex(/\s*\/\/\/ *assume +/s, 'assumption declaration'),
+		functionDeclarationWithoutOpeningBracket,
+		newline
+	), ([_, f, __]) => f)(ctx);
+}
 
 const parameter = map(seq(
 	variableName,
@@ -23,7 +31,7 @@ const parameterList = between(
 	rstr(')')
 );
 
-export const functionDeclaration = map(seq(
+const functionDeclarationWithoutOpeningBracket = map(seq(
 	opt(str('pub ')),
 	any(
 		map(seq(
@@ -83,15 +91,24 @@ export const functionDeclaration = map(seq(
 			};
 		})
 	),
-	spaces,
-	rstr('{')
-), ([pub, func, _, __]) => {
+	spaces
+), ([pub, func, _]) => {
 	return <FunctionDefinition>{
 		type: func.type,
 		public: pub != null,
         kind: func.kind,
 		returnType: func.returnType,
         name: func.name,
-		parameters: func.parameters
+		parameters: func.parameters,
+		assumptions: []
 	};
 });
+
+export const functionDeclaration = map(seq(
+	many(assumption()),
+	functionDeclarationWithoutOpeningBracket,
+	rstr('{')
+), ([assumptions, f, _]) => ({
+	...f,
+	assumptions
+}));
