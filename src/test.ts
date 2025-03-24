@@ -8,6 +8,8 @@ import { baseEnvironment, log, tokensData } from './storage';
 import { getRecoveryIssues } from './parsers/base';
 import { DiagnosticSeverity, EndOfLine, Position, Range, TextDocument, Uri } from 'vscode';
 import { deduplicateDiagnostics } from './extension';
+import { SimplexDiagnostic } from './SimplexDiagnostic';
+import { timings } from './parsers/utils';
 
 const diagnosticParser = map(
     seq(
@@ -145,6 +147,35 @@ const generateMockDocument = (path: string, text: string, textSplitted: string[]
     };
 }
 
+function performTest(path: string, codeText: string, codeLines: string[]): SimplexDiagnostic[] {
+    const document = generateMockDocument(path, codeText, codeLines);
+    log.clear();
+    tokensData.length = 0;
+    getRecoveryIssues().length = 0;
+    let [parseResult, diags] = performParsing(document);
+    diags = deduplicateDiagnostics(diags);
+
+    if (parseResult) {
+        checkVariableExistence(
+            document,
+            parseResult,
+            [
+            baseEnvironment,
+            {
+                type: "scope",
+                switchTypes: new Map(),
+                functions: [],
+                operators: [],
+                types: new Map(),
+                variables: new Map(),
+            },
+            ],
+            diags
+        );
+    }
+    return diags;
+}
+
 readdirSync(join(cwd(), '../../tests'), { recursive: true, encoding: 'utf-8' })
     .filter(fileName => fileName.endsWith('.si'))
     .forEach(fileName => {
@@ -157,65 +188,20 @@ readdirSync(join(cwd(), '../../tests'), { recursive: true, encoding: 'utf-8' })
         const codeLines = fileLines
             .filter(line => !line.startsWith('//#'));
         const codeText = codeLines.join('\n');
-        suite(fileName, () => {
+
+        suite(fileName, function () {
+            this.timeout(0);
+            this.slow(250);
             if (diagnosticLines.length === 0) {
                 test('Should have no diagnostics', () => {
-                    const document = generateMockDocument(path, codeText, codeLines);
-                    log.clear();
-                    tokensData.length = 0;
-                    getRecoveryIssues().length = 0;
-                    let [parseResult, diags] = performParsing(document);
-                    diags = deduplicateDiagnostics(diags);
-
-                    if (parseResult) {
-                        checkVariableExistence(
-                            document,
-                            parseResult,
-                            [
-                            baseEnvironment,
-                            {
-                                type: "scope",
-                                switchTypes: new Map(),
-                                functions: [],
-                                operators: [],
-                                types: new Map(),
-                                variables: new Map(),
-                            },
-                            ],
-                            diags
-                        );
-                    }
+                    const diags = performTest(path, codeText, codeLines);
                     diags.forEach(diag => console.error('Leftover: ' + JSON.stringify(diag)));
                     assert(diags.length === 0, 'There should have been no diagnostics');
                 });
             } else {
                 test(`Should have correct diagnostics (${diagnosticLines.length})`, () => {
                     const diagnostics = diagnosticLines.map(line => ParseText(line, diagnosticParser));
-                    const document = generateMockDocument(path, codeText, codeLines);
-                    log.clear();
-                    tokensData.length = 0;
-                    getRecoveryIssues().length = 0;
-                    let [parseResult, diags] = performParsing(document);
-                    diags = deduplicateDiagnostics(diags);
-
-                    if (parseResult) {
-                        checkVariableExistence(
-                            document,
-                            parseResult,
-                            [
-                            baseEnvironment,
-                            {
-                                type: "scope",
-                                switchTypes: new Map(),
-                                functions: [],
-                                operators: [],
-                                types: new Map(),
-                                variables: new Map(),
-                            },
-                            ],
-                            diags
-                        );
-                    }
+                    let diags = performTest(path, codeText, codeLines);
                     let error = false;
                     diagnostics.forEach(expected => {
                         const foundDiagnosticIndex = diags.findIndex(provided => {
@@ -237,5 +223,13 @@ readdirSync(join(cwd(), '../../tests'), { recursive: true, encoding: 'utf-8' })
                     assert(!error && diags.length === 0, `The diagnostics should all be specified`);
                 });
             }
+            test('Should parse under 1000ms', () => {
+                const timeStart = Date.now();
+                performTest(path, codeText, codeLines);
+                if (Date.now() - timeStart >= 1000) {
+                    console.info(JSON.stringify(timings, null, 2));
+                    assert.fail('Parsing was over 1000ms');
+                }
+            });
         });
     });

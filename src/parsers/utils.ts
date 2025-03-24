@@ -1,6 +1,5 @@
 import {
   Context,
-  fail,
   failure,
   Failure,
   isFailure,
@@ -10,7 +9,6 @@ import {
   success,
 } from "parser-combinators";
 import { getRecoveryIssues } from "./base";
-import { log } from "../storage";
 import { Token } from "./types/ast";
 
 export function recoverBySkippingChars<T>(
@@ -122,11 +120,17 @@ export const eof: Parser<void> = (ctx) => {
   }
 };
 
+export const timings: Record<string, number> = {};
+
+export const clearTimings = () => {
+  Object.keys(timings).forEach(key => delete timings[key]);
+}
+
 export function time<T>(label: string, parser: Parser<T>): Parser<T> {
   return (ctx) => {
-    const now = Date.now();
+    const start = performance.now();
     const result = parser(ctx);
-    log.appendLine(`[${label}] ${Date.now() - now}ms`);
+    timings[label] = (timings[label] ?? 0) + (performance.now() - start);
     return result;
   };
 }

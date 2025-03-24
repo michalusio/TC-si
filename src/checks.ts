@@ -16,6 +16,7 @@ import { NumberRValue, RValue, StringRValue, VariableRValue } from "./parsers/ty
 import { Environment } from "./environment";
 import { composeTypeDefinition, doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntSize, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
 import { explicitReturn, typeCheck } from "./workspace";
+import { clearTimings } from "./parsers/utils";
 
 const useParser = <T>(
   text: string,
@@ -50,6 +51,7 @@ export const performParsing = (
   const fullText = document.getText();
   const diags: SimplexDiagnostic[] = [];
   const startTime = Date.now();
+  clearTimings();
 
   let parseResult: ParserOutput | null = null;
   try {

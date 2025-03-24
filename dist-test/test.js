@@ -245,7 +245,7 @@ var require_many = __commonJS({
     var map_1 = require_map();
     var opt_1 = require_opt();
     var seq_1 = require_seq();
-    function many3(parser) {
+    function many4(parser) {
       return (ctx) => {
         const results = [];
         while (true) {
@@ -258,13 +258,13 @@ var require_many = __commonJS({
         }
       };
     }
-    exports2.many = many3;
-    function zeroOrMany(item, separator) {
+    exports2.many = many4;
+    function zeroOrMany2(item, separator) {
       return (0, map_1.map)((0, opt_1.opt)(oneOrMany2(item, separator)), (t) => t !== null && t !== void 0 ? t : []);
     }
-    exports2.zeroOrMany = zeroOrMany;
+    exports2.zeroOrMany = zeroOrMany2;
     function oneOrMany2(item, separator = void 0) {
-      const sequencer = (0, map_1.map)((0, seq_1.seq)(item, many3(separator ? (0, map_1.map)((0, seq_1.seq)(separator, item), ([, t]) => t) : item)), ([t, ts]) => [t, ...ts]);
+      const sequencer = (0, map_1.map)((0, seq_1.seq)(item, many4(separator ? (0, map_1.map)((0, seq_1.seq)(separator, item), ([, t]) => t) : item)), ([t, ts]) => [t, ...ts]);
       return (ctx) => {
         const res = sequencer(ctx);
         if ((0, types_1.isFailure)(res)) {
@@ -277,7 +277,7 @@ var require_many = __commonJS({
     }
     exports2.oneOrMany = oneOrMany2;
     function oneOrManyRed(item, separator, reducer) {
-      return (0, map_1.map)((0, map_1.map)((0, seq_1.seq)((0, map_1.map)(item, (x) => [null, x]), many3((0, seq_1.seq)(separator, item))), ([t, ts]) => [t, ...ts]), (ts) => {
+      return (0, map_1.map)((0, map_1.map)((0, seq_1.seq)((0, map_1.map)(item, (x) => [null, x]), many4((0, seq_1.seq)(separator, item))), ([t, ts]) => [t, ...ts]), (ts) => {
         let result = ts[0][1];
         for (let i = 1; i < ts.length; i++) {
           result = reducer(result, ts[i][1], ts[i][0]);
@@ -296,7 +296,7 @@ var require_regex = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.regex = void 0;
     var types_1 = require_types();
-    function regex5(match, expected) {
+    function regex6(match, expected) {
       const regexp = new RegExp(match, typeof match === "string" ? "y" : match.flags + "y");
       return (ctx) => {
         regexp.lastIndex = ctx.index;
@@ -308,7 +308,7 @@ var require_regex = __commonJS({
         }
       };
     }
-    exports2.regex = regex5;
+    exports2.regex = regex6;
   }
 });
 
@@ -500,63 +500,6 @@ var import_parser_combinators2 = __toESM(require_dist());
 
 // src/parsers/utils.ts
 var import_parser_combinators = __toESM(require_dist());
-
-// src/storage.ts
-var import_vscode = require("vscode");
-var log = import_vscode.window.createOutputChannel("TC-si");
-var tokenTypes = ["type", "parameter", "variable"];
-var tokenModifiers = ["declaration", "definition", "readonly"];
-var legend = new import_vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
-var tokensData = [];
-var lastTokensData = [];
-var clearTokensData = () => {
-  if (tokensData.length > 0) {
-    lastTokensData = [...tokensData];
-  }
-  tokensData.length = 0;
-};
-var finalizeTokensData = () => {
-  if (tokensData.length > 0) {
-    lastTokensData = [...tokensData];
-  }
-};
-var diagnostics = import_vscode.languages.createDiagnosticCollection("si");
-var baseEnvironment = {
-  type: "scope",
-  switchTypes: /* @__PURE__ */ new Map(),
-  functions: [],
-  operators: [],
-  types: /* @__PURE__ */ new Map(),
-  variables: /* @__PURE__ */ new Map()
-};
-var precedence = {
-  "||": 3,
-  "&&": 4,
-  "===": 5,
-  "==": 5,
-  "!=": 5,
-  "<=": 5,
-  ">=": 5,
-  "<": 5,
-  "<s": 5,
-  "<u": 5,
-  ">": 5,
-  "+": 6,
-  "-": 6,
-  "&": 6,
-  "|": 6,
-  "^": 6,
-  "*": 7,
-  "/": 7,
-  "%": 7,
-  "ror": 7,
-  "rol": 7,
-  "<<": 7,
-  ">>": 7,
-  "asr": 7
-};
-
-// src/parsers/utils.ts
 function recoverByAddingChars(chars, parser, log2 = true, message) {
   return (ctx) => {
     let firstFailure = null;
@@ -620,6 +563,18 @@ var eof = (ctx) => {
     return (0, import_parser_combinators.failure)(ctx, "End Of File", ["EOF"]);
   }
 };
+var timings = {};
+var clearTimings = () => {
+  Object.keys(timings).forEach((key) => delete timings[key]);
+};
+function time(label, parser) {
+  return (ctx) => {
+    const start = performance.now();
+    const result = parser(ctx);
+    timings[label] = (timings[label] ?? 0) + (performance.now() - start);
+    return result;
+  };
+}
 function manyForSure(parser) {
   return (ctx) => {
     const results = [];
@@ -677,7 +632,7 @@ var lcb = (0, import_parser_combinators2.str)("{");
 var rcb = (0, import_parser_combinators2.str)("}");
 var lab = (0, import_parser_combinators2.str)("<");
 var rab = (0, import_parser_combinators2.str)(">");
-var disallowedNames = [
+var disallowedNames = /* @__PURE__ */ new Set([
   "def",
   "dot",
   "switch",
@@ -691,19 +646,19 @@ var disallowedNames = [
   "else",
   "elif",
   "default"
-];
+]);
 var variableName = token(
   (0, import_parser_combinators2.map)(
     (0, import_parser_combinators2.seq)(
       (0, import_parser_combinators2.many)((0, import_parser_combinators2.any)((0, import_parser_combinators2.str)("$"), (0, import_parser_combinators2.str)("."))),
-      (0, import_parser_combinators2.ref)((0, import_parser_combinators2.regex)(/\w+/, "Variable name"), (p) => !disallowedNames.includes(p))
+      (0, import_parser_combinators2.ref)((0, import_parser_combinators2.regex)(/\w+/, "Variable name"), (p) => !disallowedNames.has(p))
     ),
     ([front, name]) => ({ front: front.join(""), name })
   )
 );
 var typeName = token((0, import_parser_combinators2.regex)(/@?[A-Z]\w*/, "Type name"));
 var functionName = token(
-  (0, import_parser_combinators2.ref)((0, import_parser_combinators2.regex)(/\w+/, "Function name"), (p) => !disallowedNames.includes(p))
+  (0, import_parser_combinators2.ref)((0, import_parser_combinators2.regex)(/\w+/, "Function name"), (p) => !disallowedNames.has(p))
 );
 var operatable = [
   "-",
@@ -720,46 +675,54 @@ var operatable = [
   "&",
   "?"
 ];
-var unaryOperator = (0, import_parser_combinators2.any)(
-  ...operatable.flatMap((o) => [
-    ...operatable.map((o2) => (0, import_parser_combinators2.str)(o + o2)),
-    (0, import_parser_combinators2.str)(o)
-  ]),
-  (0, import_parser_combinators2.regex)(/\/(?!\/)/, "/")
-);
-var functionBinaryOperator = (0, import_parser_combinators2.any)(
-  ...operatable.flatMap((o) => [
-    ...operatable.flatMap((o2) => [
-      ...operatable.map((o3) => (0, import_parser_combinators2.str)(o + o2 + o3)),
-      (0, import_parser_combinators2.str)(o + o2)
-    ]),
-    (0, import_parser_combinators2.str)(o)
-  ]),
-  (0, import_parser_combinators2.str)("/="),
-  (0, import_parser_combinators2.regex)(/\/(?!\/)/, "/")
-);
-var binaryOperator = (0, import_parser_combinators2.any)(
+var operatableParsers = operatable.map((o) => (0, import_parser_combinators2.str)(o));
+var unaryOperator = time("operators", (0, import_parser_combinators2.any)(
+  (0, import_parser_combinators2.regex)(/\/(?!\/)/, "/"),
+  ...operatableParsers.map(
+    (o, i) => operatable[i] === "?" ? (0, import_parser_combinators2.fail)("Cannot use `?` as the first term of operator") : (0, import_parser_combinators2.map)(
+      (0, import_parser_combinators2.seq)(o, (0, import_parser_combinators2.opt)((0, import_parser_combinators2.any)(...operatableParsers))),
+      ([a, b]) => b ? a + b : a
+    )
+  )
+));
+var functionBinaryOperator = time("operators", (0, import_parser_combinators2.any)(
+  (0, import_parser_combinators2.regex)(/\/(?!\/)/, "/"),
+  ...operatableParsers.map(
+    (o, i) => operatable[i] === "?" ? (0, import_parser_combinators2.fail)("Cannot use `?` as the first term of operator") : (0, import_parser_combinators2.map)(
+      (0, import_parser_combinators2.seq)(o, (0, import_parser_combinators2.opt)((0, import_parser_combinators2.any)(...operatableParsers.map(
+        (o2) => (0, import_parser_combinators2.map)(
+          (0, import_parser_combinators2.seq)(o2, (0, import_parser_combinators2.opt)((0, import_parser_combinators2.any)(...operatableParsers))),
+          ([a, b]) => b ? a + b : a
+        )
+      )))),
+      ([a, b]) => b ? a + b : a
+    )
+  )
+));
+var binaryOperator = time("operators", (0, import_parser_combinators2.any)(
+  (0, import_parser_combinators2.regex)(/\/(?!\/)/, "/"),
   (0, import_parser_combinators2.str)("<u"),
   (0, import_parser_combinators2.str)("<s"),
-  (0, import_parser_combinators2.str)("==="),
   (0, import_parser_combinators2.str)("rol"),
   (0, import_parser_combinators2.str)("ror"),
   (0, import_parser_combinators2.str)("asr"),
-  (0, import_parser_combinators2.regex)(/\/(?!\/)/, "/"),
-  ...operatable.flatMap((o) => o === "?" ? [] : [
-    ...operatable.flatMap((o2) => [
-      ...operatable.map((o3) => (0, import_parser_combinators2.str)(o + o2 + o3)),
-      (0, import_parser_combinators2.str)(o + o2)
-    ]),
-    (0, import_parser_combinators2.str)(o)
-  ]),
-  (0, import_parser_combinators2.str)("/=")
-);
-var lineComment = (0, import_parser_combinators2.regex)(/\s*\/\/.*?\r?\n/s, "Line comment");
-var blockComment = (0, import_parser_combinators2.regex)(/\s*\/\*.*?\*\//s, "Block comment");
+  ...operatableParsers.map(
+    (o, i) => operatable[i] === "?" ? (0, import_parser_combinators2.fail)("Cannot use `?` as the first term of operator") : (0, import_parser_combinators2.map)(
+      (0, import_parser_combinators2.seq)(o, (0, import_parser_combinators2.opt)((0, import_parser_combinators2.any)(...operatableParsers.map(
+        (o2) => (0, import_parser_combinators2.map)(
+          (0, import_parser_combinators2.seq)(o2, (0, import_parser_combinators2.opt)((0, import_parser_combinators2.any)(...operatableParsers))),
+          ([a, b]) => b ? a + b : a
+        )
+      )))),
+      ([a, b]) => b ? a + b : a
+    )
+  )
+));
+var lineComment = time("comments", (0, import_parser_combinators2.regex)(/\s*\/\/.*?\r?\n/s, "Line comment"));
+var blockComment = time("comments", (0, import_parser_combinators2.regex)(/\s*\/\*.*?\*\//s, "Block comment"));
 var newline = (0, import_parser_combinators2.regex)(/[ \t]*\r?\n/, "End of line");
 var functionKind = (0, import_parser_combinators2.any)((0, import_parser_combinators2.str)("def"), (0, import_parser_combinators2.str)("dot"));
-var typeDefinition = (0, import_parser_combinators2.any)(
+var typeDefinition = time("type definitions", (0, import_parser_combinators2.any)(
   typeAliasDefinition(),
   (0, import_parser_combinators2.between)(
     lab,
@@ -784,7 +747,7 @@ var typeDefinition = (0, import_parser_combinators2.any)(
     ),
     (0, import_parser_combinators2.seq)(import_parser_combinators2.wspaces, rstr(">"))
   )
-);
+));
 function typeAliasDefinition() {
   return (ctx) => token(
     (0, import_parser_combinators2.any)(
@@ -797,11 +760,73 @@ function typeAliasDefinition() {
   )(ctx);
 }
 
+// src/storage.ts
+var import_vscode = require("vscode");
+var log = import_vscode.window.createOutputChannel("TC-si");
+var tokenTypes = ["type", "parameter", "variable"];
+var tokenModifiers = ["declaration", "definition", "readonly"];
+var legend = new import_vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
+var tokensData = [];
+var lastTokensData = [];
+var clearTokensData = () => {
+  if (tokensData.length > 0) {
+    lastTokensData = [...tokensData];
+  }
+  tokensData.length = 0;
+};
+var finalizeTokensData = () => {
+  if (tokensData.length > 0) {
+    lastTokensData = [...tokensData];
+  }
+};
+var diagnostics = import_vscode.languages.createDiagnosticCollection("si");
+var baseEnvironment = {
+  type: "scope",
+  switchTypes: /* @__PURE__ */ new Map(),
+  functions: [],
+  operators: [],
+  types: /* @__PURE__ */ new Map(),
+  variables: /* @__PURE__ */ new Map()
+};
+var precedence = {
+  "||": 3,
+  "&&": 4,
+  "===": 5,
+  "==": 5,
+  "!=": 5,
+  "<=": 5,
+  ">=": 5,
+  "<": 5,
+  "<s": 5,
+  "<u": 5,
+  ">": 5,
+  "+": 6,
+  "-": 6,
+  "&": 6,
+  "|": 6,
+  "^": 6,
+  "*": 7,
+  "/": 7,
+  "%": 7,
+  "ror": 7,
+  "rol": 7,
+  "<<": 7,
+  ">>": 7,
+  "asr": 7
+};
+
 // src/parser.ts
 var import_parser_combinators6 = __toESM(require_dist());
 
 // src/parsers/functions.ts
 var import_parser_combinators3 = __toESM(require_dist());
+function assumption() {
+  return (ctx) => (0, import_parser_combinators3.map)((0, import_parser_combinators3.seq)(
+    (0, import_parser_combinators3.regex)(/\s*\/\/\/ *assume +/s, "assumption declaration"),
+    functionDeclarationWithoutOpeningBracket,
+    newline
+  ), ([_, f, __]) => f)(ctx);
+}
 var parameter = (0, import_parser_combinators3.map)((0, import_parser_combinators3.seq)(
   variableName,
   import_parser_combinators3.spaces,
@@ -809,7 +834,7 @@ var parameter = (0, import_parser_combinators3.map)((0, import_parser_combinator
   import_parser_combinators3.spaces,
   recoverByAddingChars("Int", typeAliasDefinition(), true, "parameter type")
 ), ([name, _, __, ___, type]) => ({ name, type }));
-var parameterList = (0, import_parser_combinators3.between)(
+var parameterList = time("parameters", (0, import_parser_combinators3.between)(
   lpr,
   (0, import_parser_combinators3.opt)((0, import_parser_combinators3.map)((0, import_parser_combinators3.seq)(
     parameter,
@@ -819,8 +844,8 @@ var parameterList = (0, import_parser_combinators3.between)(
     ...params.map((p) => p[3])
   ])),
   rstr(")")
-);
-var functionDeclaration = (0, import_parser_combinators3.map)((0, import_parser_combinators3.seq)(
+));
+var functionDeclarationWithoutOpeningBracket = time("function declarations", (0, import_parser_combinators3.map)((0, import_parser_combinators3.seq)(
   (0, import_parser_combinators3.opt)((0, import_parser_combinators3.str)("pub ")),
   (0, import_parser_combinators3.any)(
     (0, import_parser_combinators3.map)((0, import_parser_combinators3.seq)(
@@ -880,18 +905,26 @@ var functionDeclaration = (0, import_parser_combinators3.map)((0, import_parser_
       };
     })
   ),
-  import_parser_combinators3.spaces,
-  rstr("{")
-), ([pub, func, _, __]) => {
+  import_parser_combinators3.spaces
+), ([pub, func, _]) => {
   return {
     type: func.type,
     public: pub != null,
     kind: func.kind,
     returnType: func.returnType,
     name: func.name,
-    parameters: func.parameters
+    parameters: func.parameters,
+    assumptions: []
   };
-});
+}));
+var functionDeclaration = (0, import_parser_combinators3.map)((0, import_parser_combinators3.seq)(
+  time("assumptions", (0, import_parser_combinators3.many)(assumption())),
+  functionDeclarationWithoutOpeningBracket,
+  rstr("{")
+), ([assumptions, f, _]) => ({
+  ...f,
+  assumptions
+}));
 
 // src/parsers/variables.ts
 var import_parser_combinators4 = __toESM(require_dist());
@@ -900,14 +933,14 @@ var variableKind = token((0, import_parser_combinators4.any)(
   (0, import_parser_combinators4.str)("let"),
   (0, import_parser_combinators4.str)("var")
 ));
-var stringLiteral = (0, import_parser_combinators4.map)(
+var stringLiteral = time("strings", (0, import_parser_combinators4.map)(
   (0, import_parser_combinators4.regex)(/"(?:\.|(\\\")|[^\""\n])*"/, "String literal"),
   (value) => ({
     type: "string",
     value
   })
-);
-var stringInterpolatedLiteral = (0, import_parser_combinators4.map)(
+));
+var stringInterpolatedLiteral = time("string literals", (0, import_parser_combinators4.map)(
   (0, import_parser_combinators4.between)(
     (0, import_parser_combinators4.str)("`"),
     (0, import_parser_combinators4.exhaust)(
@@ -942,7 +975,7 @@ var stringInterpolatedLiteral = (0, import_parser_combinators4.map)(
       inserts
     };
   }
-);
+));
 var numericBase2Literal = (0, import_parser_combinators4.map)(
   (0, import_parser_combinators4.regex)(/0b[01][_01]*/, "Numeric literal"),
   (str8) => ({
@@ -958,17 +991,17 @@ var numericBase10Literal = (0, import_parser_combinators4.map)(
   })
 );
 var numericBase16Literal = (0, import_parser_combinators4.map)(
-  (0, import_parser_combinators4.regex)(/0x[0-9a-zA-Z][_0-9a-zA-Z]*/, "Numeric literal"),
+  (0, import_parser_combinators4.regex)(/0x[0-9a-z][_0-9a-z]*/i, "Numeric literal"),
   (str8) => ({
     type: "number",
     value: parseInt(str8.replaceAll("_", ""), 16)
   })
 );
-var anyNumericLiteral = (0, import_parser_combinators4.any)(
+var anyNumericLiteral = time("numerics", (0, import_parser_combinators4.any)(
   numericBase16Literal,
   numericBase2Literal,
   numericBase10Literal
-);
+));
 var variableLiteral = (0, import_parser_combinators4.map)(
   (0, import_parser_combinators4.expect)(variableName, "Variable literal"),
   (value) => ({
@@ -976,31 +1009,33 @@ var variableLiteral = (0, import_parser_combinators4.map)(
     value
   })
 );
-var arrayLiteral = (0, import_parser_combinators4.map)(
+var arrayLiteral = time("array literals", (0, import_parser_combinators4.map)(
   (0, import_parser_combinators4.seq)(
     lbr,
+    import_parser_combinators4.wspaces,
     (0, import_parser_combinators4.surely)((0, import_parser_combinators4.exhaust)(
       (0, import_parser_combinators4.seq)(
-        import_parser_combinators4.wspaces,
-        rValue(),
-        (0, import_parser_combinators4.opt)((0, import_parser_combinators4.seq)(
+        (0, import_parser_combinators4.between)(
           import_parser_combinators4.wspaces,
-          (0, import_parser_combinators4.str)(","),
-          (0, import_parser_combinators4.opt)((0, import_parser_combinators4.any)(lineComment, blockComment))
-        ))
+          rValue(),
+          import_parser_combinators4.wspaces
+        ),
+        (0, import_parser_combinators4.opt)((0, import_parser_combinators4.str)(",")),
+        import_parser_combinators4.wspaces,
+        (0, import_parser_combinators4.opt)((0, import_parser_combinators4.any)(lineComment, blockComment))
       ),
-      (0, import_parser_combinators4.seq)((0, import_parser_combinators4.opt)((0, import_parser_combinators4.any)(lineComment, blockComment)), import_parser_combinators4.wspaces, rstr("]", false))
+      (0, import_parser_combinators4.seq)(import_parser_combinators4.wspaces, rbr)
     )),
     (0, import_parser_combinators4.opt)((0, import_parser_combinators4.any)(lineComment, blockComment)),
     import_parser_combinators4.wspaces,
-    rstr("]")
+    rbr
   ),
-  ([_, values, __, ___]) => ({
+  ([_, __, values, ___]) => ({
     type: "array",
-    values: values.map((v) => v[1])
+    values: values.map((v) => v[0])
   })
-);
-var functionCall = (0, import_parser_combinators4.map)((0, import_parser_combinators4.seq)(
+));
+var functionCall = time("function calls", (0, import_parser_combinators4.map)((0, import_parser_combinators4.seq)(
   functionName,
   (0, import_parser_combinators4.between)(
     lpr,
@@ -1016,12 +1051,12 @@ var functionCall = (0, import_parser_combinators4.map)((0, import_parser_combina
               import_parser_combinators4.wspaces,
               rValue()
             ),
-            (0, import_parser_combinators4.seq)(import_parser_combinators4.spaces, rstr(")", false))
+            (0, import_parser_combinators4.seq)(import_parser_combinators4.spaces, rpr)
           )
         )
       )
     ),
-    (0, import_parser_combinators4.seq)(import_parser_combinators4.spaces, rstr(")"))
+    (0, import_parser_combinators4.seq)(import_parser_combinators4.spaces, rpr)
   )
 ), ([name, rest]) => {
   const parameters = rest == null ? [] : [
@@ -1033,7 +1068,7 @@ var functionCall = (0, import_parser_combinators4.map)((0, import_parser_combina
     value: name,
     parameters
   };
-});
+}));
 var cast = (0, import_parser_combinators4.between)(
   lab,
   typeAliasDefinition(),
@@ -1071,36 +1106,40 @@ var unaryRValue = (0, import_parser_combinators4.map)((0, import_parser_combinat
     value
   };
 });
-var parenthesisedRValue = (0, import_parser_combinators4.map)((0, import_parser_combinators4.between)(
+var parenthesisedRValue = time("parentheses", (0, import_parser_combinators4.map)((0, import_parser_combinators4.between)(
   (0, import_parser_combinators4.seq)(lpr, import_parser_combinators4.spaces),
   rValue(),
   (0, import_parser_combinators4.seq)(import_parser_combinators4.spaces, rstr(")"))
 ), (value) => ({
   type: "parenthesis",
   value
-}));
+})));
 function rValue() {
-  return (ctx) => (0, import_parser_combinators4.map)(
+  return (ctx) => time("rvalues", (0, import_parser_combinators4.map)(
     (0, import_parser_combinators4.seq)(
-      token((0, import_parser_combinators4.any)(
-        castedRValue,
-        stringLiteral,
-        stringInterpolatedLiteral,
-        anyNumericLiteral,
-        unaryRValue,
-        parenthesisedRValue,
-        arrayLiteral,
-        defaultRValue,
-        functionCall,
-        variableLiteral
-      )),
-      (0, import_parser_combinators4.many)((0, import_parser_combinators4.between)(
+      time("primary rValues", token((0, import_parser_combinators4.any)(
+        time("base rValues", (0, import_parser_combinators4.any)(
+          castedRValue,
+          anyNumericLiteral,
+          stringLiteral,
+          stringInterpolatedLiteral,
+          unaryRValue
+        )),
+        time("complex rValues", (0, import_parser_combinators4.any)(
+          parenthesisedRValue,
+          arrayLiteral,
+          defaultRValue,
+          functionCall,
+          variableLiteral
+        ))
+      ))),
+      time("indexings", (0, import_parser_combinators4.many)((0, import_parser_combinators4.between)(
         lbr,
         recoverByAddingChars("0", rValue(), true, "index"),
         rstr("]")
-      )),
+      ))),
       (0, import_parser_combinators4.opt)((0, import_parser_combinators4.seq)(import_parser_combinators4.spaces, blockComment)),
-      (0, import_parser_combinators4.any)(
+      time("operators", (0, import_parser_combinators4.any)(
         (0, import_parser_combinators4.seq)(
           import_parser_combinators4.spaces,
           (0, import_parser_combinators4.str)("?"),
@@ -1131,7 +1170,7 @@ function rValue() {
             )
           )
         )
-      )
+      ))
     ),
     ([value, indexes, _, operation]) => {
       let actualValue = value;
@@ -1253,7 +1292,7 @@ function rValue() {
         return actualValue;
       }
     }
-  )(ctx);
+  ))(ctx);
 }
 var variableModification = (0, import_parser_combinators4.map)(
   (0, import_parser_combinators4.expect)(
@@ -1361,7 +1400,7 @@ var variableDeclaration = (0, import_parser_combinators4.map)(
 
 // src/parsers/declaration.ts
 var import_parser_combinators5 = __toESM(require_dist());
-var typeDeclaration = (0, import_parser_combinators5.map)((0, import_parser_combinators5.seq)(
+var typeDeclaration = time("type declarations", (0, import_parser_combinators5.map)((0, import_parser_combinators5.seq)(
   (0, import_parser_combinators5.opt)((0, import_parser_combinators5.str)("pub ")),
   (0, import_parser_combinators5.str)("type"),
   (0, import_parser_combinators5.surely)(
@@ -1377,7 +1416,7 @@ var typeDeclaration = (0, import_parser_combinators5.map)((0, import_parser_comb
   public: !!pub,
   name,
   definition
-}));
+})));
 
 // src/parser.ts
 var getPositionInfo = (document, position) => {
@@ -1498,7 +1537,6 @@ function statementsBlock() {
           recoverBySkipping(
             (0, import_parser_combinators6.map)(
               (0, import_parser_combinators6.any)(
-                lineComment,
                 blockComment,
                 newline,
                 asmDeclaration,
@@ -1536,6 +1574,7 @@ function statementsBlock() {
                     statements
                   })
                 ),
+                lineComment,
                 (0, import_parser_combinators6.map)((0, import_parser_combinators6.seq)(variableDeclaration, (0, import_parser_combinators6.any)(newline, lineComment, lookaround((0, import_parser_combinators6.seq)(import_parser_combinators6.spaces, (0, import_parser_combinators6.str)("}"))))), ([v]) => v.value),
                 (0, import_parser_combinators6.map)((0, import_parser_combinators6.seq)(variableModification, (0, import_parser_combinators6.any)(newline, lineComment, lookaround((0, import_parser_combinators6.seq)(import_parser_combinators6.spaces, (0, import_parser_combinators6.str)("}"))))), ([v]) => v.value),
                 (0, import_parser_combinators6.map)((0, import_parser_combinators6.seq)(rValue(), (0, import_parser_combinators6.any)(newline, lineComment, lookaround((0, import_parser_combinators6.seq)(import_parser_combinators6.spaces, (0, import_parser_combinators6.str)("}"))))), ([v]) => v.value)
@@ -1702,7 +1741,6 @@ var languageParser = (0, import_parser_combinators6.map)(
       import_parser_combinators6.spaces,
       (0, import_parser_combinators6.any)(
         eof,
-        lineComment,
         blockComment,
         newline,
         callConvDeclaration,
@@ -1723,6 +1761,7 @@ var languageParser = (0, import_parser_combinators6.map)(
             statements
           })
         ),
+        lineComment,
         (0, import_parser_combinators6.map)((0, import_parser_combinators6.seq)(typeDeclaration, (0, import_parser_combinators6.any)(newline, lineComment, import_parser_combinators6.spacesPlus, eof)), ([v]) => v)
       )
     )
@@ -1800,6 +1839,12 @@ var typeTokenToTypeString = (value) => {
     } else break;
   }
   return `${"[".repeat(numberOfArrays)}${value.slice(numberOfArrays)}${"]".repeat(numberOfArrays)}`;
+};
+var composeTypeDefinition = (definition) => {
+  if (Array.isArray(definition.definition.value)) {
+    return `${definition.public ? "pub " : ""}type ${definition.name.value} <${definition.definition.value.join(", ")}>`;
+  }
+  return `${definition.public ? "pub " : ""}type ${definition.name.value} ${definition.definition.value}`;
 };
 var tryGetVariable = (inScope, environments, name) => {
   for (let index = environments.length - 1; index >= 1; index--) {
@@ -2233,6 +2278,7 @@ var performParsing = (document) => {
   const fullText = document.getText();
   const diags = [];
   const startTime = Date.now();
+  clearTimings();
   let parseResult = null;
   try {
     parseResult = useParser(fullText, languageParser);
@@ -2647,93 +2693,7 @@ var checkVariableExistence = (document, result, environments, diagnostics2) => {
         break;
       }
       case "function-declaration": {
-        if (scope.definition.type === "function") {
-          if (scope.definition.kind === "dot") {
-            if (scope.definition.parameters.length === 0) {
-              diagnostics2.push(new SimplexDiagnostic(
-                new import_vscode4.Range(
-                  document.positionAt(scope.definition.name.end),
-                  document.positionAt(scope.definition.returnType.start)
-                ),
-                `Dot function should have at least one parameter`
-              ));
-            }
-          }
-        } else {
-          if (scope.definition.kind === "binary") {
-            if (scope.definition.parameters.length > 2) {
-              scope.definition.parameters.slice(2).forEach((param) => {
-                diagnostics2.push(new SimplexDiagnostic(
-                  new import_vscode4.Range(
-                    document.positionAt(param.name.start),
-                    document.positionAt(param.type.end)
-                  ),
-                  `Binary operators should have two parameters`
-                ));
-              });
-            } else if (scope.definition.parameters.length < 2) {
-              diagnostics2.push(new SimplexDiagnostic(
-                new import_vscode4.Range(
-                  document.positionAt(scope.definition.name.end),
-                  document.positionAt(scope.definition.returnType.start)
-                ),
-                `Binary operators should have two parameters`
-              ));
-            }
-          } else {
-            if (scope.definition.parameters.length > 1) {
-              scope.definition.parameters.slice(1).forEach((param) => {
-                diagnostics2.push(new SimplexDiagnostic(
-                  new import_vscode4.Range(
-                    document.positionAt(param.name.start),
-                    document.positionAt(param.type.end)
-                  ),
-                  `Unary operators should have one parameter`
-                ));
-              });
-            } else if (scope.definition.parameters.length < 1) {
-              diagnostics2.push(new SimplexDiagnostic(
-                new import_vscode4.Range(
-                  document.positionAt(scope.definition.name.end),
-                  document.positionAt(scope.definition.returnType.start)
-                ),
-                `Unary operators should have one parameter`
-              ));
-            }
-          }
-          if (!scope.definition.name.value.startsWith("=") && scope.definition.name.value.endsWith("=")) {
-            if (scope.definition.returnType.value) {
-              diagnostics2.push(new SimplexDiagnostic(
-                new import_vscode4.Range(
-                  document.positionAt(scope.definition.returnType.start),
-                  document.positionAt(scope.definition.returnType.end)
-                ),
-                `Assignment operators should not return anything`
-              ));
-            }
-            if (scope.definition.parameters.length > 0) {
-              if (scope.definition.parameters[0].name.value.front !== "$") {
-                diagnostics2.push(new SimplexDiagnostic(
-                  new import_vscode4.Range(
-                    document.positionAt(scope.definition.parameters[0].name.start),
-                    document.positionAt(scope.definition.parameters[0].name.end)
-                  ),
-                  `The first parameter of an assignment operator should be mutable`
-                ));
-              }
-            }
-          } else {
-            if (!scope.definition.returnType.value) {
-              diagnostics2.push(new SimplexDiagnostic(
-                new import_vscode4.Range(
-                  document.positionAt(scope.definition.returnType.start),
-                  document.positionAt(scope.definition.returnType.end)
-                ),
-                `Missing return type`
-              ));
-            }
-          }
-        }
+        checkMethodConstraints(scope.definition, diagnostics2, document);
         const nextEnvironments = [...environments, newFunction(scope.definition.returnType.value)];
         scope.definition.parameters.forEach((parameter2) => {
           const env = nextEnvironments[nextEnvironments.length - 1];
@@ -2786,6 +2746,7 @@ var checkVariableExistence = (document, result, environments, diagnostics2) => {
             });
           }
         });
+        addAssumptions(document, nextEnvironments, scope.definition.assumptions, diagnostics2);
         checkVariableExistence(
           document,
           scope.statements,
@@ -2951,6 +2912,61 @@ var checkVariableExistence = (document, result, environments, diagnostics2) => {
     }
   });
 };
+var addAssumptions = (document, environments, assumptions, diagnostics2) => {
+  const env = environments[environments.length - 1];
+  assumptions.forEach((a) => {
+    checkMethodConstraints(a, diagnostics2, document);
+    const paramTypes = a.parameters.map((parameter2) => {
+      const varType = checkType(parameter2.type, document, environments, diagnostics2);
+      if (typeCheck() && !varType) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(parameter2.type.start),
+            document.positionAt(parameter2.type.end)
+          ),
+          `Missing type: '${parameter2.type.value}'`
+        ));
+      }
+      return varType ?? "?";
+    });
+    const returnType = checkType(a.returnType, document, environments, diagnostics2);
+    if (typeCheck() && a.returnType.value && !returnType) {
+      diagnostics2.push(new SimplexDiagnostic(
+        new import_vscode4.Range(
+          document.positionAt(a.returnType.start),
+          document.positionAt(a.returnType.end)
+        ),
+        `Missing type: '${a.returnType.value}'`
+      ));
+    }
+    if (a.type === "function") {
+      env.functions.push({
+        type: "user-defined",
+        kind: a.kind,
+        name: a.name.value,
+        data: a.name,
+        parameterTypes: paramTypes,
+        returnType
+      });
+    } else {
+      env.operators.push({
+        type: "user-defined",
+        kind: a.kind,
+        name: a.name.value,
+        data: a.name,
+        parameterTypes: paramTypes,
+        returnType: returnType ?? "?"
+      });
+    }
+    tokensData.push({
+      definition: a.name,
+      position: a.name,
+      info: {
+        range: a.name
+      }
+    });
+  });
+};
 var processRValue = (document, environments, rValue2) => {
   const results = [];
   switch (rValue2.type) {
@@ -3088,6 +3104,24 @@ var processRValue = (document, environments, rValue2) => {
         end: rValue2.typeValue.end,
         value: rValue2
       }, document, environments, results);
+      const kind = tryGetDefFunction(
+        environments,
+        rValue2.type,
+        ["@"]
+      );
+      if (kind !== null) {
+        tokensData.push({
+          definition: kind.data,
+          position: {
+            start: rValue2.typeValue.start - 9,
+            end: rValue2.typeValue.end + 1
+          },
+          info: {
+            type: kind.returnType ?? void 0,
+            dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? "?")
+          }
+        });
+      }
       break;
     }
     default: {
@@ -3174,6 +3208,14 @@ var checkType = (typeToken, document, environments, diagnostics2) => {
         `Cannot find type: '${typeToken.value}'`
       ));
     }
+  } else {
+    tokensData.push({
+      definition: envType.type === "built-in" ? ";" + envType.data : composeTypeDefinition(envType.data),
+      position: typeToken,
+      info: {
+        type: envType?.type
+      }
+    });
   }
   return typeName2;
 };
@@ -3553,6 +3595,95 @@ var getType = (value, document, environments, diagnostics2) => {
     }
   }
 };
+function checkMethodConstraints(definition, diagnostics2, document) {
+  if (definition.type === "function") {
+    if (definition.kind === "dot") {
+      if (definition.parameters.length === 0) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(definition.name.end),
+            document.positionAt(definition.returnType.start)
+          ),
+          `Dot function should have at least one parameter`
+        ));
+      }
+    }
+  } else {
+    if (definition.kind === "binary") {
+      if (definition.parameters.length > 2) {
+        definition.parameters.slice(2).forEach((param) => {
+          diagnostics2.push(new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(param.name.start),
+              document.positionAt(param.type.end)
+            ),
+            `Binary operators should have two parameters`
+          ));
+        });
+      } else if (definition.parameters.length < 2) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(definition.name.end),
+            document.positionAt(definition.returnType.start)
+          ),
+          `Binary operators should have two parameters`
+        ));
+      }
+    } else {
+      if (definition.parameters.length > 1) {
+        definition.parameters.slice(1).forEach((param) => {
+          diagnostics2.push(new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(param.name.start),
+              document.positionAt(param.type.end)
+            ),
+            `Unary operators should have one parameter`
+          ));
+        });
+      } else if (definition.parameters.length < 1) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(definition.name.end),
+            document.positionAt(definition.returnType.start)
+          ),
+          `Unary operators should have one parameter`
+        ));
+      }
+    }
+    if (!definition.name.value.startsWith("=") && definition.name.value.endsWith("=")) {
+      if (definition.returnType.value) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(definition.returnType.start),
+            document.positionAt(definition.returnType.end)
+          ),
+          `Assignment operators should not return anything`
+        ));
+      }
+      if (definition.parameters.length > 0) {
+        if (definition.parameters[0].name.value.front !== "$") {
+          diagnostics2.push(new SimplexDiagnostic(
+            new import_vscode4.Range(
+              document.positionAt(definition.parameters[0].name.start),
+              document.positionAt(definition.parameters[0].name.end)
+            ),
+            `The first parameter of an assignment operator should be mutable`
+          ));
+        }
+      }
+    } else {
+      if (!definition.returnType.value) {
+        diagnostics2.push(new SimplexDiagnostic(
+          new import_vscode4.Range(
+            document.positionAt(definition.returnType.start),
+            document.positionAt(definition.returnType.end)
+          ),
+          `Missing return type`
+        ));
+      }
+    }
+  }
+}
 
 // src/test.ts
 var import_vscode6 = require("vscode");
@@ -4187,13 +4318,17 @@ var hoverProvider = {
     );
     if (typeof data.definition === "string") {
       const label2 = new import_vscode5.MarkdownString();
-      label2.appendCodeblock(data.definition, "si");
+      if (data.definition.startsWith(";")) {
+        label2.appendText(data.definition.slice(1));
+      } else {
+        label2.appendCodeblock(data.definition, "si");
+      }
       return new import_vscode5.Hover(label2, range);
     }
     if (!data.info.range) return;
+    const label = new import_vscode5.MarkdownString();
     const startPosition = document.positionAt(data.info.range.start);
     const line = document.lineAt(startPosition.line);
-    const label = new import_vscode5.MarkdownString();
     label.appendCodeblock(line.text.trim(), "si");
     return new import_vscode5.Hover(label, range);
   }
@@ -4422,69 +4557,52 @@ var generateMockDocument = (path, text, textSplitted) => {
     }
   };
 };
+function performTest(path, codeText, codeLines) {
+  const document = generateMockDocument(path, codeText, codeLines);
+  log.clear();
+  tokensData.length = 0;
+  getRecoveryIssues().length = 0;
+  let [parseResult, diags] = performParsing(document);
+  diags = deduplicateDiagnostics(diags);
+  if (parseResult) {
+    checkVariableExistence(
+      document,
+      parseResult,
+      [
+        baseEnvironment,
+        {
+          type: "scope",
+          switchTypes: /* @__PURE__ */ new Map(),
+          functions: [],
+          operators: [],
+          types: /* @__PURE__ */ new Map(),
+          variables: /* @__PURE__ */ new Map()
+        }
+      ],
+      diags
+    );
+  }
+  return diags;
+}
 (0, import_fs.readdirSync)((0, import_path.join)((0, import_process.cwd)(), "../../tests"), { recursive: true, encoding: "utf-8" }).filter((fileName) => fileName.endsWith(".si")).forEach((fileName) => {
   const path = (0, import_path.join)((0, import_process.cwd)(), "../../tests", fileName);
   const fileLines = (0, import_fs.readFileSync)(path, { encoding: "utf-8" }).split("\n").map((line) => line.replaceAll("\r", ""));
   const diagnosticLines = fileLines.filter((line) => line.startsWith("//#"));
   const codeLines = fileLines.filter((line) => !line.startsWith("//#"));
   const codeText = codeLines.join("\n");
-  suite(fileName, () => {
+  suite(fileName, function() {
+    this.timeout(0);
+    this.slow(250);
     if (diagnosticLines.length === 0) {
       test("Should have no diagnostics", () => {
-        const document = generateMockDocument(path, codeText, codeLines);
-        log.clear();
-        tokensData.length = 0;
-        getRecoveryIssues().length = 0;
-        let [parseResult, diags] = performParsing(document);
-        diags = deduplicateDiagnostics(diags);
-        if (parseResult) {
-          checkVariableExistence(
-            document,
-            parseResult,
-            [
-              baseEnvironment,
-              {
-                type: "scope",
-                switchTypes: /* @__PURE__ */ new Map(),
-                functions: [],
-                operators: [],
-                types: /* @__PURE__ */ new Map(),
-                variables: /* @__PURE__ */ new Map()
-              }
-            ],
-            diags
-          );
-        }
+        const diags = performTest(path, codeText, codeLines);
         diags.forEach((diag) => console.error("Leftover: " + JSON.stringify(diag)));
         (0, import_assert.default)(diags.length === 0, "There should have been no diagnostics");
       });
     } else {
       test(`Should have correct diagnostics (${diagnosticLines.length})`, () => {
         const diagnostics2 = diagnosticLines.map((line) => (0, import_parser_combinators8.ParseText)(line, diagnosticParser));
-        const document = generateMockDocument(path, codeText, codeLines);
-        log.clear();
-        tokensData.length = 0;
-        getRecoveryIssues().length = 0;
-        let [parseResult, diags] = performParsing(document);
-        diags = deduplicateDiagnostics(diags);
-        if (parseResult) {
-          checkVariableExistence(
-            document,
-            parseResult,
-            [
-              baseEnvironment,
-              {
-                type: "scope",
-                switchTypes: /* @__PURE__ */ new Map(),
-                functions: [],
-                operators: [],
-                types: /* @__PURE__ */ new Map(),
-                variables: /* @__PURE__ */ new Map()
-              }
-            ],
-            diags
-          );
-        }
+        let diags = performTest(path, codeText, codeLines);
         let error = false;
         diagnostics2.forEach((expected) => {
           const foundDiagnosticIndex = diags.findIndex((provided) => {
@@ -4501,6 +4619,14 @@ var generateMockDocument = (path, text, textSplitted) => {
         (0, import_assert.default)(!error && diags.length === 0, `The diagnostics should all be specified`);
       });
     }
+    test("Should parse under 1000ms", () => {
+      const timeStart = Date.now();
+      performTest(path, codeText, codeLines);
+      if (Date.now() - timeStart >= 1e3) {
+        console.info(JSON.stringify(timings, null, 2));
+        import_assert.default.fail("Parsing was over 1000ms");
+      }
+    });
   });
 });
 //# sourceMappingURL=test.js.map

@@ -21,3 +21,46 @@ var b = <S65>0
 def x() {
     .b = A
 }
+
+// def get_input($scratch_space: [Int], tick: Int, $inputs: [Int]) {
+
+//     var a = random(256)
+//     var b = random(256)
+
+//     inputs[0] = a
+//     inputs[1] = b
+
+//     def test_func() Int {
+//         return .b
+//     }
+
+//     dot test_meth(x: Int) Int {
+//         return x * .a
+//     }
+
+//     switch tick
+//         0 {set_error("zer0")}
+//         0 + 1 {set_error("0ne")}
+//         0 - 1 {set_error("-0ne")}
+//         2 * 1 {set_error("tw0")}
+//         1 | 2 {set_error("three")}
+//         4 / 1 {set_error("f0ur")}
+//         [5,4,3,2][0] {set_error("five")}
+//         12 >> 1 {set_error("six")}
+//         15 & 23 {set_error("seven")}
+//         247 ^ 255 {set_error("eight")}
+//         999 % 10 {set_error("nine")}
+//         5 << 1 {set_error("ten")}
+//         a / 10 {set_error("ai_over_ten")}
+//         test_func() {set_error("bee")}
+//         3.test_meth() {set_error("three_ai")}
+//         tick {set_error("tick")}
+//         default {set_error("default")}
+
+//     //ui_set_text("description", `What is {a} * {b}?`)
+
+//     switch true
+//         tick > 1 {set_error("greater_than_0ne")}
+//         tick == 1 {set_error("0ne")}
+//         tick < 1 {set_error("less_than_0ne")}
+// }

@@ -1,7 +1,7 @@
-import { any, between, exhaust, expect, many, map, opt, Parser, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
-import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators, typeAliasDefinition, rpr } from "./base";
+import { any, between, exhaust, expect, many, map, opt, Parser, regex, seq, spaces, spacesPlus, str, surely, wspaces, zeroOrMany } from "parser-combinators"
+import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators, typeAliasDefinition, rpr, rbr } from "./base";
 import { ArrayRValue, BinaryRValue, CastedRValue, DefaultRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./types/rvalue";
-import { recoverByAddingChars, rstr, token } from "./utils";
+import { lookaround, recoverByAddingChars, rstr, time, token } from "./utils";
 import { Token, VariableDeclaration, VariableModification } from "./types/ast";
 import { precedence } from "../storage";
 
@@ -11,15 +11,15 @@ const variableKind = token(any(
     str('var')
 ));
 
-export const stringLiteral = map(
+export const stringLiteral = time('strings', map(
     regex(/"(?:\.|(\\\")|[^\""\n])*"/, 'String literal'),
     (value) =>  (<StringRValue>{
         type: 'string',
         value
     })
-);
+));
 
-const stringInterpolatedLiteral = map(
+const stringInterpolatedLiteral = time('string literals', map(
 between(
     str('`'),
     exhaust(
@@ -57,7 +57,7 @@ between(
             inserts
         });
     }
-)
+))
 
 const numericBase2Literal = map(
     regex(/0b[01][_01]*/, 'Numeric literal'),
@@ -74,18 +74,18 @@ const numericBase10Literal = map(
     })
 );
 const numericBase16Literal = map(
-    regex(/0x[0-9a-zA-Z][_0-9a-zA-Z]*/, 'Numeric literal'),
+    regex(/0x[0-9a-z][_0-9a-z]*/i, 'Numeric literal'),
     (str) => (<NumberRValue>{
         type: 'number',
         value: parseInt(str.replaceAll('_', ''), 16)
     })
 );
 
-export const anyNumericLiteral = any(
+export const anyNumericLiteral = time('numerics', any(
     numericBase16Literal,
     numericBase2Literal,
     numericBase10Literal
-);
+));
 
 export const variableLiteral = map(
     expect(variableName, 'Variable literal'),
@@ -94,32 +94,33 @@ export const variableLiteral = map(
         value
     })
 );
-
-const arrayLiteral = map(
+const arrayLiteral = time('array literals', map(
     seq(
         lbr,
+        wspaces,
         surely(exhaust(
             seq(
-                wspaces,
-                rValue(),
-                opt(seq(
+                between(
                     wspaces,
-                    str(','),
-                    opt(any(lineComment, blockComment))
-                ))
+                    rValue(),
+                    wspaces
+                ),
+                opt(str(',')),
+                wspaces,
+                opt(any(lineComment, blockComment))
             ),
-            seq(opt(any(lineComment, blockComment)), wspaces, rstr(']', false))
+            seq(wspaces, rbr)
         )),
         opt(any(lineComment, blockComment)),
         wspaces,
-        rstr(']')
-    ), ([_, values, __, ___]) =>  (<ArrayRValue>{
+        rbr
+    ), ([_, __, values, ___]) =>  (<ArrayRValue>{
         type: 'array',
-        values: values.map(v => v[1])
+        values: values.map(v => v[0])
     })
-);
+));
 
-export const functionCall = map(seq(
+export const functionCall = time('function calls', map(seq(
     functionName,
     between(
         lpr,
@@ -135,12 +136,12 @@ export const functionCall = map(seq(
                             wspaces,
                             rValue()
                         ),
-                        seq(spaces, rstr(')', false))
+                        seq(spaces, rpr)
                     )
                 )
             )
         ),
-        seq(spaces, rstr(')'))
+        seq(spaces, rpr)
     )
 ), ([name, rest]) => {
     const parameters = rest == null
@@ -154,7 +155,7 @@ export const functionCall = map(seq(
         value: name,
         parameters 
     };
-});
+}));
 
 const cast = between(
     lab,
@@ -197,37 +198,40 @@ const unaryRValue = map(seq(
     }
 });
 
-const parenthesisedRValue = map(between(
+const parenthesisedRValue = time('parentheses', map(between(
     seq(lpr, spaces),
     rValue(),
     seq(spaces, rstr(')'))
 ), (value) => (<ParenthesisedRValue>{
     type: 'parenthesis',
     value
-}));
+})));
 
 export function rValue(): Parser<Token<RValue>> {
-    return (ctx) => map(
+    return (ctx) => time('rvalues', map(
         seq(
-            token(any<RValue>(
-                castedRValue,
-                stringLiteral,
-                stringInterpolatedLiteral,
-                anyNumericLiteral,
-                unaryRValue,
-                parenthesisedRValue,
-                arrayLiteral,
-                defaultRValue,
-                functionCall,
-                variableLiteral
-            )),
-            many(between(
+            time('primary rValues', token(any<RValue>(
+                time('base rValues', any(castedRValue,
+                    anyNumericLiteral,
+                    stringLiteral,
+                    stringInterpolatedLiteral,
+                    unaryRValue,
+                )),
+                time('complex rValues', any(
+                    parenthesisedRValue,
+                    arrayLiteral,
+                    defaultRValue,
+                    functionCall,
+                    variableLiteral
+                ))
+            ))),
+            time('indexings', many(between(
                 lbr,
                 recoverByAddingChars('0', rValue(), true, 'index'),
                 rstr(']')
-            )),
+            ))),
             opt(seq(spaces, blockComment)),
-            any(
+            time('operators', any(
                 seq(
                     spaces,
                     str('?'),
@@ -258,7 +262,7 @@ export function rValue(): Parser<Token<RValue>> {
                         )
                     )
                 )
-            )
+            ))
         ),
         ([value, indexes, _, operation]) => {
             let actualValue: Token<RValue> = value;
@@ -383,7 +387,7 @@ export function rValue(): Parser<Token<RValue>> {
                 return actualValue;
             }
         }
-    )(ctx);
+    ))(ctx);
 }
 
 export const variableModification = map(

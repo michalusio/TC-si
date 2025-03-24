@@ -8,10 +8,12 @@ module.exports = defineConfig([
     workspaceFolder: './tests',
     mocha: {
       ui: 'tdd',
-      timeout: 20000,
+      timeout: 10000,
+      parallel: false
     },
     launchArgs: [
-      "--disable-extensions"
+      "--disable-extensions",
+      "--sync off"
     ]
   }
 ]);

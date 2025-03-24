@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.4]
+- Improved parsing performance
+
 ## [0.6.3]
 - Allowed defining assumptions for function existence
 

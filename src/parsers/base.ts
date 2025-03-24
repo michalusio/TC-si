@@ -2,6 +2,7 @@ import {
   any,
   between,
   exhaust,
+  fail,
   many,
   map,
   opt,
@@ -12,9 +13,8 @@ import {
   str,
   wspaces,
 } from "parser-combinators";
-import { rstr, token } from "./utils";
+import { rstr, time, token } from "./utils";
 import { ParseReturnType, Token, VariableName } from "./types/ast";
-import { log } from "../storage";
 
 const recoveryIssues: {
   type: "added" | "skipped";
@@ -37,7 +37,7 @@ export const rcb = str("}");
 export const lab = str("<");
 export const rab = str(">");
 
-const disallowedNames = [
+const disallowedNames = new Set([
   "def",
   "dot",
   "switch",
@@ -51,20 +51,20 @@ const disallowedNames = [
   "else",
   "elif",
   "default",
-];
+]);
 
 export const variableName = token(
   map(
     seq(
       many(any(str("$"), str("."))),
-      ref(regex(/\w+/, "Variable name"), (p) => !disallowedNames.includes(p))
+      ref(regex(/\w+/, "Variable name"), (p) => !disallowedNames.has(p))
     ),
     ([front, name]) => <VariableName>{ front: front.join(""), name }
   )
 );
 export const typeName = token(regex(/@?[A-Z]\w*/, "Type name"));
 export const functionName = token(
-  ref(regex(/\w+/, "Function name"), (p) => !disallowedNames.includes(p))
+  ref(regex(/\w+/, "Function name"), (p) => !disallowedNames.has(p))
 );
 
 const operatable = [
@@ -80,59 +80,62 @@ const operatable = [
   '^',
   "!",
   "&",
-  "?",
+  "?"
 ];
 
-export const unaryOperator = any(
-  ...operatable.flatMap(o => [
-    ...operatable.map(o2 => str(o+o2)),
-    str(o)
-  ]),
-  regex(/\/(?!\/)/, "/")
-);
+const operatableParsers = operatable.map(o => str(o));
 
-export const functionBinaryOperator = any(
-  ...operatable.flatMap(o => [
-    ...operatable.flatMap(o2 => [
-      ...operatable.map(o3 => str(o+o2+o3)),
-      str(o+o2)
-    ]),
-    str(o)
-  ]),
-  str('/='),
-  regex(/\/(?!\/)/, "/")
-);
+export const unaryOperator = time('operators', any(
+  regex(/\/(?!\/)/, "/"),
+  ...operatableParsers.map((o, i) => operatable[i] === '?'
+    ? fail<string>('Cannot use `?` as the first term of operator')
+    : map(
+      seq(o, opt(any(...operatableParsers))),
+      ([a, b]) => b ? (a + b) : a)
+  )
+));
 
-export const binaryOperator = any(
+export const functionBinaryOperator = time('operators', any(
+  regex(/\/(?!\/)/, "/"),
+  ...operatableParsers.map((o, i) => operatable[i] === '?'
+    ? fail<string>('Cannot use `?` as the first term of operator')
+    : map(
+      seq(o, opt(any(...operatableParsers.map(o2 => map(
+        seq(o2, opt(any(...operatableParsers))),
+        ([a, b]) => b ? (a + b) : a)
+      )))),
+      ([a, b]) => b ? (a + b) : a)
+  )
+));
+
+export const binaryOperator = time('operators', any(
+  regex(/\/(?!\/)/, "/"),
   str("<u"),
   str("<s"),
-  str("==="),
   str("rol"),
   str("ror"),
   str("asr"),
-  regex(/\/(?!\/)/, "/"),
-  ...operatable.flatMap(o => o === '?'
-    ? []
-    : [
-    ...operatable.flatMap(o2 => [
-      ...operatable.map(o3 => str(o+o2+o3)),
-      str(o+o2)
-    ]),
-    str(o)
-  ]),
-  str('/='),
-);
+  ...operatableParsers.map((o, i) => operatable[i] === '?'
+    ? fail<string>('Cannot use `?` as the first term of operator')
+    : map(
+      seq(o, opt(any(...operatableParsers.map(o2 => map(
+        seq(o2, opt(any(...operatableParsers))),
+        ([a, b]) => b ? (a + b) : a)
+      )))),
+      ([a, b]) => b ? (a + b) : a)
+  ),
+));
 
 export type BinaryOperators = ParseReturnType<typeof binaryOperator>;
 
-export const lineComment = regex(/\s*\/\/.*?\r?\n/s, "Line comment");
-export const blockComment = regex(/\s*\/\*.*?\*\//s, "Block comment");
+export const lineComment = time('comments', regex(/\s*\/\/.*?\r?\n/s, "Line comment"));
+export const blockComment = time('comments', regex(/\s*\/\*.*?\*\//s, "Block comment"));
 
 export const newline = regex(/[ \t]*\r?\n/, "End of line");
 
 export const functionKind = any(str("def"), str("dot"));
 
-export const typeDefinition = any(
+export const typeDefinition = time('type definitions', any(
   typeAliasDefinition(),
   between(
     lab,
@@ -157,7 +160,7 @@ export const typeDefinition = any(
     ),
     seq(wspaces, rstr(">"))
   )
-);
+));
 
 export function typeAliasDefinition(): Parser<Token<string>> {
   return (ctx) =>

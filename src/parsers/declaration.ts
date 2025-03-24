@@ -1,8 +1,9 @@
 import { map, opt, seq, spacesPlus, str, surely } from "parser-combinators";
 import { typeDefinition, typeName } from "./base";
 import { TypeDefinition } from "./types/ast";
+import { time } from "./utils";
 
-export const typeDeclaration = map(seq(
+export const typeDeclaration = time('type declarations', map(seq(
     opt(str('pub ')),
     str('type'),
     surely(
@@ -18,4 +19,4 @@ export const typeDeclaration = map(seq(
     public: !!pub,
     name,
     definition
-}));
+})));
