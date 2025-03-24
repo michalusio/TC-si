@@ -643,14 +643,24 @@ export const checkVariableExistence = (
             }
             caseValues.push(null);
           } else {
-            const caseName = oneCase.caseName as Token<StringRValue | NumberRValue | VariableRValue>;
+            const caseName = oneCase.caseName as Token<RValue>;
             const caseType = getType(caseName, document, environments, diagnostics);
-            const caseValue = caseName.value.type === 'variable'
-              ? `v'${caseName.value.value.value.front}${caseName.value.value.value.name}`
-              : (caseName.value.type === 'number'
-                ? `n'${caseName.value.value}`
-                : `s'${caseName.value.value}`
-              );
+            let caseValue = '';
+            switch (caseName.value.type) {
+              case 'variable':
+                caseValue = `v'${caseName.value.value.value.front}${caseName.value.value.value.name}`;
+                break;
+              case 'number':
+                caseValue = `n'${caseName.value.value}`;
+                break;
+              case 'string':
+                caseValue = `s'${caseName.value.value}`;
+                break;
+              default:
+                caseValue = JSON.stringify(caseName.value);
+                break;
+            }
+            diagnostics.push(...processRValue(document, environments, caseName.value));
             if (typeCheck()) {
               if (varType !== caseType) {
                 if (!isIntegerType(varType) || caseName.value.type !== 'number') {

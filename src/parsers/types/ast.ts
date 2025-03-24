@@ -102,7 +102,7 @@ export type SwitchStatement = {
     type: 'switch',
     value: Token<RValue>,
     cases: {
-        caseName: Token<StringRValue | NumberRValue | VariableRValue | "default">,
+        caseName: Token<RValue | "default">,
         statements: StatementsBlock
     }[]
 };

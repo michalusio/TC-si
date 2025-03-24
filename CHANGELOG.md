@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.5]
+- Added basic support for r-values in switch cases
+
 ## [0.6.4]
 - Improved parsing performance
 

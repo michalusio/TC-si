@@ -325,7 +325,13 @@ function switchBlock(): Parser<SwitchStatement> {
 										}
 										return wspace === (v?.length ?? 0);
 									}),
-									token(any(anyNumericLiteral, stringLiteral, variableLiteral, str('default'))),
+									token(any(
+										map(
+											seq(str('default'), lookaround(any(str(' '), str('{')))),
+											([v]) => v
+										),
+										map(rValue(), v => v.value)
+									)),
 									spacesPlus,
 									rstr('{'),
 									surely(map(

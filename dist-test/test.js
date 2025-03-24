@@ -1703,7 +1703,13 @@ function switchBlock() {
                     }
                     return wspace === (v?.length ?? 0);
                   }),
-                  token((0, import_parser_combinators6.any)(anyNumericLiteral, stringLiteral, variableLiteral, (0, import_parser_combinators6.str)("default"))),
+                  token((0, import_parser_combinators6.any)(
+                    (0, import_parser_combinators6.map)(
+                      (0, import_parser_combinators6.seq)((0, import_parser_combinators6.str)("default"), lookaround((0, import_parser_combinators6.any)((0, import_parser_combinators6.str)(" "), (0, import_parser_combinators6.str)("{")))),
+                      ([v]) => v
+                    ),
+                    (0, import_parser_combinators6.map)(rValue(), (v) => v.value)
+                  )),
                   import_parser_combinators6.spacesPlus,
                   rstr("{"),
                   (0, import_parser_combinators6.surely)((0, import_parser_combinators6.map)(
@@ -2838,7 +2844,22 @@ var checkVariableExistence = (document, result, environments, diagnostics2) => {
           } else {
             const caseName = oneCase.caseName;
             const caseType = getType(caseName, document, environments, diagnostics2);
-            const caseValue = caseName.value.type === "variable" ? `v'${caseName.value.value.value.front}${caseName.value.value.value.name}` : caseName.value.type === "number" ? `n'${caseName.value.value}` : `s'${caseName.value.value}`;
+            let caseValue = "";
+            switch (caseName.value.type) {
+              case "variable":
+                caseValue = `v'${caseName.value.value.value.front}${caseName.value.value.value.name}`;
+                break;
+              case "number":
+                caseValue = `n'${caseName.value.value}`;
+                break;
+              case "string":
+                caseValue = `s'${caseName.value.value}`;
+                break;
+              default:
+                caseValue = JSON.stringify(caseName.value);
+                break;
+            }
+            diagnostics2.push(...processRValue(document, environments, caseName.value));
             if (typeCheck()) {
               if (varType !== caseType) {
                 if (!isIntegerType(varType) || caseName.value.type !== "number") {
