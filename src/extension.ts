@@ -1,10 +1,13 @@
 import {
+  CodeAction,
+  CodeActionKind,
   CompletionItem,
   CompletionItemKind,
   CompletionItemProvider,
   Declaration,
   DeclarationProvider,
   Diagnostic,
+  DiagnosticSeverity,
   DocumentSemanticTokensProvider,
   Hover,
   HoverProvider,
@@ -244,3 +247,21 @@ languages.registerHoverProvider(selector, hoverProvider);
 languages.registerInlayHintsProvider(selector, inlayProvider);
 languages.registerRenameProvider(selector, renameProvider);
 languages.registerCompletionItemProvider(selector, dotCompletionProvider, '.');
+languages.registerCodeActionsProvider(selector, {
+  provideCodeActions(document, range, context, token) {
+    const fixes = context.diagnostics
+      .filter(d => d.severity === DiagnosticSeverity.Hint && d.message.startsWith('This value could be replaced with '))
+      .filter(d => d.range.contains(range));
+    return fixes.map(f => {
+      const value = f.message.slice(34);
+      const ca = new CodeAction(`Replace the expression with value ${value}`);
+      ca.diagnostics = [f];
+      ca.isPreferred = true;
+      ca.kind = CodeActionKind.QuickFix;
+      const we = new WorkspaceEdit();
+      we.replace(document.uri, f.range, value);
+      ca.edit = we;
+      return ca;
+    });
+  },
+})

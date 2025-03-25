@@ -52,6 +52,28 @@ export type EnvironmentType = {
   data: string;
 }
 
+export type StaticValue =
+  | { type: 'string', value: string }
+  | { type: 'number', value: number }
+  | { type: 'default' }
+  | { type: 'variable', value: string }
+  | { type: 'complicated' }
+  ;
+
+export function sameStaticValue(a: StaticValue, b: StaticValue): boolean {
+  switch (a.type) {
+    case 'default': return b.type === 'default';
+    case 'complicated': return false;
+    case 'variable': return b.type === 'variable' && a.value === b.value;
+    case 'string': return b.type === 'string' && a.value === b.value;
+    case 'number': return b.type === 'number' && a.value === b.value;
+    default: {
+      const x: never = a;
+      throw x;
+    }
+  }
+}
+
 export type Environment = ({
   type: 'function';
   returnType: string | null;
@@ -62,5 +84,5 @@ export type Environment = ({
   functions: EnvironmentFunction[];
   operators: EnvironmentOperator[];
   types: Map<string, EnvironmentType>;
-  switchTypes: Map<string, [string, (string | null)[]]>;
+  switchTypes: Map<string, [string, StaticValue[]]>;
 };

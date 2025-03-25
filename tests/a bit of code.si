@@ -42,6 +42,8 @@ def get_input($scratch_space: [Int], tick: Int, $inputs: [Int]) {
         0 {set_error("zer0")}
         0 + 1 {set_error("0ne")}
         0 - 1 {set_error("-0ne")}
+        0 - 1 {set_error("-0ne")}
+        0 - 1 {set_error("-0ne")}
         2 * 1 {set_error("tw0")}
         1 | 2 {set_error("three")}
         4 / 1 {set_error("f0ur")}

@@ -12,8 +12,8 @@ import {
   VariableName,
 } from "./parsers/types/ast";
 import { SimplexDiagnostic } from './SimplexDiagnostic';
-import { NumberRValue, RValue, StringRValue, VariableRValue } from "./parsers/types/rvalue";
-import { Environment } from "./environment";
+import { RValue } from "./parsers/types/rvalue";
+import { StaticValue, Environment, sameStaticValue } from "./environment";
 import { composeTypeDefinition, doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntSize, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
 import { explicitReturn, typeCheck } from "./workspace";
 import { clearTimings } from "./parsers/utils";
@@ -279,6 +279,7 @@ export const checkVariableExistence = (
     switch (scope.type) {
       case 'declaration': {
         diagnostics.push(...processRValue(document, environments, scope.value.value));
+        diagnostics.push(...checkForSimplification(scope.value, document));
         if (scope.kind.value === 'const') {
           if (scope.name.value.name.search(/[a-z]/) >= 0) {
             diagnostics.push(new SimplexDiagnostic(
@@ -345,6 +346,7 @@ export const checkVariableExistence = (
       }
       case 'modification': {
         diagnostics.push(...processRValue(document, environments, scope.value.value));
+        diagnostics.push(...checkForSimplification(scope.value, document));
         const left = getType(scope.name, document, environments, diagnostics);
         const right = getType(scope.value, document, environments, diagnostics);
         if (typeCheck() && left !== right) {
@@ -450,6 +452,7 @@ export const checkVariableExistence = (
           const cast = scope.name.value;
           const newType = checkType(cast.to, document, environments, diagnostics);
           diagnostics.push(...processRValue(document, environments, cast.value.value));
+          diagnostics.push(...checkForSimplification(cast.value, document));
           diagnostics.push(new SimplexDiagnostic(
             new Range(
               document.positionAt(scope.name.start),
@@ -462,13 +465,16 @@ export const checkVariableExistence = (
         } else {
           const index = scope.name.value;
           diagnostics.push(...processRValue(document, environments, index.parameter.value));
+          diagnostics.push(...checkForSimplification(index.parameter, document));
           diagnostics.push(...processRValue(document, environments, index.value.value));
+          diagnostics.push(...checkForSimplification(index.value, document));
         }
         break;
       }
       case 'return': {
         if (scope.value.value) {
           diagnostics.push(...processRValue(document, environments, scope.value.value));
+          diagnostics.push(...checkForSimplification(scope.value, document));
           const varType = getType(scope.value as Token<RValue>, document, environments, diagnostics);
           const funcType = tryGetReturnType(environments);
           if (typeCheck() && varType !== funcType) {
@@ -576,6 +582,7 @@ export const checkVariableExistence = (
       }
       case "if": {
         diagnostics.push(...processRValue(document, environments, scope.value.value));
+        diagnostics.push(...checkForSimplification(scope.value, document));
         const nextIfEnvironments: Environment[] = [...environments, newScope()];
         checkVariableExistence(
           document,
@@ -595,6 +602,7 @@ export const checkVariableExistence = (
         }
         scope.elifBlocks.forEach((elif) => {
           diagnostics.push(...processRValue(document, environments, elif.value.value));
+          diagnostics.push(...checkForSimplification(elif.value, document));
           const nextElifEnvironments: Environment[] = [...environments, newScope()];
           checkVariableExistence(
             document,
@@ -624,15 +632,10 @@ export const checkVariableExistence = (
       }
       case "switch": {
         const varType = getType(scope.value, document, environments, diagnostics);
-        const caseValues: (string | null)[] = [];
+        const caseValues: StaticValue[] = [];
         scope.cases.forEach((oneCase) => {
-          if (typeof oneCase.caseName.value !== 'string') {
-            if (oneCase.caseName.value.type === 'variable') {
-              diagnostics.push(...checkVariable(oneCase.caseName.value.value, document, environments));
-            }
-          }
           if (oneCase.caseName.value === 'default') {
-            if (typeCheck() && caseValues.includes(null)) {
+            if (typeCheck() && caseValues.some(v => v.type === 'default')) {
               diagnostics.push(new SimplexDiagnostic(
                 new Range(
                   document.positionAt(oneCase.caseName.start),
@@ -641,26 +644,12 @@ export const checkVariableExistence = (
                 `The switch block already has a default case`
               ));
             }
-            caseValues.push(null);
+            caseValues.push({ type: 'default' });
           } else {
             const caseName = oneCase.caseName as Token<RValue>;
             const caseType = getType(caseName, document, environments, diagnostics);
-            let caseValue = '';
-            switch (caseName.value.type) {
-              case 'variable':
-                caseValue = `v'${caseName.value.value.value.front}${caseName.value.value.value.name}`;
-                break;
-              case 'number':
-                caseValue = `n'${caseName.value.value}`;
-                break;
-              case 'string':
-                caseValue = `s'${caseName.value.value}`;
-                break;
-              default:
-                caseValue = JSON.stringify(caseName.value);
-                break;
-            }
             diagnostics.push(...processRValue(document, environments, caseName.value));
+            diagnostics.push(...checkForSimplification(caseName, document));
             if (typeCheck()) {
               if (varType !== caseType) {
                 if (!isIntegerType(varType) || caseName.value.type !== 'number') {
@@ -673,17 +662,20 @@ export const checkVariableExistence = (
                   ));
                 }
               }
-              if (caseValues.includes(caseValue)) {
-                diagnostics.push(new SimplexDiagnostic(
-                  new Range(
-                    document.positionAt(oneCase.caseName.start),
-                    document.positionAt(oneCase.caseName.end)
-                  ),
-                  `This switch block already has this case specified`
-                ));
+              if (varType === 'String' || isIntegerType(varType)) {
+                const caseStaticValue: StaticValue = getStaticValue(caseName);
+                if (caseValues.some(v => sameStaticValue(v, caseStaticValue))) {
+                  diagnostics.push(new SimplexDiagnostic(
+                    new Range(
+                      document.positionAt(oneCase.caseName.start),
+                      document.positionAt(oneCase.caseName.end)
+                    ),
+                    `This switch block already has this case specified`
+                  ));
+                }
+                caseValues.push(caseStaticValue);
               }
             }
-            caseValues.push(caseValue);
           }
           const nextCaseEnvironments: Environment[] = [...environments, newScope()];
           checkVariableExistence(
@@ -694,6 +686,7 @@ export const checkVariableExistence = (
           );
         });
         diagnostics.push(...processRValue(document, environments, scope.value.value));
+        diagnostics.push(...checkForSimplification(scope.value, document));
         environments[environments.length - 1]
           .switchTypes
           .set(`${scope.value.start}_${scope.value.end}`, [varType, caseValues]);
@@ -701,6 +694,7 @@ export const checkVariableExistence = (
       }
       case "while": {
         diagnostics.push(...processRValue(document, environments, scope.value.value));
+        diagnostics.push(...checkForSimplification(scope.value, document));
         const nextEnvironments: Environment[] = [...environments, newScope()];
         checkVariableExistence(
           document,
@@ -1094,7 +1088,7 @@ const doesReturn = (document: TextDocument, statements: StatementsBlock, environ
           if (switchData) {
             const enumData = isEnumType(switchData[0], environments);
             if (enumData) {
-              if (switchData[1].every(s => s?.startsWith('v'))) {
+              if (switchData[1].every(s => s === undefined)) {
                 if (new Set(switchData[1]).size === enumData.length) {
                   return true;
                 } else {
@@ -1527,6 +1521,123 @@ function checkMethodConstraints(definition: FunctionDefinition, diagnostics: Sim
           `Missing return type`
         ));
       }
+    }
+  }
+}
+
+const getStaticValue = (rvalue: Token<RValue>): StaticValue => {
+  const complicated: StaticValue = { type: 'complicated' };
+  switch (rvalue.value.type) {
+    case "_default": {
+      if (isIntegerType(rvalue.value.typeValue.value)) {
+        return { type: 'number', value: 0 };
+      }
+      if (rvalue.value.typeValue.value === 'String') {
+        return { type: 'string', value: "" };
+      }
+      return complicated;
+    }
+    case 'number': return { type: 'number', value: rvalue.value.value };
+    case 'string': return { type: 'string', value: rvalue.value.value };
+
+    case 'parenthesis':
+      return getStaticValue(rvalue.value.value);
+    case 'variable':
+      return { type: 'variable', value: rvalue.value.value.value.front + rvalue.value.value.value.name };
+
+    case 'unary': {
+      const internal = getStaticValue(rvalue.value.value);
+      if (internal.type !== 'number') {
+        return complicated;
+      }
+      switch (rvalue.value.operator) {
+        case '-': return { type: 'number', value: -internal.value };
+        case '~': return { type: 'number', value: ~internal.value };
+      }
+      return complicated;
+    }
+    case 'binary': {
+      const internalLeft = getStaticValue(rvalue.value.left);
+      const internalRight = getStaticValue(rvalue.value.right);
+      switch (internalLeft.type) {
+        case 'number': {
+          if (internalRight.type === 'number') {
+            switch (rvalue.value.operator) {
+              case '+': return { type: 'number', value: internalLeft.value + internalRight.value };
+              case '-': return { type: 'number', value: internalLeft.value - internalRight.value };
+              case '*': return { type: 'number', value: internalLeft.value * internalRight.value };
+              case '/': return { type: 'number', value: internalLeft.value / internalRight.value };
+              case '%': return { type: 'number', value: internalLeft.value % internalRight.value };
+              case '&': return { type: 'number', value: internalLeft.value & internalRight.value };
+              case '|': return { type: 'number', value: internalLeft.value | internalRight.value };
+              case '^': return { type: 'number', value: internalLeft.value ^ internalRight.value };
+              case '<<': return { type: 'number', value: internalLeft.value << internalRight.value };
+              case '>>': return { type: 'number', value: internalLeft.value >> internalRight.value };
+            }
+          }
+          return complicated;
+        }
+        case 'string': {
+          if (internalRight.type === 'string') {
+            if (rvalue.value.operator === '+') {
+              return { type: 'string', value: internalLeft.value + internalRight.value };
+            }
+          }
+          return complicated;
+        }
+        default: return complicated;
+      }
+    }
+
+    case 'cast':
+    case 'dotMethod':
+    case 'array':
+    case 'index':
+    case 'function':
+    case 'interpolated':
+    case 'ternary':
+      return complicated;
+
+    default: {
+      const x: never = rvalue.value;
+      throw x;
+    }
+  }
+}
+
+const checkForSimplification = (rValue: Token<RValue | null>, document: TextDocument): SimplexDiagnostic[] => {
+  if (rValue.value == null) return [];
+  const rv = rValue as Token<RValue>;
+  switch (rv.value.type) {
+    case 'number':
+    case 'string':
+      return [];
+    default: {
+      const staticValue = getStaticValue(rv);
+      if (staticValue.type === 'number') {
+        return [
+          new SimplexDiagnostic(
+            new Range(
+              document.positionAt(rv.start),
+              document.positionAt(rv.end)
+            ),
+            `This value could be replaced with ${staticValue.value}`,
+            DiagnosticSeverity.Hint
+          )
+        ]
+      } else if (staticValue.type === 'string') {
+        return [
+          new SimplexDiagnostic(
+            new Range(
+              document.positionAt(rv.start),
+              document.positionAt(rv.end)
+            ),
+            `This value could be replaced with "${staticValue.value}"`,
+            DiagnosticSeverity.Hint
+          )
+        ]
+      }
+      return [];
     }
   }
 }

@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.6.6]
+- Added support for checking simple expressions in switch cases for duplicated cases
+- Added hints and code actions for simplifying simple expressions
+
 ## [0.6.5]
 - Added basic support for r-values in switch cases
 
