@@ -1,0 +1,7 @@
+def get_input($scratch_space: [Int], tick: Int, $inputs: [Int]) {
+
+    const X =0
+
+    X = 1
+
+}

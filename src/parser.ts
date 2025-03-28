@@ -2,11 +2,11 @@ import { Position, TextDocument } from "vscode";
 import { any, between, Context, exhaust, map, oneOrMany, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators";
 import { functionDeclaration } from "./parsers/functions";
 import { blockComment, lcb, lineComment, newline, variableName } from "./parsers/base";
-import { anyNumericLiteral, rValue, stringLiteral, topmostVariableDeclaration, variableDeclaration, variableLiteral, variableModification } from "./parsers/variables";
+import { rValue, topmostVariableDeclaration, variableDeclaration, variableModification } from "./parsers/variables";
 import { typeDeclaration } from "./parsers/declaration";
 import { eof, lookaround, manyForSure, recoverByAddingChars, recoverBySkipping, rstr, token } from "./parsers/utils";
 import { BreakStatement, ContinueStatement, FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, TokenRange, TypeDefinition, VariableDeclaration, WhileStatement } from "./parsers/types/ast";
-import { lastTokensData } from "./storage";
+import { lastTokensData, log } from "./storage";
 
 export const getPositionInfo = (document: TextDocument, position: Position): {
 	current: TokenRange,
@@ -195,8 +195,7 @@ function statementsBlock(): Parser<StatementsBlock> {
 								),
 								lineComment,
 								map(seq(variableDeclaration, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
-								map(seq(variableModification, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
-								map(seq(rValue(), any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value)
+								map(seq(variableModification, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value)
 							),
 							(s) => typeof s === 'string' ? null : s
 						),

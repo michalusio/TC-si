@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.7]
+- Fixed parsing of variable modification statements
+
 ## [0.6.6]
 - Added support for checking simple expressions in switch cases for duplicated cases
 - Added hints and code actions for simplifying simple expressions

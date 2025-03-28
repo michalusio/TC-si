@@ -1,9 +1,9 @@
-import { any, between, exhaust, expect, many, map, opt, Parser, regex, seq, spaces, spacesPlus, str, surely, wspaces, zeroOrMany } from "parser-combinators"
+import { any, between, exhaust, expect, many, map, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces, zeroOrMany } from "parser-combinators"
 import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators, typeAliasDefinition, rpr, rbr } from "./base";
 import { ArrayRValue, BinaryRValue, CastedRValue, DefaultRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./types/rvalue";
 import { lookaround, recoverByAddingChars, rstr, time, token } from "./utils";
 import { Token, VariableDeclaration, VariableModification } from "./types/ast";
-import { precedence } from "../storage";
+import { log, precedence } from "../storage";
 
 const variableKind = token(any(
     str('const'),
@@ -400,8 +400,7 @@ export const variableModification = map(
                 rstr(']')
             )),
             spaces,
-            opt(binaryOperator),
-            str('='),
+            ref(binaryOperator, op => op.endsWith('=')),
             surely(seq(
                 spaces,
                 recoverByAddingChars('0', rValue(), true, 'value')
@@ -409,7 +408,7 @@ export const variableModification = map(
         ),
         'Variable modification statement'
     ),
-    ([name, indexes, _, operator, __, [___, value]]) => {
+    ([name, indexes, _, operator, [__, value]]) => {
         let actualName: Token<VariableRValue | CastedRValue | IndexRValue> = name;
         indexes.forEach(index => {
             actualName = <Token<IndexRValue>>{
@@ -428,7 +427,7 @@ export const variableModification = map(
             value: <VariableModification>{
                 type: 'modification',
                 name: actualName,
-                operator: operator ?? undefined,
+                operator: operator.slice(0, operator.length - 1) ?? undefined,
                 value
             }
         };
