@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.9]
+- Improved inlay hints behavior when switching between files
+
 ## [0.6.8]
 - Fixed parsing of standalone function calls
 

@@ -139,7 +139,7 @@ const hoverProvider: HoverProvider = {
 const inlayProvider: InlayHintsProvider = {
   provideInlayHints(document, range) {
     if (!showInlayTypeHints()) return [];
-    const declarations = getDeclarations();
+    const declarations = getDeclarations(document);
     return declarations
       .filter(d => range.contains(document.positionAt(d.position.end)))
       .map(d => new InlayHint(document.positionAt(d.position.end), ": "+typeTokenToTypeString(d.info.type!), InlayHintKind.Type));
@@ -183,7 +183,7 @@ const tokenProvider: DocumentSemanticTokensProvider = {
     statusItem.severity = LanguageStatusSeverity.Information;
 
     log.clear();
-    clearTokensData();
+    clearTokensData(document);
     getRecoveryIssues().length = 0;
     diagnostics.clear();
     return new Promise<SemanticTokens>(res => {
@@ -231,7 +231,7 @@ const tokenProvider: DocumentSemanticTokensProvider = {
       Object.entries(diagnosticsPerFile).forEach(([key, value]) => {
         diagnostics.set(Uri.parse(key, true), value);
       });
-      finalizeTokensData();
+      finalizeTokensData(document);
       res(tokensBuilder.build());
     });
   },

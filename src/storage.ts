@@ -1,4 +1,4 @@
-import { window, Range, SemanticTokensLegend, languages } from 'vscode';
+import { window, Range, SemanticTokensLegend, languages, TextDocument } from 'vscode';
 import { ParseReturnType, TokenRange } from './parsers/types/ast';
 import type { binaryOperator } from './parsers/base';
 import type { Environment } from './environment';
@@ -20,18 +20,20 @@ export type TokenData = {
 };
 
 export const tokensData: TokenData[] = [];
-export let lastTokensData: TokenData[] = [];
+export let lastTokensData: Record<string, TokenData[]> = {};
 
-export const clearTokensData = () => {
+export const getTokensData = (document: TextDocument) => lastTokensData[document.uri.toString()] ?? [];
+
+export const clearTokensData = (document: TextDocument) => {
 	if (tokensData.length > 0) {
-		lastTokensData = [...tokensData];
+		lastTokensData[document.uri.toString()] = [...tokensData];
 	}
 	tokensData.length = 0;
 }
 
-export const finalizeTokensData = () => {
+export const finalizeTokensData = (document: TextDocument) => {
 	if (tokensData.length > 0) {
-		lastTokensData = [...tokensData];
+		lastTokensData[document.uri.toString()] = [...tokensData];
 	}
 }
 
