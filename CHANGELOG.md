@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.8]
+- Fixed parsing of standalone function calls
+
 ## [0.6.7]
 - Fixed parsing of variable modification statements
 
