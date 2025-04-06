@@ -1053,12 +1053,14 @@ const checkType = (typeToken: Token<string | null>, document: TextDocument, envi
 }
 
 const doesReturnValue = (document: TextDocument, statements: StatementsBlock, environments: Environment[], diagnostics: SimplexDiagnostic[], shouldReturnValue: boolean): 'value' | 'empty' | null => {
+  let returnValue: 'value' | 'empty' | 'none' | undefined = undefined;
   for (let index = statements.length - 1; index >= 0; index--) {
     const statement = statements[index];
     switch (statement.type) {
       case 'return': {
         if (statement.value.value) {
-          return 'value';
+          returnValue = 'value';
+          continue;
         } else if (shouldReturnValue) {
           diagnostics.push(new SimplexDiagnostic(
             new Range(
@@ -1069,7 +1071,8 @@ const doesReturnValue = (document: TextDocument, statements: StatementsBlock, en
             DiagnosticSeverity.Error
           ));
         }
-        return 'empty';
+        returnValue =  'empty';
+        continue;
       }
       case 'if': {
         const allToCheck = [
@@ -1088,7 +1091,8 @@ const doesReturnValue = (document: TextDocument, statements: StatementsBlock, en
             return null;
           }, 'value');
         if (overallReturn !== null) {
-          return overallReturn;
+          returnValue = overallReturn;
+          continue;
         }
         break;
       }
@@ -1105,7 +1109,8 @@ const doesReturnValue = (document: TextDocument, statements: StatementsBlock, en
           }, 'value');
         if (overallReturn !== null) {
           if (statement.cases.some(c => c.caseName.value === 'default')) {
-            return overallReturn;
+            returnValue = overallReturn;
+            continue;
           }
           const currentEnv = environments[environments.length - 1];
           const switchData = currentEnv.switchTypes.get(`${statement.value.start}_${statement.value.end}`);
@@ -1114,7 +1119,8 @@ const doesReturnValue = (document: TextDocument, statements: StatementsBlock, en
             if (enumData) {
               if (switchData[1].every(s => s === undefined)) {
                 if (new Set(switchData[1]).size === enumData.length) {
-                  return overallReturn;
+                  returnValue = overallReturn;
+                  continue;
                 } else {
                   diagnostics.push(new SimplexDiagnostic(
                     new Range(
@@ -1132,8 +1138,12 @@ const doesReturnValue = (document: TextDocument, statements: StatementsBlock, en
         break;
       }
       case 'while': {
-        const condition = statement.value.value;
         const overallReturn = doesReturnValue(document, statement.statements, environments, diagnostics, shouldReturnValue);
+        if (overallReturn !== null) {
+          returnValue = overallReturn;
+          continue;
+        }
+        const condition = statement.value.value;
         if (condition.type === "variable") {
           if (condition.value.value.front === '') {
             if (condition.value.value.name === 'true' && overallReturn === null && !hasBreakStatement(statement.statements)) {
@@ -1142,19 +1152,33 @@ const doesReturnValue = (document: TextDocument, statements: StatementsBlock, en
                   document.positionAt(statement.value.start),
                   document.positionAt(statement.value.end)
                 ),
-                `This while statement is an infinite loop`,
-                DiagnosticSeverity.Error
+                `This while statement is an infinite loop (always true condition, no returns or breaks)`,
+                DiagnosticSeverity.Warning
               ));
-              return null;
+              returnValue = 'none';
+              continue;
             }
           }
         }
-        if (overallReturn !== null) return overallReturn;
+        if (getAllVariables(statement.value.value).every(v => !hasVariableModification(v, statement.statements))) {
+          if (!hasBreakStatement(statement.statements)) {
+            diagnostics.push(new SimplexDiagnostic(
+              new Range(
+                document.positionAt(statement.value.start),
+                document.positionAt(statement.value.end)
+              ),
+              `This while statement is an infinite loop (no condition modification inside, no returns or breaks)`,
+              DiagnosticSeverity.Warning
+            ));
+            returnValue = 'none';
+            continue;
+          }
+        }
         break;
       }
     }
   }
-  return null;
+  return returnValue === 'none' ? null : (returnValue ?? null);
 }
 
 const hasBreakStatement = (statements: StatementsBlock): boolean => {
@@ -1169,6 +1193,75 @@ const hasBreakStatement = (statements: StatementsBlock): boolean => {
       case 'switch': return statement.cases
         .map(c => c.statements)
         .some(hasBreakStatement);
+    }
+  }
+  return false;
+}
+
+const getAllVariables = (v: RValue): string[] => {
+  switch (v.type) {
+    case "array": return v.values.flatMap(vv => getAllVariables(vv.value));
+    case 'binary': return [...getAllVariables(v.left.value), ...getAllVariables(v.right.value)];
+    case 'cast': return getAllVariables(v.value.value);
+    case 'dotMethod': return [...getAllVariables(v.object.value), ...v.parameters.flatMap(vv => getAllVariables(vv.value))];
+    case 'function': return v.parameters.flatMap(vv => getAllVariables(vv.value));
+    case 'index': return [...getAllVariables(v.value.value), ...getAllVariables(v.parameter.value)];
+    case 'interpolated': return v.inserts.flatMap(vv => getAllVariables(vv.value.value));
+    case 'parenthesis': return getAllVariables(v.value.value);
+    case 'ternary': return [...getAllVariables(v.condition.value), ...getAllVariables(v.ifTrue.value), ...getAllVariables(v.ifFalse.value)];
+    case 'unary': return getAllVariables(v.value.value);
+    case 'variable': return [v.value.value.name];
+  }
+  return [];
+}
+
+const hasVariableModification = (variable: string, statements: StatementsBlock): boolean => {
+  for (const statement of statements) {
+    switch (statement.type) {
+      case 'dotMethod': {
+        const objectValue = statement.object.value;
+        if (objectValue.type === 'variable' && objectValue.value.value.name === variable) return true;
+        break;
+      }
+      case 'if': {
+        const allCases = [
+          statement.ifBlock,
+          statement.elseBlock,
+          ...statement.elifBlocks.map(e => e.statements)
+        ];
+        if (allCases.some(c => hasVariableModification(variable, c))) return true;
+        break;
+      }
+      case 'index': {
+        const objectValue = statement.value.value;
+        if (objectValue.type === 'variable' && objectValue.value.value.name === variable) return true;
+        break;
+      }
+      case 'modification': {
+        const objectValue = statement.name.value;
+        if (objectValue.type === 'variable' && objectValue.value.value.name === variable) return true;
+        if (objectValue.type === 'index') {
+          const objectValue2 = objectValue.value.value;
+          if (objectValue2.type === 'variable' && objectValue2.value.value.name === variable) return true;
+        }
+        if (objectValue.type === 'cast') {
+          const objectValue2 = objectValue.value.value;
+          if (objectValue2.type === 'variable' && objectValue2.value.value.name === variable) return true;
+        }
+        break;
+      }
+      case 'statements': {
+        if (hasVariableModification(variable, statement.statements)) return true;
+        break;
+      }
+      case 'switch': {
+        if (statement.cases.map(c => c.statements).some(c => hasVariableModification(variable, c))) return true;
+        break;
+      }
+      case 'while': {
+        if (hasVariableModification(variable, statement.statements)) return true;
+        break;
+      }
     }
   }
   return false;

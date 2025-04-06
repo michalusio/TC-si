@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.11]
+- Added infinite while loop checks for conditions without variable modifications in loop body
+
 ## [0.6.10]
 - Added simple infinite while loop checks
 - Added warning about casting between different-sized integer arrays
