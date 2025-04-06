@@ -385,7 +385,7 @@ export const getIntSigned = (type: string): boolean => {
   return false;
 };
 
-export const getIntSize = (type: string): bigint => {
+export const getIntMaxValue = (type: string): bigint => {
   const typeValue = getIntBitSize(type);
   return (BigInt(1) << BigInt(typeValue)) - BigInt(1);
 };
@@ -400,6 +400,17 @@ export const getIntBitSize = (type: string): number => {
   }
   return typeValue;
 };
+
+/**
+ * Gets the integer containing type, e.g. U9 -> 16, S8 -> 8, U2048 -> 2048
+ */
+export const getIntContainingType = (type: string): number => {
+  const bitSize = getIntBitSize(type);
+  if (bitSize <= 8) return 8;
+  if (bitSize <= 16) return 16;
+  if (bitSize <= 32) return 32;
+  return Math.ceil(bitSize / 64.0);
+}
 
 /**
  * Checks whether an integer type can be assigned to another integer type

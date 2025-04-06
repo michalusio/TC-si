@@ -14,7 +14,7 @@ import {
 import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { RValue } from "./parsers/types/rvalue";
 import { StaticValue, Environment, sameStaticValue } from "./environment";
-import { composeTypeDefinition, doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntSize, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString } from "./typeSetup";
+import { composeTypeDefinition, doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntMaxValue, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString, getArrayType, getIntContainingType } from "./typeSetup";
 import { explicitReturn, typeCheck } from "./workspace";
 import { clearTimings } from "./parsers/utils";
 
@@ -372,7 +372,7 @@ export const checkVariableExistence = (
             }
           } else {
             const signed = getIntSigned(left)
-            const size = getIntSize(left)
+            const size = getIntMaxValue(left)
 
             if (!signed && scope.value.value.value < 0) {
               diagnostics.push(new SimplexDiagnostic(
@@ -566,14 +566,15 @@ export const checkVariableExistence = (
           nextEnvironments,
           diagnostics
         );
+        const returnsValue = doesReturnValue(document, scope.statements, nextEnvironments, diagnostics, !!scope.definition.returnType.value);
         if (explicitReturn() && scope.definition.returnType.value) {
-          if (!doesReturn(document, scope.statements, nextEnvironments, diagnostics)) {
+          if (returnsValue == null) {
             diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(scope.definition.returnType.start),
                 document.positionAt(scope.definition.returnType.end)
               ),
-              `A function with return type has to return a value`,
+              `A function with return type should return a value`,
               DiagnosticSeverity.Warning
             ));
           }
@@ -1051,37 +1052,60 @@ const checkType = (typeToken: Token<string | null>, document: TextDocument, envi
   return typeName;
 }
 
-const doesReturn = (document: TextDocument, statements: StatementsBlock, environments: Environment[], diagnostics: SimplexDiagnostic[]): boolean => {
+const doesReturnValue = (document: TextDocument, statements: StatementsBlock, environments: Environment[], diagnostics: SimplexDiagnostic[], shouldReturnValue: boolean): 'value' | 'empty' | null => {
   for (let index = statements.length - 1; index >= 0; index--) {
     const statement = statements[index];
     switch (statement.type) {
       case 'return': {
         if (statement.value.value) {
-          return true;
-        } else {
+          return 'value';
+        } else if (shouldReturnValue) {
           diagnostics.push(new SimplexDiagnostic(
             new Range(
               document.positionAt(statement.value.start),
               document.positionAt(statement.value.end)
             ),
             `A return in a function with specified return type must return a value`,
-            DiagnosticSeverity.Warning
+            DiagnosticSeverity.Error
           ));
         }
-        break;
+        return 'empty';
       }
       case 'if': {
-        if (doesReturn(document, statement.ifBlock, environments, diagnostics)
-          && doesReturn(document, statement.elseBlock, environments, diagnostics)
-          && statement.elifBlocks.every(b => doesReturn(document, b.statements, environments, diagnostics))) {
-          return true;
+        const allToCheck = [
+          statement.ifBlock,
+          ...statement.elifBlocks.map(ei => ei.statements),
+          statement.elseBlock
+        ];
+        const overallReturn = allToCheck
+          .map(s => doesReturnValue(document, s, environments, diagnostics, shouldReturnValue))
+          .reduce((curr, next) => {
+            if (next === 'value') return curr;
+            if (next === 'empty') {
+              if (curr === null) return null;
+              return 'empty';
+            }
+            return null;
+          }, 'value');
+        if (overallReturn !== null) {
+          return overallReturn;
         }
         break;
       }
       case 'switch': {
-        if (statement.cases.every(c => doesReturn(document, c.statements, environments, diagnostics))) {
+        const overallReturn = statement.cases
+          .map(c => doesReturnValue(document, c.statements, environments, diagnostics, shouldReturnValue))
+          .reduce((curr, next) => {
+            if (next === 'value') return curr;
+            if (next === 'empty') {
+              if (curr === null) return null;
+              return 'empty';
+            }
+            return null;
+          }, 'value');
+        if (overallReturn !== null) {
           if (statement.cases.some(c => c.caseName.value === 'default')) {
-            return true;
+            return overallReturn;
           }
           const currentEnv = environments[environments.length - 1];
           const switchData = currentEnv.switchTypes.get(`${statement.value.start}_${statement.value.end}`);
@@ -1090,7 +1114,7 @@ const doesReturn = (document: TextDocument, statements: StatementsBlock, environ
             if (enumData) {
               if (switchData[1].every(s => s === undefined)) {
                 if (new Set(switchData[1]).size === enumData.length) {
-                  return true;
+                  return overallReturn;
                 } else {
                   diagnostics.push(new SimplexDiagnostic(
                     new Range(
@@ -1105,7 +1129,46 @@ const doesReturn = (document: TextDocument, statements: StatementsBlock, environ
             }
           }
         }
+        break;
       }
+      case 'while': {
+        const condition = statement.value.value;
+        const overallReturn = doesReturnValue(document, statement.statements, environments, diagnostics, shouldReturnValue);
+        if (condition.type === "variable") {
+          if (condition.value.value.front === '') {
+            if (condition.value.value.name === 'true' && overallReturn === null && !hasBreakStatement(statement.statements)) {
+              diagnostics.push(new SimplexDiagnostic(
+                new Range(
+                  document.positionAt(statement.value.start),
+                  document.positionAt(statement.value.end)
+                ),
+                `This while statement is an infinite loop`,
+                DiagnosticSeverity.Error
+              ));
+              return null;
+            }
+          }
+        }
+        if (overallReturn !== null) return overallReturn;
+        break;
+      }
+    }
+  }
+  return null;
+}
+
+const hasBreakStatement = (statements: StatementsBlock): boolean => {
+  for (const statement of statements) {
+    switch (statement.type) {
+      case 'break': return true;
+      case 'if': return [
+          statement.ifBlock,
+          ...statement.elifBlocks.map(e => e.statements),
+          statement.elseBlock
+        ].some(hasBreakStatement);
+      case 'switch': return statement.cases
+        .map(c => c.statements)
+        .some(hasBreakStatement);
     }
   }
   return false;
@@ -1304,12 +1367,12 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       return transformGenericType(func, paramTypes);
     }
     case 'cast': {
-      getType(rValue.value, document, environments, diagnostics);
-      const newType = typeStringToTypeToken(rValue.to.value);
+      const castedFromType = getType(rValue.value, document, environments, diagnostics);
+      const castedToType = typeStringToTypeToken(rValue.to.value);
 
-      if (isIntegerType(newType) && rValue.value.value.type === 'number') {
-        const signed = getIntSigned(newType)
-        const size = getIntSize(newType)
+      if (isIntegerType(castedToType) && rValue.value.value.type === 'number') {
+        const signed = getIntSigned(castedToType)
+        const size = getIntMaxValue(castedToType)
 
         if (!signed && rValue.value.value.value < 0) {
           diagnostics.push(new SimplexDiagnostic(
@@ -1317,7 +1380,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
               document.positionAt(rValue.value.start),
               document.positionAt(rValue.value.end)
             ),
-            `A negative value cannot be casted to ${typeTokenToTypeString(newType)}`
+            `A negative value cannot be casted to ${typeTokenToTypeString(castedToType)}`
           ));
         }
         if (size < BigInt(rValue.value.value.value)) {
@@ -1326,12 +1389,28 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
               document.positionAt(rValue.value.start),
               document.positionAt(rValue.value.end)
             ),
-            `This value is too large to be casted to ${typeTokenToTypeString(newType)}`
+            `This value is too large to be casted to ${typeTokenToTypeString(castedToType)}`
           ));
         }
       }
-      logg(`Cast: ${newType}`);
-      return newType;
+      const afterIndexFrom = getAfterIndexType(castedFromType, environments);
+      const afterIndexTo = getAfterIndexType(castedToType, environments);
+      if (afterIndexFrom && afterIndexTo && isIntegerType(afterIndexFrom) && isIntegerType(afterIndexTo)) {
+        const containingSizeFrom = getIntContainingType(afterIndexFrom);
+        const containingSizeTo = getIntContainingType(afterIndexTo);
+        if (containingSizeTo > containingSizeFrom) {
+          diagnostics.push(new SimplexDiagnostic(
+            new Range(
+              document.positionAt(rValue.to.start),
+              document.positionAt(rValue.to.end)
+            ),
+            `You are casting to an array with bigger elements - make sure the array's length is a multiple of ${containingSizeTo / containingSizeFrom} to avoid out-of-bounds errors`,
+            DiagnosticSeverity.Warning
+          ));
+        }
+      }
+      logg(`Cast: ${castedToType}`);
+      return castedToType;
     }
     case 'array': {
       const valuesTypes = rValue.values.map(v => [v, getType(v, document, environments, diagnostics)] as const);

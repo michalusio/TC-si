@@ -1,0 +1,15 @@
+def a() Int {
+    var i = 0
+    while true {
+        i = 1
+    }
+}
+
+def b() Int {
+    var x = array(12, <U8>0)
+
+
+
+
+    var y = <[U19]> x
+}

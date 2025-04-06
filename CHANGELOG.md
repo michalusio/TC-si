@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.6.10]
+- Added simple infinite while loop checks
+- Added warning about casting between different-sized integer arrays
+
 ## [0.6.9]
 - Improved inlay hints behavior when switching between files
 
