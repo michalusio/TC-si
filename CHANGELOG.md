@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.12]
+- Made the function calls check the defined assumptions
+
 ## [0.6.11]
 - Added infinite while loop checks for conditions without variable modifications in loop body
 

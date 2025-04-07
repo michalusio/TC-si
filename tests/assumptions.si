@@ -1,0 +1,12 @@
+///assume dot len(a: @Any) Int
+dot do_stuff(a: @Any) Int {
+    return a.len()
+}
+
+
+
+
+def main() {
+    5.do_stuff()
+}
+//# 10:7-10:15 -Error -Cannot find `dot len(a: Int) Int`, which is needed for this function to work

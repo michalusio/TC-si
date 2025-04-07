@@ -66,3 +66,19 @@ def get_input($scratch_space: [Int], tick: Int, $inputs: [Int]) {
         tick == 1 {set_error("0ne")}
         tick < 1 {set_error("less_than_0ne")}
 }
+
+//# 45:9-45:14 -Error -This switch block already has this case specified
+//# 46:9-46:14 -Error -This switch block already has this case specified
+//# 3:16-3:33 -Hint -This value could be replaced with ""
+//# 43:9-43:14 -Hint -This value could be replaced with 1
+//# 44:9-44:14 -Hint -This value could be replaced with -1
+//# 45:9-45:14 -Hint -This value could be replaced with -1
+//# 46:9-46:14 -Hint -This value could be replaced with -1
+//# 47:9-47:14 -Hint -This value could be replaced with 2
+//# 48:9-48:14 -Hint -This value could be replaced with 3
+//# 49:9-49:14 -Hint -This value could be replaced with 4
+//# 51:9-51:16 -Hint -This value could be replaced with 6
+//# 52:9-52:16 -Hint -This value could be replaced with 7
+//# 53:9-53:18 -Hint -This value could be replaced with 8
+//# 54:9-54:17 -Hint -This value could be replaced with 9
+//# 55:9-55:15 -Hint -This value could be replaced with 10

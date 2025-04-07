@@ -5,3 +5,5 @@ def get_input($scratch_space: [Int], tick: Int, $inputs: [Int]) {
     X = 1
 
 }
+
+//# 5:5-5:6 -Error -Cannot assign to 'X' because it is a constant

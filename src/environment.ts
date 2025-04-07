@@ -1,4 +1,4 @@
-import { FunctionKind, OperatorKind, TokenRange, TypeDefinition, VariableKind } from "./parsers/types/ast";
+import { FunctionDefinition, FunctionKind, OperatorKind, TokenRange, TypeDefinition, VariableKind } from "./parsers/types/ast";
 
 export type EnvironmentVariable = {
   type: 'user-defined';
@@ -17,6 +17,7 @@ export type EnvironmentFunction = {
   kind: FunctionKind;
   name: string;
   data: TokenRange;
+  assumptions: FunctionDefinition[];
   parameterTypes: string[];
   returnType: string | null;
 } | {
@@ -33,6 +34,7 @@ export type EnvironmentOperator = {
   kind: OperatorKind;
   name: string;
   data: TokenRange;
+  assumptions: FunctionDefinition[];
   parameterTypes: string[];
   returnType: string;
 } | {

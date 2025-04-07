@@ -14,7 +14,7 @@ import {
 import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { RValue } from "./parsers/types/rvalue";
 import { StaticValue, Environment, sameStaticValue } from "./environment";
-import { composeTypeDefinition, doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntMaxValue, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString, getArrayType, getIntContainingType } from "./typeSetup";
+import { composeTypeDefinition, doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntMaxValue, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString, getArrayType, getIntContainingType, composeFunctionDefinition } from "./typeSetup";
 import { explicitReturn, typeCheck } from "./workspace";
 import { clearTimings } from "./parsers/utils";
 
@@ -225,6 +225,7 @@ export const checkVariableExistence = (
               kind: scope.definition.kind,
               name: scope.definition.name.value,
               data: scope.definition.name,
+              assumptions: scope.definition.assumptions,
               parameterTypes: paramTypes,
               returnType
             });
@@ -259,6 +260,7 @@ export const checkVariableExistence = (
               kind: scope.definition.kind,
               name: scope.definition.name.value,
               data: scope.definition.name,
+              assumptions: scope.definition.assumptions,
               parameterTypes: paramTypes,
               returnType: returnType ?? '?'
             });
@@ -767,6 +769,7 @@ const addAssumptions = (document: TextDocument, environments: Environment[], ass
         kind: a.kind,
         name: a.name.value,
         data: a.name,
+        assumptions: a.assumptions,
         parameterTypes: paramTypes,
         returnType: returnType
       });
@@ -776,6 +779,7 @@ const addAssumptions = (document: TextDocument, environments: Environment[], ass
         kind: a.kind,
         name: a.name.value,
         data: a.name,
+        assumptions: a.assumptions,
         parameterTypes: paramTypes,
         returnType: returnType ?? '?'
       });
@@ -847,16 +851,17 @@ const processRValue = (
       rValue.parameters.forEach(p => {
         results.push(...processRValue(document, environments, p.value));
       });
+      const paramTypes = [rValue.object, ...rValue.parameters].map(p => getType(p, document, environments, results));
       const kind = tryGetDotFunction(
         environments,
         rValue.value.value,
-        [rValue.object, ...rValue.parameters].map(p => getType(p, document, environments, results))
+        paramTypes
       );
       if (kind === null) {
         const closeDot = getCloseDot(
           environments,
           rValue.value.value,
-          [rValue.object, ...rValue.parameters].map(p => getType(p, document, environments, results))
+          paramTypes
         );
         if (closeDot) {
           results.push(
@@ -890,6 +895,28 @@ const processRValue = (
             dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? '?')
           }
         });
+        if (typeCheck() && kind.type === 'user-defined') {
+          kind.assumptions.forEach(a => {
+            const foundAssumption = a.kind === 'def'
+              ? tryGetDefFunction(environments, a.name.value, paramTypes)
+              : (a.kind === 'dot'
+                ? tryGetDotFunction(environments, a.name.value, paramTypes)
+                : (a.kind === 'unary'
+                  ? tryGetUnaryOperator(environments, a.name.value, paramTypes)
+                  : tryGetBinaryOperator(environments, a.name.value, paramTypes)
+                )
+              );
+            if (!foundAssumption) {
+              results.push(new SimplexDiagnostic(
+                new Range(
+                  document.positionAt(rValue.value.start),
+                  document.positionAt(rValue.parameters[rValue.parameters.length - 1]?.end ?? rValue.value.end)
+                ),
+                `Cannot find \`${composeFunctionDefinition(a, paramTypes)}\`, which is needed for this function to work`
+              ));
+            }
+          });
+        }
       }
       break;
     }
@@ -902,10 +929,11 @@ const processRValue = (
         end: (rValue.parameters[rValue.parameters.length - 1]?.end ?? (rValue.value.end + 1)) + 1,
         value: rValue
       }, document, environments, results);
+      const paramTypes = rValue.parameters.map(p => getType(p, document, environments, results));
       const kind = tryGetDefFunction(
         environments,
         rValue.value.value,
-        rValue.parameters.map(p => getType(p, document, environments, results))
+        paramTypes
       );
       if (kind !== null) {
         tokensData.push({
@@ -919,6 +947,28 @@ const processRValue = (
             dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? '?')
           }
         });
+        if (typeCheck() && kind.type === 'user-defined') {
+          kind.assumptions.forEach(a => {
+            const foundAssumption = a.kind === 'def'
+              ? tryGetDefFunction(environments, a.name.value, paramTypes)
+              : (a.kind === 'dot'
+                ? tryGetDotFunction(environments, a.name.value, paramTypes)
+                : (a.kind === 'unary'
+                  ? tryGetUnaryOperator(environments, a.name.value, paramTypes)
+                  : tryGetBinaryOperator(environments, a.name.value, paramTypes)
+                )
+              );
+            if (!foundAssumption) {
+              results.push(new SimplexDiagnostic(
+                new Range(
+                  document.positionAt(rValue.value.start),
+                  document.positionAt(rValue.parameters[rValue.parameters.length - 1]?.end ?? rValue.value.end)
+                ),
+                `Cannot find \`${composeFunctionDefinition(a, paramTypes)}\`, which is needed for this function to work`
+              ));
+            }
+          });
+        }
       }
       break;
     }
@@ -1318,6 +1368,28 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           `Cannot find unary operator ${rValue.operator} for type ${typeTokenToTypeString(type)}`
         ));
       }
+      if (typeCheck() && operator?.type === 'user-defined') {
+        operator.assumptions.forEach(a => {
+          const foundAssumption = a.kind === 'def'
+            ? tryGetDefFunction(environments, a.name.value, [type])
+            : (a.kind === 'dot'
+              ? tryGetDotFunction(environments, a.name.value, [type])
+              : (a.kind === 'unary'
+                ? tryGetUnaryOperator(environments, a.name.value, [type])
+                : tryGetBinaryOperator(environments, a.name.value, [type])
+              )
+            );
+          if (!foundAssumption) {
+            diagnostics.push(new SimplexDiagnostic(
+              new Range(
+                document.positionAt(rValue.value.start),
+                document.positionAt(rValue.value.end)
+              ),
+              `Cannot find \`${composeFunctionDefinition(a, [type])}\`, which is needed for this function to work`
+            ));
+          }
+        });
+      }
       logg(`Unary: ${operator?.returnType ?? '?'}`);
       return transformGenericType(operator, [type]);
     }
@@ -1339,6 +1411,28 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           ),
           `Cannot find binary operator ${rValue.operator} for types ${typeTokenToTypeString(leftType)} and ${typeTokenToTypeString(rightType)}`
         ));
+      }
+      if (typeCheck() && operator?.type === 'user-defined') {
+        operator.assumptions.forEach(a => {
+          const foundAssumption = a.kind === 'def'
+            ? tryGetDefFunction(environments, a.name.value, [leftType, rightType])
+            : (a.kind === 'dot'
+              ? tryGetDotFunction(environments, a.name.value, [leftType, rightType])
+              : (a.kind === 'unary'
+                ? tryGetUnaryOperator(environments, a.name.value, [leftType, rightType])
+                : tryGetBinaryOperator(environments, a.name.value, [leftType, rightType])
+              )
+            );
+          if (!foundAssumption) {
+            diagnostics.push(new SimplexDiagnostic(
+              new Range(
+                document.positionAt(rValue.left.start),
+                document.positionAt(rValue.right.end)
+              ),
+              `Cannot find \`${composeFunctionDefinition(a, [leftType, rightType])}\`, which is needed for this function to work`
+            ));
+          }
+        });
       }
       logg(`Binary: ${operator?.returnType ?? '?'}`);
       return transformGenericType(operator, [leftType, rightType]);
@@ -1401,6 +1495,28 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
         }
       });
+      if (typeCheck() && dotFunction?.type === 'user-defined') {
+        dotFunction.assumptions.forEach(a => {
+          const foundAssumption = a.kind === 'def'
+            ? tryGetDefFunction(environments, a.name.value, paramTypes)
+            : (a.kind === 'dot'
+              ? tryGetDotFunction(environments, a.name.value, paramTypes)
+              : (a.kind === 'unary'
+                ? tryGetUnaryOperator(environments, a.name.value, paramTypes)
+                : tryGetBinaryOperator(environments, a.name.value, paramTypes)
+              )
+            );
+          if (!foundAssumption) {
+            diagnostics.push(new SimplexDiagnostic(
+              new Range(
+                document.positionAt(rValue.value.start),
+                document.positionAt(rValue.parameters[rValue.parameters.length - 1]?.end ?? rValue.value.end)
+              ),
+              `Cannot find \`${composeFunctionDefinition(a, paramTypes)}\`, which is needed for this function to work`
+            ));
+          }
+        });
+      }
       logg(`Dot Method: ${dotFunction?.returnType ?? '?'}`);
       return transformGenericType(dotFunction, paramTypes);
     }
@@ -1456,6 +1572,28 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
         }
       });
+      if (typeCheck() && func?.type === 'user-defined') {
+        func.assumptions.forEach(a => {
+          const foundAssumption = a.kind === 'def'
+            ? tryGetDefFunction(environments, a.name.value, paramTypes)
+            : (a.kind === 'dot'
+              ? tryGetDotFunction(environments, a.name.value, paramTypes)
+              : (a.kind === 'unary'
+                ? tryGetUnaryOperator(environments, a.name.value, paramTypes)
+                : tryGetBinaryOperator(environments, a.name.value, paramTypes)
+              )
+            );
+          if (!foundAssumption) {
+            diagnostics.push(new SimplexDiagnostic(
+              new Range(
+                document.positionAt(rValue.value.start),
+                document.positionAt(rValue.parameters[rValue.parameters.length - 1]?.end ?? rValue.value.end)
+              ),
+              `Cannot find \`${composeFunctionDefinition(a, paramTypes)}\`, which is needed for this function to work`
+            ));
+          }
+        });
+      }
       logg(`Def Method: ${func?.returnType ?? '?'}`);
       return transformGenericType(func, paramTypes);
     }

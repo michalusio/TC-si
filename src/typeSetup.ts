@@ -6,7 +6,7 @@ import type {
   EnvironmentVariable,
 } from "./environment";
 import { levenshtein } from "./levenshtein";
-import { TokenRange, TypeDefinition } from "./parsers/types/ast";
+import { FunctionDefinition, TokenRange, TypeDefinition } from "./parsers/types/ast";
 import { baseEnvironment } from "./storage";
 
 /**
@@ -42,6 +42,10 @@ export const composeTypeDefinition = (definition: TypeDefinition): string => {
     return `${definition.public ? 'pub ' : ''}type ${definition.name.value} <${definition.definition.value.join(', ')}>`;
   }
   return `${definition.public ? 'pub ' : ''}type ${definition.name.value} ${definition.definition.value}`;
+}
+
+export const composeFunctionDefinition = (definition: FunctionDefinition, params: string[]): string => {
+  return `${definition.public ? 'pub ' : ''}${definition.kind} ${definition.name.value}(${definition.parameters.map((p, i) => `${p.name.value.front}${p.name.value.name}: ${params[i]}`)}) ${definition.returnType.value ?? ''}`.trim();
 }
 
 export const tryGetVariable = (
