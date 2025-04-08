@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.13]
+- Added a warning when casting enums to signed integers
+
 ## [0.6.12]
 - Made the function calls check the defined assumptions
 

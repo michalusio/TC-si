@@ -14,7 +14,7 @@ import {
 import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { RValue } from "./parsers/types/rvalue";
 import { StaticValue, Environment, sameStaticValue } from "./environment";
-import { composeTypeDefinition, doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntMaxValue, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString, getArrayType, getIntContainingType, composeFunctionDefinition } from "./typeSetup";
+import { composeTypeDefinition, doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntMaxValue, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString, getArrayType, getIntContainingType, composeFunctionDefinition, isSignedIntegerType } from "./typeSetup";
 import { explicitReturn, typeCheck } from "./workspace";
 import { clearTimings } from "./parsers/utils";
 
@@ -1601,26 +1601,38 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       const castedFromType = getType(rValue.value, document, environments, diagnostics);
       const castedToType = typeStringToTypeToken(rValue.to.value);
 
-      if (isIntegerType(castedToType) && rValue.value.value.type === 'number') {
-        const signed = getIntSigned(castedToType)
-        const size = getIntMaxValue(castedToType)
+      if (isIntegerType(castedToType)) {
+        if (rValue.value.value.type === 'number') {
+          const signed = getIntSigned(castedToType)
+          const size = getIntMaxValue(castedToType)
 
-        if (!signed && rValue.value.value.value < 0) {
-          diagnostics.push(new SimplexDiagnostic(
-            new Range(
-              document.positionAt(rValue.value.start),
-              document.positionAt(rValue.value.end)
-            ),
-            `A negative value cannot be casted to ${typeTokenToTypeString(castedToType)}`
-          ));
+          if (!signed && rValue.value.value.value < 0) {
+            diagnostics.push(new SimplexDiagnostic(
+              new Range(
+                document.positionAt(rValue.value.start),
+                document.positionAt(rValue.value.end)
+              ),
+              `A negative value cannot be casted to ${typeTokenToTypeString(castedToType)}`
+            ));
+          }
+          if (size < BigInt(rValue.value.value.value)) {
+            diagnostics.push(new SimplexDiagnostic(
+              new Range(
+                document.positionAt(rValue.value.start),
+                document.positionAt(rValue.value.end)
+              ),
+              `This value is too large to be casted to ${typeTokenToTypeString(castedToType)}`
+            ));
+          }
         }
-        if (size < BigInt(rValue.value.value.value)) {
+        if (isEnumType(castedFromType, environments) && (castedToType==='Int' || isSignedIntegerType(castedToType))) {
           diagnostics.push(new SimplexDiagnostic(
             new Range(
-              document.positionAt(rValue.value.start),
+              document.positionAt(rValue.to.start - 1),
               document.positionAt(rValue.value.end)
             ),
-            `This value is too large to be casted to ${typeTokenToTypeString(castedToType)}`
+            `You are casting an enum to a signed integer - this will result in some values having negative value!`,
+            DiagnosticSeverity.Warning
           ));
         }
       }
@@ -1632,8 +1644,8 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         if (containingSizeTo > containingSizeFrom) {
           diagnostics.push(new SimplexDiagnostic(
             new Range(
-              document.positionAt(rValue.to.start),
-              document.positionAt(rValue.to.end)
+              document.positionAt(rValue.to.start - 1),
+              document.positionAt(rValue.value.end)
             ),
             `You are casting to an array with bigger elements - make sure the array's length is a multiple of ${containingSizeTo / containingSizeFrom} to avoid out-of-bounds errors`,
             DiagnosticSeverity.Warning

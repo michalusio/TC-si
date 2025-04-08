@@ -3569,6 +3569,20 @@ var getType = (value, document, environments, diagnostics2) => {
           `Cannot find unary operator ${rValue2.operator} for type ${typeTokenToTypeString(type)}`
         ));
       }
+      if (typeCheck() && operator?.type === "user-defined") {
+        operator.assumptions.forEach((a) => {
+          const foundAssumption = a.kind === "def" ? tryGetDefFunction(environments, a.name.value, [type]) : a.kind === "dot" ? tryGetDotFunction(environments, a.name.value, [type]) : a.kind === "unary" ? tryGetUnaryOperator(environments, a.name.value, [type]) : tryGetBinaryOperator(environments, a.name.value, [type]);
+          if (!foundAssumption) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(rValue2.value.start),
+                document.positionAt(rValue2.value.end)
+              ),
+              `Cannot find \`${composeFunctionDefinition(a, [type])}\`, which is needed for this function to work`
+            ));
+          }
+        });
+      }
       logg(`Unary: ${operator?.returnType ?? "?"}`);
       return transformGenericType(operator, [type]);
     }
@@ -3590,6 +3604,20 @@ var getType = (value, document, environments, diagnostics2) => {
           ),
           `Cannot find binary operator ${rValue2.operator} for types ${typeTokenToTypeString(leftType)} and ${typeTokenToTypeString(rightType)}`
         ));
+      }
+      if (typeCheck() && operator?.type === "user-defined") {
+        operator.assumptions.forEach((a) => {
+          const foundAssumption = a.kind === "def" ? tryGetDefFunction(environments, a.name.value, [leftType, rightType]) : a.kind === "dot" ? tryGetDotFunction(environments, a.name.value, [leftType, rightType]) : a.kind === "unary" ? tryGetUnaryOperator(environments, a.name.value, [leftType, rightType]) : tryGetBinaryOperator(environments, a.name.value, [leftType, rightType]);
+          if (!foundAssumption) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(rValue2.left.start),
+                document.positionAt(rValue2.right.end)
+              ),
+              `Cannot find \`${composeFunctionDefinition(a, [leftType, rightType])}\`, which is needed for this function to work`
+            ));
+          }
+        });
       }
       logg(`Binary: ${operator?.returnType ?? "?"}`);
       return transformGenericType(operator, [leftType, rightType]);
@@ -3739,25 +3767,37 @@ var getType = (value, document, environments, diagnostics2) => {
     case "cast": {
       const castedFromType = getType(rValue2.value, document, environments, diagnostics2);
       const castedToType = typeStringToTypeToken(rValue2.to.value);
-      if (isIntegerType(castedToType) && rValue2.value.value.type === "number") {
-        const signed = getIntSigned(castedToType);
-        const size = getIntMaxValue(castedToType);
-        if (!signed && rValue2.value.value.value < 0) {
-          diagnostics2.push(new SimplexDiagnostic(
-            new import_vscode4.Range(
-              document.positionAt(rValue2.value.start),
-              document.positionAt(rValue2.value.end)
-            ),
-            `A negative value cannot be casted to ${typeTokenToTypeString(castedToType)}`
-          ));
+      if (isIntegerType(castedToType)) {
+        if (rValue2.value.value.type === "number") {
+          const signed = getIntSigned(castedToType);
+          const size = getIntMaxValue(castedToType);
+          if (!signed && rValue2.value.value.value < 0) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(rValue2.value.start),
+                document.positionAt(rValue2.value.end)
+              ),
+              `A negative value cannot be casted to ${typeTokenToTypeString(castedToType)}`
+            ));
+          }
+          if (size < BigInt(rValue2.value.value.value)) {
+            diagnostics2.push(new SimplexDiagnostic(
+              new import_vscode4.Range(
+                document.positionAt(rValue2.value.start),
+                document.positionAt(rValue2.value.end)
+              ),
+              `This value is too large to be casted to ${typeTokenToTypeString(castedToType)}`
+            ));
+          }
         }
-        if (size < BigInt(rValue2.value.value.value)) {
+        if (isEnumType(castedFromType, environments) && (castedToType === "Int" || isSignedIntegerType(castedToType))) {
           diagnostics2.push(new SimplexDiagnostic(
             new import_vscode4.Range(
-              document.positionAt(rValue2.value.start),
+              document.positionAt(rValue2.to.start - 1),
               document.positionAt(rValue2.value.end)
             ),
-            `This value is too large to be casted to ${typeTokenToTypeString(castedToType)}`
+            `You are casting an enum to a signed integer - this will result in some values having negative value!`,
+            import_vscode4.DiagnosticSeverity.Warning
           ));
         }
       }
@@ -3769,8 +3809,8 @@ var getType = (value, document, environments, diagnostics2) => {
         if (containingSizeTo > containingSizeFrom) {
           diagnostics2.push(new SimplexDiagnostic(
             new import_vscode4.Range(
-              document.positionAt(rValue2.to.start),
-              document.positionAt(rValue2.to.end)
+              document.positionAt(rValue2.to.start - 1),
+              document.positionAt(rValue2.value.end)
             ),
             `You are casting to an array with bigger elements - make sure the array's length is a multiple of ${containingSizeTo / containingSizeFrom} to avoid out-of-bounds errors`,
             import_vscode4.DiagnosticSeverity.Warning
