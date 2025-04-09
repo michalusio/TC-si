@@ -92,11 +92,11 @@ const regAllocUse = map(
 	seq(
 		str('_reg_alloc_use'),
 		spacesPlus,
-		recoverByAddingChars('value', variableName, true, 'variable')
+		oneOrMany(variableName, seq(spaces, str(','), spaces))
 	),
-	([_, __, value]) => (<RegAllocUseStatement>{
+	([_, __, values]) => (<RegAllocUseStatement>{
 		type: '_reg_alloc_use',
-		value
+		values
 	})
 );
 

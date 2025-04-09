@@ -282,6 +282,7 @@ def arch_get_input($scratch_space: [Int], test: Int) Int {
     var ptext = ""
     var i = 0
     while i <= len {
+        _reg_alloc_use i, len
         if i == cursor {
             ptext += "v"
         } else {

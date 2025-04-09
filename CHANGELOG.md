@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.14]
+- Added support for multiple arguments for `_reg_alloc_use`
+
 ## [0.6.13]
 - Added a warning when casting enums to signed integers
 

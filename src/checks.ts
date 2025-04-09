@@ -504,7 +504,9 @@ export const checkVariableExistence = (
         break;
       }
       case '_reg_alloc_use': {
-        diagnostics.push(...checkVariable(scope.value, document, environments));
+        scope.values.forEach(value => {
+          diagnostics.push(...checkVariable(value, document, environments));
+        });
         break;
       }
       case "function-declaration": {

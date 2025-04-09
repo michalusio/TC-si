@@ -82,7 +82,7 @@ export type StatementsStatement = {
 
 export type RegAllocUseStatement = {
     type: '_reg_alloc_use',
-    value: Token<VariableName>
+    values: Token<VariableName>[]
 };
 
 export type ReturnStatement = {
