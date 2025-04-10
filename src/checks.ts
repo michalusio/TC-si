@@ -1228,6 +1228,14 @@ const doesReturnValue = (document: TextDocument, statements: StatementsBlock, en
         }
         break;
       }
+      case 'statements': {
+        const overallReturn = doesReturnValue(document, statement.statements, environments, diagnostics, shouldReturnValue);
+        if (overallReturn !== null) {
+          returnValue = overallReturn;
+          continue;
+        }
+        break;
+      }
     }
   }
   return returnValue === 'none' ? null : (returnValue ?? null);
@@ -1237,14 +1245,27 @@ const hasBreakStatement = (statements: StatementsBlock): boolean => {
   for (const statement of statements) {
     switch (statement.type) {
       case 'break': return true;
-      case 'if': return [
+      case 'if': {
+        const hasBreak = [
           statement.ifBlock,
           ...statement.elifBlocks.map(e => e.statements),
           statement.elseBlock
         ].some(hasBreakStatement);
-      case 'switch': return statement.cases
-        .map(c => c.statements)
-        .some(hasBreakStatement);
+        if (hasBreak) return true;
+        break;
+      }
+      case 'switch': {
+        const hasBreak = statement.cases
+          .map(c => c.statements)
+          .some(hasBreakStatement);
+          if (hasBreak) return true;
+          break;
+      }
+      case 'statements': {
+        const hasBreak = hasBreakStatement(statement.statements);
+        if (hasBreak) return true;
+        break;
+      }
     }
   }
   return false;

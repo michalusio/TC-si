@@ -1477,11 +1477,11 @@ var regAllocUse = (0, import_parser_combinators6.map)(
   (0, import_parser_combinators6.seq)(
     (0, import_parser_combinators6.str)("_reg_alloc_use"),
     import_parser_combinators6.spacesPlus,
-    recoverByAddingChars("value", variableName, true, "variable")
+    (0, import_parser_combinators6.oneOrMany)(variableName, (0, import_parser_combinators6.seq)(import_parser_combinators6.spaces, (0, import_parser_combinators6.str)(","), import_parser_combinators6.spaces))
   ),
-  ([_, __, value]) => ({
+  ([_, __, values]) => ({
     type: "_reg_alloc_use",
-    value
+    values
   })
 );
 var asmDeclaration = (0, import_parser_combinators6.map)(
@@ -2733,7 +2733,9 @@ var checkVariableExistence = (document, result, environments, diagnostics2) => {
         break;
       }
       case "_reg_alloc_use": {
-        diagnostics2.push(...checkVariable(scope.value, document, environments));
+        scope.values.forEach((value) => {
+          diagnostics2.push(...checkVariable(value, document, environments));
+        });
         break;
       }
       case "function-declaration": {
@@ -3419,6 +3421,14 @@ var doesReturnValue = (document, statements, environments, diagnostics2, shouldR
         }
         break;
       }
+      case "statements": {
+        const overallReturn = doesReturnValue(document, statement.statements, environments, diagnostics2, shouldReturnValue);
+        if (overallReturn !== null) {
+          returnValue = overallReturn;
+          continue;
+        }
+        break;
+      }
     }
   }
   return returnValue === "none" ? null : returnValue ?? null;
@@ -3428,14 +3438,25 @@ var hasBreakStatement = (statements) => {
     switch (statement.type) {
       case "break":
         return true;
-      case "if":
-        return [
+      case "if": {
+        const hasBreak = [
           statement.ifBlock,
           ...statement.elifBlocks.map((e) => e.statements),
           statement.elseBlock
         ].some(hasBreakStatement);
-      case "switch":
-        return statement.cases.map((c) => c.statements).some(hasBreakStatement);
+        if (hasBreak) return true;
+        break;
+      }
+      case "switch": {
+        const hasBreak = statement.cases.map((c) => c.statements).some(hasBreakStatement);
+        if (hasBreak) return true;
+        break;
+      }
+      case "statements": {
+        const hasBreak = hasBreakStatement(statement.statements);
+        if (hasBreak) return true;
+        break;
+      }
     }
   }
   return false;

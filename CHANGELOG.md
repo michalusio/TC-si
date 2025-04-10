@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.15]
+- Fixed issue with nested blocks not checking for returns, breaks and infinite loops
+
 ## [0.6.14]
 - Added support for multiple arguments for `_reg_alloc_use`
 

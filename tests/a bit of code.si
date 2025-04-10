@@ -9,6 +9,12 @@ def on_reset($scratch_space: [Int], test: Int) {
     if len > 12 {
         exit(1)
     }
+
+    {
+        while len > 0 {
+            print(len)
+        }
+    }
 }
 
 ///assume dot do_magic(a: @Any, b: @Any) String
@@ -67,19 +73,20 @@ def get_input($scratch_space: [Int], tick: Int, $inputs: [Int]) {
         tick < 1 {set_error("less_than_0ne")}
 }
 
-//# 45:9-45:14 -Error -This switch block already has this case specified
-//# 46:9-46:14 -Error -This switch block already has this case specified
-//# 7:14-7:20 -Error -Cannot find `dot do_magic(a: Int,b: Int) String`, which is needed for this function to work
 //# 3:16-3:33 -Hint -This value could be replaced with ""
-//# 43:9-43:14 -Hint -This value could be replaced with 1
-//# 44:9-44:14 -Hint -This value could be replaced with -1
-//# 45:9-45:14 -Hint -This value could be replaced with -1
-//# 46:9-46:14 -Hint -This value could be replaced with -1
-//# 47:9-47:14 -Hint -This value could be replaced with 2
-//# 48:9-48:14 -Hint -This value could be replaced with 3
-//# 49:9-49:14 -Hint -This value could be replaced with 4
-//# 51:9-51:16 -Hint -This value could be replaced with 6
-//# 52:9-52:16 -Hint -This value could be replaced with 7
-//# 53:9-53:18 -Hint -This value could be replaced with 8
-//# 54:9-54:17 -Hint -This value could be replaced with 9
-//# 55:9-55:15 -Hint -This value could be replaced with 10
+//# 7:14-7:20 -Error -Cannot find `dot do_magic(a: Int,b: Int) String`, which is needed for this function to work
+//# 14:15-14:23 -Warning -This while statement is an infinite loop (no condition modification inside, no returns or breaks)
+//# 49:9-49:14 -Hint -This value could be replaced with 1
+//# 50:9-50:14 -Hint -This value could be replaced with -1
+//# 51:9-51:14 -Hint -This value could be replaced with -1
+//# 51:9-51:14 -Error -This switch block already has this case specified
+//# 52:9-52:14 -Hint -This value could be replaced with -1
+//# 52:9-52:14 -Error -This switch block already has this case specified
+//# 53:9-53:14 -Hint -This value could be replaced with 2
+//# 54:9-54:14 -Hint -This value could be replaced with 3
+//# 55:9-55:14 -Hint -This value could be replaced with 4
+//# 57:9-57:16 -Hint -This value could be replaced with 6
+//# 58:9-58:16 -Hint -This value could be replaced with 7
+//# 59:9-59:18 -Hint -This value could be replaced with 8
+//# 60:9-60:17 -Hint -This value could be replaced with 9
+//# 61:9-61:15 -Hint -This value could be replaced with 10
