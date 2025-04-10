@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.16]
+- Fixed issue with renaming function sometimes removing function arguments
+
 ## [0.6.15]
 - Fixed issue with nested blocks not checking for returns, breaks and infinite loops
 

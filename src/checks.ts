@@ -889,10 +889,7 @@ const processRValue = (
       } else {
         tokensData.push({
           definition: kind.data,
-          position: {
-            start: rValue.value.start,
-            end: rValue.parameters.reduce((c, n) => Math.max(c, n.end), rValue.value.end + 1) + 1
-          },
+          position: rValue.value,
           info: {
             dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? '?')
           }
@@ -940,10 +937,7 @@ const processRValue = (
       if (kind !== null) {
         tokensData.push({
           definition: kind.data,
-          position: {
-            start: rValue.value.start,
-            end: rValue.parameters.reduce((c, n) => Math.max(c, n.end), rValue.value.end + 1) + 1
-          },
+          position: rValue.value,
           info: {
             type: kind.returnType ?? undefined,
             dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? '?')
