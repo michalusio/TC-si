@@ -368,13 +368,32 @@ export const languageParser = map(
 	exhaust(
 		seq(
 			spaces,
-			any(
+			any<void | string | Statement>(
 				eof,
 				blockComment,
 				newline,
+				asmDeclaration,
 				callConvDeclaration,
 				externDeclaration,
+				regAllocUse,
+				returnStatement,
+				breakStatement,
+				continueStatement,
+				whileBlock(),
+				ifBlock(),
+				switchBlock(),
 				map(seq(topmostVariableDeclaration, any(newline, lineComment, spacesPlus, eof)), ([v]) => v.value),
+				map(
+					between(
+						lcb,
+						statementsBlock(),
+						seq(wspaces, rstr('}'))
+					),
+					(statements) => (<StatementsStatement>{
+						type: 'statements',
+						statements
+					})
+				),
 				map(
 					seq(
 						functionDeclaration,
@@ -391,9 +410,12 @@ export const languageParser = map(
 					})
 				),
 				lineComment,
-				map(seq(typeDeclaration, any(newline, lineComment, spacesPlus, eof)), ([v]) => v)
+				map(seq(typeDeclaration, any(newline, lineComment, spacesPlus, eof)), ([v]) => v),
+				map(seq(variableDeclaration, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
+				map(seq(variableModification, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
+				map(seq(rValue(), any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value)
 			)
 		)
 	),
-	(data) => data.map(d => d[1]).filter((d): d is VariableDeclaration | FunctionDeclaration | TypeDefinition => !!d && typeof d !== 'string')
+	(data) => data.map(d => d[1]).filter((d): d is Statement => !!d && typeof d !== 'string')
 );

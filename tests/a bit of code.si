@@ -73,6 +73,12 @@ def get_input($scratch_space: [Int], tick: Int, $inputs: [Int]) {
         tick < 1 {set_error("less_than_0ne")}
 }
 
+var xx = 12
+while xx > 1 {
+    print(xx)
+    xx -= 1
+}
+
 //# 3:16-3:33 -Hint -This value could be replaced with ""
 //# 7:14-7:20 -Error -Cannot find `dot do_magic(a: Int,b: Int) String`, which is needed for this function to work
 //# 14:15-14:23 -Warning -This while statement is an infinite loop (no condition modification inside, no returns or breaks)

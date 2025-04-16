@@ -1749,9 +1749,28 @@ var languageParser = (0, import_parser_combinators6.map)(
         eof,
         blockComment,
         newline,
+        asmDeclaration,
         callConvDeclaration,
         externDeclaration,
+        regAllocUse,
+        returnStatement,
+        breakStatement,
+        continueStatement,
+        whileBlock(),
+        ifBlock(),
+        switchBlock(),
         (0, import_parser_combinators6.map)((0, import_parser_combinators6.seq)(topmostVariableDeclaration, (0, import_parser_combinators6.any)(newline, lineComment, import_parser_combinators6.spacesPlus, eof)), ([v]) => v.value),
+        (0, import_parser_combinators6.map)(
+          (0, import_parser_combinators6.between)(
+            lcb,
+            statementsBlock(),
+            (0, import_parser_combinators6.seq)(import_parser_combinators6.wspaces, rstr("}"))
+          ),
+          (statements) => ({
+            type: "statements",
+            statements
+          })
+        ),
         (0, import_parser_combinators6.map)(
           (0, import_parser_combinators6.seq)(
             functionDeclaration,
@@ -1768,7 +1787,10 @@ var languageParser = (0, import_parser_combinators6.map)(
           })
         ),
         lineComment,
-        (0, import_parser_combinators6.map)((0, import_parser_combinators6.seq)(typeDeclaration, (0, import_parser_combinators6.any)(newline, lineComment, import_parser_combinators6.spacesPlus, eof)), ([v]) => v)
+        (0, import_parser_combinators6.map)((0, import_parser_combinators6.seq)(typeDeclaration, (0, import_parser_combinators6.any)(newline, lineComment, import_parser_combinators6.spacesPlus, eof)), ([v]) => v),
+        (0, import_parser_combinators6.map)((0, import_parser_combinators6.seq)(variableDeclaration, (0, import_parser_combinators6.any)(newline, lineComment, lookaround((0, import_parser_combinators6.seq)(import_parser_combinators6.spaces, (0, import_parser_combinators6.str)("}"))))), ([v]) => v.value),
+        (0, import_parser_combinators6.map)((0, import_parser_combinators6.seq)(variableModification, (0, import_parser_combinators6.any)(newline, lineComment, lookaround((0, import_parser_combinators6.seq)(import_parser_combinators6.spaces, (0, import_parser_combinators6.str)("}"))))), ([v]) => v.value),
+        (0, import_parser_combinators6.map)((0, import_parser_combinators6.seq)(rValue(), (0, import_parser_combinators6.any)(newline, lineComment, lookaround((0, import_parser_combinators6.seq)(import_parser_combinators6.spaces, (0, import_parser_combinators6.str)("}"))))), ([v]) => v.value)
       )
     )
   ),
@@ -3107,10 +3129,7 @@ var processRValue = (document, environments, rValue2) => {
       } else {
         tokensData.push({
           definition: kind.data,
-          position: {
-            start: rValue2.value.start,
-            end: rValue2.parameters.reduce((c, n) => Math.max(c, n.end), rValue2.value.end + 1) + 1
-          },
+          position: rValue2.value,
           info: {
             dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? "?")
           }
@@ -3150,10 +3169,7 @@ var processRValue = (document, environments, rValue2) => {
       if (kind !== null) {
         tokensData.push({
           definition: kind.data,
-          position: {
-            start: rValue2.value.start,
-            end: rValue2.parameters.reduce((c, n) => Math.max(c, n.end), rValue2.value.end + 1) + 1
-          },
+          position: rValue2.value,
           info: {
             type: kind.returnType ?? void 0,
             dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? "?")

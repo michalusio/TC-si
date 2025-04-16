@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.17]
+- Enabled parsing of the top level statements just like statements inside a function
+
 ## [0.6.16]
 - Fixed issue with renaming function sometimes removing function arguments
 

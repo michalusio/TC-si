@@ -124,4 +124,4 @@ export type IfStatement = {
     elseBlock: StatementsBlock
 };
 
-export type ParserOutput = (VariableDeclaration | TypeDefinition | FunctionDeclaration)[];
+export type ParserOutput = Statement[];
