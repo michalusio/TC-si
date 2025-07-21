@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.18]
+- Fixed matching of generic types between the function and it's assumptions
+
 ## [0.6.17]
 - Enabled parsing of the top level statements just like statements inside a function
 

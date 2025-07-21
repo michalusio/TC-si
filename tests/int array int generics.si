@@ -1,0 +1,13 @@
+pub def test(this: [Int]) Int {
+    return this.find_new(5)
+}
+
+/// assume binary ==(a: @Type, b: @Type) Bool
+pub dot find_new(this: [@Type], value: @Type) Int {
+    var i = 0
+    while (i < this.len()) && !(this[i] == value) {
+        i += 1
+    }
+    if i == this.len() { return -1 }
+    return i
+}

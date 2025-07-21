@@ -8,7 +8,7 @@ lerna-debug.log*
 .pnpm-debug.log*
 
 lib.si
-./dist-test
+dist-test/
 
 # VSIX
 *.vsix

@@ -6,7 +6,8 @@ import type {
   EnvironmentVariable,
 } from "./environment";
 import { levenshtein } from "./levenshtein";
-import { FunctionDefinition, TokenRange, TypeDefinition } from "./parsers/types/ast";
+import { FunctionDefinition, Parameter, Token, TokenRange, TypeDefinition } from "./parsers/types/ast";
+import { RValue } from "./parsers/types/rvalue";
 import { baseEnvironment } from "./storage";
 
 /**
@@ -45,7 +46,7 @@ export const composeTypeDefinition = (definition: TypeDefinition): string => {
 }
 
 export const composeFunctionDefinition = (definition: FunctionDefinition, params: string[]): string => {
-  return `${definition.public ? 'pub ' : ''}${definition.kind} ${definition.name.value}(${definition.parameters.map((p, i) => `${p.name.value.front}${p.name.value.name}: ${params[i]}`)}) ${definition.returnType.value ?? ''}`.trim();
+  return `${definition.public ? 'pub ' : ''}${definition.kind} ${definition.name.value}(${definition.parameters.map((p, i) => `${p.name.value.front}${p.name.value.name}: ${typeTokenToTypeString(params[i])}`).join(', ')}) ${definition.returnType.value ?? ''}`.trim();
 }
 
 export const tryGetVariable = (
@@ -283,6 +284,27 @@ export const getArrayType = (
   return arrayTypeName;
 };
 
+export const getParamMapping = (parameters: string[], paramTypes: string[]): Partial<Record<string, string>> => {
+  const result: Partial<Record<string, string>> = {};
+  parameters.forEach((p, i) => {
+    const arrayWraps = howBaseTypeMatchesForGeneric(p, paramTypes[i]);
+    if (arrayWraps == null) return;
+    if (arrayWraps[1].startsWith('@')) {
+      result[arrayWraps[1]] = arrayWraps[2];
+    }
+  });
+  return result;
+}
+
+export const applyParamMapping = (parameters: Parameter[], paramMap: Partial<Record<string, string>>): string[] => {
+  return parameters.map(p => {
+    const [ins, inner] = getInnerArrayType(typeStringToTypeToken(p.type.value));
+    const mapped = paramMap[inner];
+    if (!mapped) return p.type.value;
+    return `${'['.repeat(ins)}${mapped}${']'.repeat(ins)}`;
+  });
+}
+
 export const tryGetType = (
   environments: Environment[],
   name: string
@@ -349,6 +371,17 @@ export const transformGenericType = (
   return "?";
 };
 
+/**
+ * Checks how type t1 matches to t2.
+ * 
+ * 0 - they are the same
+ * 
+ * +1, +2, ..., +N - t2 is t1 arrayed N times
+ * 
+ * -1, -2, ..., -N - t1 is t2 arrayed N times
+ * 
+ * null - they are a different type
+ */
 export const howBaseTypeMatches = (t1: string, t2: string): number | null => {
   if (t1 === t2) return 0;
   if (t1.startsWith("*")) {
@@ -361,6 +394,42 @@ export const howBaseTypeMatches = (t1: string, t2: string): number | null => {
   }
   return null;
 };
+
+/**
+ * Checks how type t1 matches to t2. t1 can be a generic type.
+ * 
+ * 0 - they are the same
+ * 
+ * +1, +2, ..., +N - t2 is t1 arrayed N times
+ * 
+ * -1, -2, ..., -N - t1 is t2 arrayed N times
+ * 
+ * null - they are a different type
+ */
+export const howBaseTypeMatchesForGeneric = (t1: string, t2: string): [number, string, string] | null => {
+  if (t1 === t2) return [0, t1, t2];
+  if (t1.startsWith("*")) {
+    const r = howBaseTypeMatchesForGeneric(t1.slice(1), t2);
+    return r != null ? [r[0] - 1, r[1], r[2]] : r;
+  }
+  if (t2.startsWith("*")) {
+    const r = howBaseTypeMatchesForGeneric(t1, t2.slice(1));
+    return r != null ? [r[0] + 1, r[1], r[2]] : r;
+  }
+  if (t1.startsWith('@')) {
+    // t1 is a generic type, so anything in t2 goes.
+    return [0, t1, t2];
+  }
+  return null;
+};
+
+export const getInnerArrayType = (t: string): [number, string] => {
+  if (t.startsWith('*')) {
+    const [a, b] = getInnerArrayType(t.slice(1));
+    return [a + 1, b];
+  }
+  return [0, t];
+}
 
 export const getAfterIndexType = (
   type: string,

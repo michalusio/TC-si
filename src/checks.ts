@@ -14,7 +14,7 @@ import {
 import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { RValue } from "./parsers/types/rvalue";
 import { StaticValue, Environment, sameStaticValue } from "./environment";
-import { composeTypeDefinition, doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntMaxValue, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString, getArrayType, getIntContainingType, composeFunctionDefinition, isSignedIntegerType } from "./typeSetup";
+import { composeTypeDefinition, doesTypeMatch, filterOnlyConst, getAfterIndexType, getCloseDef, getCloseDot, getCloseType, getCloseVariable, getDotFunctionsFor, getIntSigned, getIntMaxValue, isEnumType, isIntAssignableTo, isIntegerType, transformGenericType, tryGetBinaryOperator, tryGetDefFunction, tryGetDotFunction, tryGetReturnType, tryGetType, tryGetUnaryOperator, tryGetVariable, typeStringToTypeToken, typeTokenToTypeString, getArrayType, getIntContainingType, composeFunctionDefinition, isSignedIntegerType, getParamMapping, applyParamMapping } from "./typeSetup";
 import { explicitReturn, typeCheck } from "./workspace";
 import { clearTimings } from "./parsers/utils";
 
@@ -895,14 +895,19 @@ const processRValue = (
           }
         });
         if (typeCheck() && kind.type === 'user-defined') {
+
+          const paramMapping = getParamMapping(kind.parameterTypes, paramTypes);
+
           kind.assumptions.forEach(a => {
+            const assumptionParamTypes = applyParamMapping(a.parameters, paramMapping);
+
             const foundAssumption = a.kind === 'def'
-              ? tryGetDefFunction(environments, a.name.value, paramTypes)
+              ? tryGetDefFunction(environments, a.name.value, assumptionParamTypes)
               : (a.kind === 'dot'
-                ? tryGetDotFunction(environments, a.name.value, paramTypes)
+                ? tryGetDotFunction(environments, a.name.value, assumptionParamTypes)
                 : (a.kind === 'unary'
-                  ? tryGetUnaryOperator(environments, a.name.value, paramTypes)
-                  : tryGetBinaryOperator(environments, a.name.value, paramTypes)
+                  ? tryGetUnaryOperator(environments, a.name.value, assumptionParamTypes)
+                  : tryGetBinaryOperator(environments, a.name.value, assumptionParamTypes)
                 )
               );
             if (!foundAssumption) {
@@ -911,7 +916,7 @@ const processRValue = (
                   document.positionAt(rValue.value.start),
                   document.positionAt(rValue.parameters[rValue.parameters.length - 1]?.end ?? rValue.value.end)
                 ),
-                `Cannot find \`${composeFunctionDefinition(a, paramTypes)}\`, which is needed for this function to work`
+                `Cannot find \`${composeFunctionDefinition(a, assumptionParamTypes)}\`, which is needed for this function to work`
               ));
             }
           });
@@ -944,14 +949,18 @@ const processRValue = (
           }
         });
         if (typeCheck() && kind.type === 'user-defined') {
+          const paramMapping = getParamMapping(kind.parameterTypes, paramTypes);
+
           kind.assumptions.forEach(a => {
+            const assumptionParamTypes = applyParamMapping(a.parameters, paramMapping);
+
             const foundAssumption = a.kind === 'def'
-              ? tryGetDefFunction(environments, a.name.value, paramTypes)
+              ? tryGetDefFunction(environments, a.name.value, assumptionParamTypes)
               : (a.kind === 'dot'
-                ? tryGetDotFunction(environments, a.name.value, paramTypes)
+                ? tryGetDotFunction(environments, a.name.value, assumptionParamTypes)
                 : (a.kind === 'unary'
-                  ? tryGetUnaryOperator(environments, a.name.value, paramTypes)
-                  : tryGetBinaryOperator(environments, a.name.value, paramTypes)
+                  ? tryGetUnaryOperator(environments, a.name.value, assumptionParamTypes)
+                  : tryGetBinaryOperator(environments, a.name.value, assumptionParamTypes)
                 )
               );
             if (!foundAssumption) {
@@ -960,7 +969,7 @@ const processRValue = (
                   document.positionAt(rValue.value.start),
                   document.positionAt(rValue.parameters[rValue.parameters.length - 1]?.end ?? rValue.value.end)
                 ),
-                `Cannot find \`${composeFunctionDefinition(a, paramTypes)}\`, which is needed for this function to work`
+                `Cannot find \`${composeFunctionDefinition(a, assumptionParamTypes)}\`, which is needed for this function to work`
               ));
             }
           });
@@ -1513,14 +1522,18 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         }
       });
       if (typeCheck() && dotFunction?.type === 'user-defined') {
+        const paramMapping = getParamMapping(dotFunction.parameterTypes, paramTypes);
+
         dotFunction.assumptions.forEach(a => {
+          const assumptionParamTypes = applyParamMapping(a.parameters, paramMapping);
+
           const foundAssumption = a.kind === 'def'
-            ? tryGetDefFunction(environments, a.name.value, paramTypes)
+            ? tryGetDefFunction(environments, a.name.value, assumptionParamTypes)
             : (a.kind === 'dot'
-              ? tryGetDotFunction(environments, a.name.value, paramTypes)
+              ? tryGetDotFunction(environments, a.name.value, assumptionParamTypes)
               : (a.kind === 'unary'
-                ? tryGetUnaryOperator(environments, a.name.value, paramTypes)
-                : tryGetBinaryOperator(environments, a.name.value, paramTypes)
+                ? tryGetUnaryOperator(environments, a.name.value, assumptionParamTypes)
+                : tryGetBinaryOperator(environments, a.name.value, assumptionParamTypes)
               )
             );
           if (!foundAssumption) {
@@ -1529,7 +1542,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
                 document.positionAt(rValue.value.start),
                 document.positionAt(rValue.parameters[rValue.parameters.length - 1]?.end ?? rValue.value.end)
               ),
-              `Cannot find \`${composeFunctionDefinition(a, paramTypes)}\`, which is needed for this function to work`
+              `Cannot find \`${composeFunctionDefinition(a, assumptionParamTypes)}\`, which is needed for this function to work`
             ));
           }
         });
@@ -1590,14 +1603,18 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         }
       });
       if (typeCheck() && func?.type === 'user-defined') {
+        const paramMapping = getParamMapping(func.parameterTypes, paramTypes);
+
         func.assumptions.forEach(a => {
+          const assumptionParamTypes = applyParamMapping(a.parameters, paramMapping);
+
           const foundAssumption = a.kind === 'def'
-            ? tryGetDefFunction(environments, a.name.value, paramTypes)
+            ? tryGetDefFunction(environments, a.name.value, assumptionParamTypes)
             : (a.kind === 'dot'
-              ? tryGetDotFunction(environments, a.name.value, paramTypes)
+              ? tryGetDotFunction(environments, a.name.value, assumptionParamTypes)
               : (a.kind === 'unary'
-                ? tryGetUnaryOperator(environments, a.name.value, paramTypes)
-                : tryGetBinaryOperator(environments, a.name.value, paramTypes)
+                ? tryGetUnaryOperator(environments, a.name.value, assumptionParamTypes)
+                : tryGetBinaryOperator(environments, a.name.value, assumptionParamTypes)
               )
             );
           if (!foundAssumption) {
@@ -1606,7 +1623,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
                 document.positionAt(rValue.value.start),
                 document.positionAt(rValue.parameters[rValue.parameters.length - 1]?.end ?? rValue.value.end)
               ),
-              `Cannot find \`${composeFunctionDefinition(a, paramTypes)}\`, which is needed for this function to work`
+              `Cannot find \`${composeFunctionDefinition(a, assumptionParamTypes)}\`, which is needed for this function to work`
             ));
           }
         });
