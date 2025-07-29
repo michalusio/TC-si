@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.6.19]
+- Changed `rol`, `ror` and `asr_64` to be functions instead of binary operators
+
 ## [0.6.18]
 - Fixed matching of generic types between the function and it's assumptions
 

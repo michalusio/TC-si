@@ -85,6 +85,7 @@ const generateMockDocument = (path: string, text: string, textSplitted: string[]
         isDirty: false,
         isClosed: false,
         eol: EndOfLine.LF,
+        encoding: 'utf8',
         lineCount: text.split("\n").length,
         save: () => Promise.resolve(false),
         lineAt: (lineOrPosition: number | Position) => {

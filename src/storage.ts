@@ -72,9 +72,6 @@ export const precedence: Record<ParseReturnType<typeof binaryOperator>, number> 
 	'*': 7,
 	'/': 7,
 	'%': 7,
-	'ror': 7,
-	'rol': 7,
 	'<<': 7,
-	'>>': 7,
-	'asr': 7
+	'>>': 7
 }

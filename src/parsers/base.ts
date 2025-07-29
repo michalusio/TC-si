@@ -112,9 +112,6 @@ export const binaryOperator = time('operators', any(
   regex(/\/(?!\/)/, "/"),
   str("<u"),
   str("<s"),
-  str("rol"),
-  str("ror"),
-  str("asr"),
   ...operatableParsers.map((o, i) => operatable[i] === '?'
     ? fail<string>('Cannot use `?` as the first term of operator')
     : map(

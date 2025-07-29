@@ -33,25 +33,6 @@ const addIntOperations = (iType: string) => {
     [iType, iType]
   );
   addBinary(
-    "rol",
-    "Rotates the first integer left by the second integers value",
-    iType,
-    [iType, iType]
-  );
-  addBinary(
-    "ror",
-    "Rotates the first integer right by the second integers value",
-    iType,
-    [iType, iType]
-  );
-  addBinary(
-    "asr",
-    "Arithmetically shifts the first integer right by the second integers value",
-    iType,
-    [iType, iType]
-  );
-
-  addBinary(
     ">",
     "Checks if the first integer is larger than the second",
     boolType,
@@ -131,4 +112,7 @@ addDef("min", "pub def min(a: Int, b: Int) Int {", intType, [intType, intType]);
 addDef("max", "pub def max(a: Int, b: Int) Int {", intType, [intType, intType]);
 addDef("clz", "pub def clz(value: Int) Int {", intType, [intType]);
 addDef("ctz", "pub def ctz(value: Int) Int {", intType, [intType]);
+addDef("rol", "pub def rol(a: Int, b: Int) Int {", intType, [intType, intType]);
+addDef("ror", "pub def ror(a: Int, b: Int) Int {", intType, [intType, intType]);
+addDef("asr_64", "pub def asr_64(a: Int, b: Int) Int {", intType, [intType, intType]);
 addDef("log10", "pub def log10(a: Int) Int {", intType, [intType]);
