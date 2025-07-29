@@ -1,6 +1,6 @@
 # Change Log
 
-## [0.6.19]
+## [0.7.0]
 - Changed `rol`, `ror` and `asr_64` to be functions instead of binary operators
 
 ## [0.6.18]
