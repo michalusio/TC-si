@@ -60,7 +60,7 @@ const returnStatement = map(
 			between(
 				spacesPlus,
 				recoverByAddingChars('0', map(rValue(), v => v.value), true, 'return value'),
-				any(newline, lineComment, spacesPlus)
+				any(newline, lineComment, spacesPlus, lookaround(str('}')))
 			)
 		))
 	),

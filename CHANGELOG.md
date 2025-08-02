@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.7.1]
+- Fixed returns not being parsed correctly when they had a closing bracket directly after them
+
 ## [0.7.0]
 - Changed `rol`, `ror` and `asr_64` to be functions instead of binary operators
 

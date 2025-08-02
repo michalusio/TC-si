@@ -173,6 +173,9 @@ export function token<T>(parser: Parser<T>): Parser<Token<T>> {
   }
 }
 
+/**
+ * Checks whether the parser parses successfully, but doesn't move the cursor forward
+ */
 export function lookaround<T>(parser: Parser<T>): Parser<void> {
   return (ctx) => {
     const result = parser(ctx);

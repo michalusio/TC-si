@@ -1,0 +1,273 @@
+
+const INPUT = 0
+const SOURCE = 1
+const DEST = 2
+const HEIGHT = 3
+const MAG_POS = 4
+const MAG_LIFTED = 5
+const FAIL = 6
+const PLATES = 7
+
+def redraw(scratch_space: [Int]) {
+
+    if scratch_space[FAIL] == 1 {
+
+        ui_set_hidden("0", true)
+        ui_set_hidden("1", true)
+        ui_set_hidden("2", true)
+        ui_set_hidden("3", true)
+        ui_set_hidden("4", true)
+        ui_set_hidden("magnet", true)
+        ui_set_hidden("error_text", false)
+
+    }
+
+    ui_set_hidden("2", true)
+    ui_set_hidden("3", true)
+    ui_set_hidden("4", true)
+
+    let plate_0 = scratch_space[PLATES + 0]
+    let plate_1 = scratch_space[PLATES + 1]
+    let plate_2 = scratch_space[PLATES + 2]
+    let plate_3 = scratch_space[PLATES + 3]
+    let plate_4 = scratch_space[PLATES + 4]
+
+    var y_pos = [205, 205, 205]
+
+    if plate_4 != -1 { 
+
+        ui_set_position("4", -200 + 200 * plate_4, y_pos[plate_4])
+        ui_set_hidden("4", false)
+        y_pos[plate_4] -= 24
+
+    }
+
+    if plate_3 != -1 { 
+
+        ui_set_position("3", -200 + 200 * plate_3, y_pos[plate_3])
+        ui_set_hidden("3", false)
+        y_pos[plate_3] -= 24
+
+    }
+
+    if plate_2 != -1 { 
+
+        ui_set_position("2", -200 + 200 * plate_2, y_pos[plate_2])
+        ui_set_hidden("2", false)
+        y_pos[plate_2] -= 24
+
+    }
+
+    ui_set_position("1", -200 + 200 * plate_1, y_pos[plate_1])
+    y_pos[plate_1] -= 24
+    ui_set_position("0", -200 + 200 * plate_0, y_pos[plate_0])
+
+    
+    // Magnet
+
+    ui_set_position("magnet", -200 + 200 * scratch_space[MAG_POS], 0)
+
+    if scratch_space[MAG_LIFTED] != -1 {
+
+        let x = -200 + 200 * scratch_space[MAG_POS]
+
+        switch scratch_space[MAG_LIFTED] 
+            0 { ui_set_position("0", x, 80) }
+            1 { ui_set_position("1", x, 80) }
+            2 { ui_set_position("2", x, 80) }
+            3 { ui_set_position("3", x, 80) }
+            4 { ui_set_position("4", x, 80) }
+
+    }
+
+}
+
+def level_input($scratch_space: [Int], input: Int) {
+    
+    switch input
+        0 {
+
+            scratch_space[MAG_POS] = 0
+
+        }
+        1 {
+
+            scratch_space[MAG_POS] = 1
+
+        }
+        2 {
+
+            scratch_space[MAG_POS] = 2
+
+        }
+        5 {
+
+            if scratch_space[MAG_LIFTED] == -1 {
+
+                let pos = scratch_space[MAG_POS]
+
+                var i = 0
+                while i < 5 {
+
+                    if pos == scratch_space[PLATES + i] {
+
+                        scratch_space[MAG_LIFTED] = i
+                        break
+
+                    }
+
+                    i += 1
+                }
+
+            } else {
+
+                let pos = scratch_space[MAG_POS]
+                let lifted = scratch_space[MAG_LIFTED]
+
+                var i = 0
+                while i < lifted {
+
+                    if scratch_space[PLATES + i] == pos {
+
+                        scratch_space[FAIL] = 1
+                        break
+
+                    }
+
+                    i += 1
+
+                }
+
+                scratch_space[PLATES + lifted] = pos
+                scratch_space[MAG_LIFTED] = -1
+
+            }
+
+        } 
+
+    redraw(scratch_space)
+           
+}
+
+def on_manual_input($scratch_space: [Int], input: Int) {
+
+    switch input
+        0 { // left
+
+            if scratch_space[MAG_POS] > 0 {
+
+                scratch_space[MAG_POS] -= 1
+                level_input($scratch_space, scratch_space[MAG_POS])
+
+            }
+
+        }
+        2 { // right
+
+            if scratch_space[MAG_POS] < 2 {
+
+                scratch_space[MAG_POS] += 1
+                level_input($scratch_space, scratch_space[MAG_POS])
+
+            }
+
+        }
+        5 { // enter
+
+
+            level_input($scratch_space, 5)
+
+        }
+
+}
+
+def on_reset($scratch_space: [Int], test: Int) {
+
+    scratch_space[MAG_LIFTED] = -1
+
+    let source  = random(3)
+    var destination = source
+    let height = 3 + random(3)
+
+    while source == destination {
+
+        destination = random(3)
+
+    }
+
+    scratch_space[SOURCE] = source
+    scratch_space[DEST] = destination
+    scratch_space[HEIGHT] = height
+
+    var i = 0
+    while i < height {
+
+        scratch_space[PLATES + i] = source
+        i += 1
+
+    }
+
+    while i < 5 {
+
+        scratch_space[PLATES + i] = -1
+        i += 1
+
+    }
+
+    redraw(scratch_space)
+
+}
+
+def arch_get_input($scratch_space: [Int], test: Int) Int {
+
+    let count = scratch_space[INPUT]
+    scratch_space[INPUT] = count + 1
+
+    switch count
+        0 { return scratch_space[HEIGHT] - 1 }
+        1 { return scratch_space[SOURCE] }
+        2 { return scratch_space[DEST]}
+        3 { return 3 - scratch_space[SOURCE] - scratch_space[DEST] }
+
+}
+
+def arch_check_output($scratch_space: [Int], test: Int, input: Int, output: Int) TestResult {
+
+    level_input($scratch_space, output)
+
+    if scratch_space[FAIL] == 1 {
+
+        return fail
+
+    }
+
+    let target = scratch_space[DEST]
+
+    var i = 0
+    while i < 5 {
+
+        let pos = scratch_space[PLATES + i]
+        if pos == -1 {
+
+            return win
+
+        } elif pos != target {
+
+            break
+
+        }
+
+        i += 1
+
+    }
+
+
+    if i >= 5 {
+
+        return win
+
+    }
+
+}
+//# 221:54-221:57 -Warning -A function with return type should return a value
+//# 234:82-234:92 -Warning -A function with return type should return a value
