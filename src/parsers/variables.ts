@@ -1,9 +1,9 @@
-import { any, between, exhaust, expect, many, map, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces, zeroOrMany } from "parser-combinators"
+import { any, between, exhaust, expect, many, map, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
 import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators, typeAliasDefinition, rpr, rbr } from "./base";
 import { ArrayRValue, BinaryRValue, CastedRValue, DefaultRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./types/rvalue";
-import { lookaround, recoverByAddingChars, rstr, time, token } from "./utils";
+import { recoverByAddingChars, rstr, time, token } from "./utils";
 import { Token, VariableDeclaration, VariableModification } from "./types/ast";
-import { log, precedence } from "../storage";
+import { logLine, precedence } from "../storage";
 
 const variableKind = token(any(
     str('const'),
@@ -24,12 +24,12 @@ between(
     str('`'),
     exhaust(
         any(
+            regex(/[^\n\r{`]+/, 'String character'),
             between(
                 lcb,
                 rValue(),
                 rstr('}')
-            ),
-            regex(/[^\n\r{`]+/, 'String character')
+            )
         ),
         rstr('`', false)
     ),

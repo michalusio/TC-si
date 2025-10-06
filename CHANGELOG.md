@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.7.2]
+- Fixed while loops warning about infinite looping when the variable modification was done with `/=`
+- Improved string literals parsing performance
+- Consolidated debug logging into an extension flag
+
 ## [0.7.1]
 - Fixed returns not being parsed correctly when they had a closing bracket directly after them
 

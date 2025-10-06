@@ -16,6 +16,13 @@ def b() Int {
     var z = <Int>true
 }
 
+def c() {
+    var val = 10
+    while val != 0 {
+        val /= 2
+    }
+}
+
 //# 1:9-1:12 -Warning -A function with return type should return a value
 //# 3:11-3:15 -Warning -This while statement is an infinite loop (always true condition, no returns or breaks)
 //# 8:9-8:12 -Warning -A function with return type should return a value

@@ -12,3 +12,4 @@ const setting = <T>(name: string, defaultValue: T) => {
 export const explicitReturn = setting('warnOnMissingExplicitReturn', false);
 export const typeCheck = setting('showTypeCheckingErrors', true);
 export const showInlayTypeHints = setting('showInlayTypeHints', true);
+export const logDebugInfo = setting('logDebugInfo', false);

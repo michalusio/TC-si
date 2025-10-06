@@ -37,6 +37,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show inlay type hints in variable declarations"
+        },
+        "tcsi.logDebugInfo": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log additional information in the TC-si debug window"
         }
       }
     },

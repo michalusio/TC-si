@@ -1,6 +1,6 @@
 import { DiagnosticSeverity, Range, TextDocument } from "vscode";
 import { getRecoveryIssues } from "./parsers/base";
-import { log, tokensData } from "./storage";
+import { log, logLine, tokensData } from "./storage";
 import { languageParser } from "./parser";
 import { isFailure, ParseError, Parser } from "parser-combinators";
 import {
@@ -102,14 +102,10 @@ export const performParsing = (
       );
     }
   }
-  logg(`Time spent parsing: ${Date.now() - startTime}ms`);
+  logLine(`Time spent parsing: ${Date.now() - startTime}ms`);
 
   return [parseResult, diags];
 };
-
-let logging = false;
-
-const logg = (v: string) => logging && log.appendLine(v);
 
 const newScope = (): Environment => ({
   type: 'scope',
@@ -1293,6 +1289,7 @@ const getAllVariables = (v: RValue): string[] => {
 
 const hasVariableModification = (variable: string, statements: StatementsBlock): boolean => {
   for (const statement of statements) {
+    logLine('Checking modification of ' + variable + ' in ' + statement.type);
     switch (statement.type) {
       case 'dotMethod': {
         const objectValue = statement.object.value;
@@ -1347,7 +1344,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
   const rValue = value.value;
   switch (rValue.type) {
     case 'number':
-      logg(`Number: Int`);
+      logLine(`Number: Int`);
       tokensData.push({
         definition: rValue.value.toString(),
         position: value,
@@ -1359,7 +1356,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       return 'Int';
     case 'string':
     case 'interpolated':
-      logg(`String: String`);
+      logLine(`String: String`);
       tokensData.push({
         definition: rValue.value.toString(),
         position: value,
@@ -1371,7 +1368,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       return 'String';
     case 'parenthesis': {
       const type = getType(rValue.value, document, environments, diagnostics);
-      logg(`Parenthesis: ${type}`);
+      logLine(`Parenthesis: ${type}`);
       tokensData.push({
         definition: "",
         position: value,
@@ -1416,7 +1413,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
         });
       }
-      logg(`Unary: ${operator?.returnType ?? '?'}`);
+      logLine(`Unary: ${operator?.returnType ?? '?'}`);
       return transformGenericType(operator, [type]);
     }
     case 'binary': {
@@ -1460,7 +1457,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
         });
       }
-      logg(`Binary: ${operator?.returnType ?? '?'}`);
+      logLine(`Binary: ${operator?.returnType ?? '?'}`);
       return transformGenericType(operator, [leftType, rightType]);
     }
     case 'ternary': {
@@ -1485,7 +1482,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           `Both ternary branches must have the same type - was ${typeTokenToTypeString(ifTrueType)} and ${typeTokenToTypeString(ifFalseType)}`
         ));
       }
-      logg(`Ternary: ${ifTrueType}`);
+      logLine(`Ternary: ${ifTrueType}`);
       return ifTrueType;
     }
     case 'dotMethod': {
@@ -1547,7 +1544,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
         });
       }
-      logg(`Dot Method: ${dotFunction?.returnType ?? '?'}`);
+      logLine(`Dot Method: ${dotFunction?.returnType ?? '?'}`);
       return transformGenericType(dotFunction, paramTypes);
     }
     case 'function': {
@@ -1628,7 +1625,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
         });
       }
-      logg(`Def Method: ${func?.returnType ?? '?'}`);
+      logLine(`Def Method: ${func?.returnType ?? '?'}`);
       return transformGenericType(func, paramTypes);
     }
     case 'cast': {
@@ -1686,7 +1683,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           ));
         }
       }
-      logg(`Cast: ${castedToType}`);
+      logLine(`Cast: ${castedToType}`);
       return castedToType;
     }
     case 'array': {
@@ -1717,10 +1714,10 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
           return false;
         })) {
-        logg(`Array: *?`);
+        logLine(`Array: *?`);
         return '*?';
       }
-      logg(`Array: *${typeName}`);
+      logLine(`Array: *${typeName}`);
       return `*${typeName}`;
     }
     case 'variable': {
@@ -1734,7 +1731,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           `Unknown variable type`
         ));
       }
-      logg(`Variable: ${variableData?.varType ?? '?'}`);
+      logLine(`Variable: ${variableData?.varType ?? '?'}`);
       return variableData?.varType ?? '?';
     }
     case 'index': {
@@ -1759,7 +1756,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           `An indexed value has to be an array type - was ${typeTokenToTypeString(variableType)}`
         ));
       }
-      logg(`Index: ${afterIndexType ?? '?'}`);
+      logLine(`Index: ${afterIndexType ?? '?'}`);
       return afterIndexType ?? '?';
     }
     case '_default': {
@@ -1773,7 +1770,7 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           `Unknown type`
         ));
       }
-      logg(`Type: ${type ?? '?'}`);
+      logLine(`Type: ${type ?? '?'}`);
       tokensData.push({
         definition: "",
         position: value,

@@ -2,8 +2,11 @@ import { window, Range, SemanticTokensLegend, languages, TextDocument } from 'vs
 import { ParseReturnType, TokenRange } from './parsers/types/ast';
 import type { binaryOperator } from './parsers/base';
 import type { Environment } from './environment';
+import { logDebugInfo } from './workspace';
 
 export const log = window.createOutputChannel("TC-si");
+
+export const logLine = (v: string) => logDebugInfo() && log.appendLine(v);
 
 const tokenTypes = ['type', 'parameter', 'variable'];
 const tokenModifiers = ['declaration', 'definition', 'readonly'];

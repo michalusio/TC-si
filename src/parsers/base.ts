@@ -83,10 +83,12 @@ const operatable = [
   "?"
 ];
 
-const operatableParsers = operatable.map(o => str(o));
+const operatableParsers = [
+  ...operatable.map(o => str(o)),
+  regex(/\/(?!\/)/, "/")
+];
 
 export const unaryOperator = time('operators', any(
-  regex(/\/(?!\/)/, "/"),
   ...operatableParsers.map((o, i) => operatable[i] === '?'
     ? fail<string>('Cannot use `?` as the first term of operator')
     : map(
@@ -96,7 +98,6 @@ export const unaryOperator = time('operators', any(
 ));
 
 export const functionBinaryOperator = time('operators', any(
-  regex(/\/(?!\/)/, "/"),
   ...operatableParsers.map((o, i) => operatable[i] === '?'
     ? fail<string>('Cannot use `?` as the first term of operator')
     : map(
@@ -109,7 +110,6 @@ export const functionBinaryOperator = time('operators', any(
 ));
 
 export const binaryOperator = time('operators', any(
-  regex(/\/(?!\/)/, "/"),
   str("<u"),
   str("<s"),
   ...operatableParsers.map((o, i) => operatable[i] === '?'
