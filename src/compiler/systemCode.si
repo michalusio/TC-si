@@ -1,0 +1,11 @@
+pub def input() U16 {
+    asm symphony {
+        in r1
+    }
+}
+
+pub def output(a: U16) {
+    asm symphony {
+        out r1
+    }
+}

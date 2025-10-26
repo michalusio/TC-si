@@ -1,5 +1,5 @@
 import { Parser } from "parser-combinators";
-import { CastedRValue, IndexRValue, NumberRValue, RValue, StringRValue, VariableRValue } from "./rvalue";
+import { CastedRValue, IndexRValue, RValue, VariableRValue } from "./rvalue";
 
 export type ParseReturnType<T> = T extends Parser<infer R> ? R : never;
 
@@ -71,9 +71,15 @@ export type VariableModification = {
     value: Token<RValue>
 }
 
-export type StatementsBlock = Statement[];
+export type AsmStatement = {
+    type: 'asm',
+    architecture: string,
+    code: string
+}
 
-export type Statement = TypeDefinition | FunctionDeclaration | StatementsStatement | VariableDeclaration | VariableModification | RegAllocUseStatement | ReturnStatement | BreakStatement | ContinueStatement | SwitchStatement | WhileStatement | IfStatement | RValue;
+export type StatementsBlock = Token<Statement>[];
+
+export type Statement = TypeDefinition | FunctionDeclaration | StatementsStatement | VariableDeclaration | VariableModification | RegAllocUseStatement | AsmStatement | ReturnStatement | BreakStatement | ContinueStatement | SwitchStatement | WhileStatement | IfStatement | RValue;
 
 export type StatementsStatement = {
     type: 'statements',
@@ -117,11 +123,7 @@ export type IfStatement = {
     type: 'if',
     value: Token<RValue>,
     ifBlock: StatementsBlock,
-    elifBlocks: {
-        value: Token<RValue>,
-        statements: StatementsBlock
-    }[],
     elseBlock: StatementsBlock
 };
 
-export type ParserOutput = Statement[];
+export type ParserOutput = StatementsBlock;

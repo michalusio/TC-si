@@ -6,7 +6,12 @@ import { logDebugInfo } from './workspace';
 
 export const log = window.createOutputChannel("TC-si");
 
-export const logLine = (v: string) => logDebugInfo() && log.appendLine(v);
+export const logLine = (v: string) => {
+	if (logDebugInfo()) {
+		console.debug(v);
+		log.appendLine(v);
+	}
+}
 
 const tokenTypes = ['type', 'parameter', 'variable'];
 const tokenModifiers = ['declaration', 'definition', 'readonly'];
@@ -77,4 +82,9 @@ export const precedence: Record<ParseReturnType<typeof binaryOperator>, number> 
 	'%': 7,
 	'<<': 7,
 	'>>': 7
+}
+
+export const isSymphonyFile = (document: TextDocument): boolean => {
+  const firstLine = document.lineAt(0).text.toLowerCase().replace(' ', '');
+  return firstLine === '///symphony';
 }

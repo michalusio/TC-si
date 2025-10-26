@@ -1,0 +1,198 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "symphony",
+    "patterns": [
+        {
+            "include": "#comments"
+        },
+        {
+            "include": "#label"
+        },
+        {
+            "include": "#mov_cmp"
+        },
+        {
+            "include": "#call"
+        },
+        {
+            "include": "#push_pop"
+        },
+        {
+            "include": "#jumps"
+        },
+        {
+            "include": "#ret_nop"
+        },
+        {
+            "include": "#aluInstructions"
+        },
+        {
+            "include": "#io"
+        },
+        {
+            "include": "#stores"
+        },
+        {
+            "include": "#loads"
+        }
+    ],
+    "repository": {
+        "comments": {
+            "patterns": [
+                {
+                    "name": "comment.line.symphony",
+                    "match": "//.*\\n?"
+                }
+            ]
+        },
+        "register": {
+            "patterns": [
+                {
+                    "name": "variable.name.symphony",
+                    "match": "r(?:(?:10)|(?:11)|(?:12)|(?:13)|[0-9])"
+                },
+                {
+                    "name": "keyword.control.symphony",
+                    "match": "sp|flags"
+                }
+            ]
+        },
+        "immediate": {
+            "name": "constant.numeric.symphony",
+            "match": "(0x[0-9a-fA-F]+)|([0-9]+)"
+        },
+        "registerOrImmediate": {
+            "patterns": [
+                {
+                    "include": "#register"
+                },
+                {
+                    "include": "#immediate"
+                }
+            ]
+        },
+        "registerOrLabel": {
+            "patterns": [
+                {
+                    "include": "#register"
+                },
+                {
+                    "match": ".+",
+                    "name": "entity.name.function.symphony"
+                }
+            ]
+        },
+        "label": {
+            "match": "(.+?):",
+            "name": "entity.name.function.symphony"
+        },
+        "mov_cmp": {
+            "match": "(mov|cmp) +(.+?) *, *(.+)",
+            "captures": {
+                "1": {
+                    "name": "keyword.other.symphony"
+                },
+                "2": {
+                    "patterns": [{ "include": "#register" }]
+                },
+                "3": {
+                    "patterns": [{ "include": "#registerOrImmediate" }]
+                }
+            }
+        },
+        "call": {
+            "match": "(call) +(.+)",
+            "captures": {
+                "1": {
+                    "name": "keyword.other.symphony"
+                },
+                "2": {
+                    "name": "entity.name.function.symphony"
+                }
+            }
+        },
+        "push_pop": {
+            "match": "(push|pop) +(.+)",
+            "captures": {
+                "1": {
+                    "name": "keyword.other.symphony"
+                },
+                "2": {
+                    "patterns": [{ "include": "#register" }]
+                }
+            }
+        },
+        "jumps": {
+            "match": "(jmp|je|jne|jb|ja|jbe|jae|jg|jl|jge|jle) +(.+)",
+            "captures": {
+                "1": {
+                    "name": "keyword.other.symphony"
+                },
+                "2": {
+                    "patterns": [{ "include": "#registerOrLabel" }]
+                }
+            }
+        },
+        "ret_nop": {
+            "match": "ret|nop",
+            "name": "keyword.other.symphony"
+        },
+        "stores": {
+            "match": "(store_16|store_8) \\[(.+?)\\] *, *(.+)",
+            "captures": {
+                "1": {
+                    "name": "keyword.other.symphony"
+                },
+                "2": {
+                    "patterns": [{ "include": "#registerOrImmediate" }]
+                },
+                "3": {
+                    "patterns": [{ "include": "#register" }]
+                }
+            }
+        },
+        "loads": {
+            "match": "(load_16|load_8) (.+) *, *\\[(.+?)\\]",
+            "captures": {
+                "1": {
+                    "name": "keyword.other.symphony"
+                },
+                "2": {
+                    "patterns": [{ "include": "#register" }]
+                },
+                "3": {
+                    "patterns": [{ "include": "#registerOrImmediate" }]
+                }
+            }
+        },
+        "io": {
+            "match": "(in|out) +(.+)",
+            "captures": {
+                "1": {
+                    "name": "keyword.other.symphony"
+                },
+                "2": {
+                    "patterns": [{ "include": "#register" }]
+                }
+            }
+        },
+        "aluInstructions": {
+            "match": "(add|sub|lsl|lsr|or|and|nor|nand|xor|mul) +(.+?) *, *(.+?) *, *(.+)",
+            "captures": {
+                "1": {
+                    "name": "keyword.other.symphony"
+                },
+                "2": {
+                    "patterns": [{ "include": "#register" }]
+                },
+                "3": {
+                    "patterns": [{ "include": "#register" }]
+                },
+                "4": {
+                    "patterns": [{ "include": "#registerOrImmediate" }]
+                }
+            }
+        }
+    },
+    "scopeName": "source.symphony"
+}

@@ -1,13 +1,12 @@
 import type {
-    Environment,
+  Environment,
   EnvironmentFunction,
   EnvironmentOperator,
   EnvironmentType,
   EnvironmentVariable,
 } from "./environment";
 import { levenshtein } from "./levenshtein";
-import { FunctionDefinition, Parameter, Token, TokenRange, TypeDefinition } from "./parsers/types/ast";
-import { RValue } from "./parsers/types/rvalue";
+import { FunctionDefinition, Parameter, TokenRange, TypeDefinition } from "./parsers/types/ast";
 import { baseEnvironment } from "./storage";
 
 /**

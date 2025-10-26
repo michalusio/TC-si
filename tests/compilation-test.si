@@ -1,0 +1,6 @@
+///symphony
+
+pub def main() U16 {
+    var a = input()
+    return a
+}

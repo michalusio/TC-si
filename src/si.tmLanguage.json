@@ -3,6 +3,9 @@
     "name": "si",
     "patterns": [
         {
+            "include": "#symphonyAsmBlocks"
+        },
+        {
             "include": "#comments"
         },
         {
@@ -28,6 +31,21 @@
         }
     ],
     "repository": {
+        "symphonyAsmBlocks": {
+            "begin": "asm symphony {",
+            "end": "}",
+            "beginCaptures": {
+                "0":{
+                    "patterns": [{
+                        "include": "#keywords"
+                    }]
+                }
+            },
+            "patterns" : [{
+                "name": "meta.embedded.block.symphony",
+                "include" : "source.symphony"
+            }]
+        },
         "builtInTypes": {
             "patterns": [
                 {
@@ -68,7 +86,7 @@
                 },
                 {
                     "name": "keyword.other.si",
-                    "match": "\\b(pub|def|dot|binary|unary|const|let|var|type|extern|call_conv|x86_64|aarch64|windows_x64)\\b"
+                    "match": "\\b(pub|def|dot|binary|unary|const|let|var|type|extern|call_conv|x86_64|aarch64|windows_x64|symphony)\\b"
                 },
                 {
                     "name": "keyword.operator.arithmetic.si",

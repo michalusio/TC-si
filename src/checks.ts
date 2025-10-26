@@ -128,11 +128,12 @@ const newFunction = (returnType: string | null): Environment => ({
 
 export const checkVariableExistence = (
   document: TextDocument,
-  result: Statement[],
+  result: Token<Statement>[],
   environments: Environment[],
   diagnostics: SimplexDiagnostic[]
 ) => {
-  result.forEach(scope => {
+  const statements = result.map(s => s.value);
+  statements.forEach(scope => {
     switch (scope.type) {
       case 'type-definition': {
         const kind = tryGetType(environments, scope.name.value);
@@ -194,7 +195,7 @@ export const checkVariableExistence = (
       }
     }
   })
-  result.forEach(scope => {
+  statements.forEach(scope => {
     switch (scope.type) {
       case 'function-declaration': {
         if (scope.definition.type === 'function') {
@@ -273,7 +274,7 @@ export const checkVariableExistence = (
       }
     }
   })
-  result.forEach(scope => {
+  statements.forEach(scope => {
     switch (scope.type) {
       case 'declaration': {
         diagnostics.push(...processRValue(document, environments, scope.value.value));
@@ -601,27 +602,6 @@ export const checkVariableExistence = (
             `An if block condition has to be a boolean type - was ${typeTokenToTypeString(varType)}`
           ));
         }
-        scope.elifBlocks.forEach((elif) => {
-          diagnostics.push(...processRValue(document, environments, elif.value.value));
-          diagnostics.push(...checkForSimplification(elif.value, document));
-          const nextElifEnvironments: Environment[] = [...environments, newScope()];
-          checkVariableExistence(
-            document,
-            elif.statements,
-            nextElifEnvironments,
-            diagnostics
-          );
-          const varType = getType(elif.value, document, environments, diagnostics);
-          if (typeCheck() && varType !== 'Bool') {
-            diagnostics.push(new SimplexDiagnostic(
-              new Range(
-                document.positionAt(scope.value.start),
-                document.positionAt(scope.value.end)
-              ),
-              `An elif block condition has to be a boolean type - was ${typeTokenToTypeString(varType)}`
-            ));
-          }
-        });
         const nextElseEnvironments: Environment[] = [...environments, newScope()];
         checkVariableExistence(
           document,
@@ -722,6 +702,9 @@ export const checkVariableExistence = (
         break;
       }
       case 'continue': {
+        break;
+      }
+      case 'asm': {
         break;
       }
       default: {
@@ -1106,7 +1089,7 @@ const checkType = (typeToken: Token<string | null>, document: TextDocument, envi
 const doesReturnValue = (document: TextDocument, statements: StatementsBlock, environments: Environment[], diagnostics: SimplexDiagnostic[], shouldReturnValue: boolean): 'value' | 'empty' | null => {
   let returnValue: 'value' | 'empty' | 'none' | undefined = undefined;
   for (let index = statements.length - 1; index >= 0; index--) {
-    const statement = statements[index];
+    const statement = statements[index].value;
     switch (statement.type) {
       case 'return': {
         if (statement.value.value) {
@@ -1128,7 +1111,6 @@ const doesReturnValue = (document: TextDocument, statements: StatementsBlock, en
       case 'if': {
         const allToCheck = [
           statement.ifBlock,
-          ...statement.elifBlocks.map(ei => ei.statements),
           statement.elseBlock
         ];
         const overallReturn = allToCheck
@@ -1241,13 +1223,13 @@ const doesReturnValue = (document: TextDocument, statements: StatementsBlock, en
 }
 
 const hasBreakStatement = (statements: StatementsBlock): boolean => {
-  for (const statement of statements) {
+  for (const s of statements) {
+    const statement = s.value;
     switch (statement.type) {
       case 'break': return true;
       case 'if': {
         const hasBreak = [
           statement.ifBlock,
-          ...statement.elifBlocks.map(e => e.statements),
           statement.elseBlock
         ].some(hasBreakStatement);
         if (hasBreak) return true;
@@ -1288,8 +1270,8 @@ const getAllVariables = (v: RValue): string[] => {
 }
 
 const hasVariableModification = (variable: string, statements: StatementsBlock): boolean => {
-  for (const statement of statements) {
-    logLine('Checking modification of ' + variable + ' in ' + statement.type);
+  for (const s of statements) {
+    const statement = s.value;
     switch (statement.type) {
       case 'dotMethod': {
         const objectValue = statement.object.value;
@@ -1299,8 +1281,7 @@ const hasVariableModification = (variable: string, statements: StatementsBlock):
       case 'if': {
         const allCases = [
           statement.ifBlock,
-          statement.elseBlock,
-          ...statement.elifBlocks.map(e => e.statements)
+          statement.elseBlock
         ];
         if (allCases.some(c => hasVariableModification(variable, c))) return true;
         break;

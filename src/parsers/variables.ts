@@ -3,7 +3,7 @@ import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOp
 import { ArrayRValue, BinaryRValue, CastedRValue, DefaultRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./types/rvalue";
 import { recoverByAddingChars, rstr, time, token } from "./utils";
 import { Token, VariableDeclaration, VariableModification } from "./types/ast";
-import { logLine, precedence } from "../storage";
+import { precedence } from "../storage";
 
 const variableKind = token(any(
     str('const'),
@@ -15,7 +15,7 @@ export const stringLiteral = time('strings', map(
     regex(/"(?:\.|(\\\")|[^\""\n])*"/, 'String literal'),
     (value) =>  (<StringRValue>{
         type: 'string',
-        value
+        value: value.slice(1, -1)
     })
 ));
 

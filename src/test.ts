@@ -1,15 +1,17 @@
 import assert from 'assert';
 import { cwd } from 'process';
 import { readdirSync, readFileSync } from 'fs';
-import { basename, join } from 'path';
+import { join } from 'path';
 import { map, seq, intP, str, spaces, spacesPlus, regex, ParseText, any } from 'parser-combinators';
 import { checkVariableExistence, performParsing } from './checks';
-import { baseEnvironment, log, tokensData } from './storage';
+import { baseEnvironment, isSymphonyFile, log, tokensData } from './storage';
 import { getRecoveryIssues } from './parsers/base';
-import { DiagnosticSeverity, EndOfLine, Position, Range, TextDocument, Uri } from 'vscode';
+import { DiagnosticSeverity } from 'vscode';
 import { deduplicateDiagnostics } from './extension';
 import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { timings } from './parsers/utils';
+import { generateMockDocument } from './workspace';
+import { checkSymphonyDiagnostics } from './parsers/symphony';
 
 const diagnosticParser = map(
     seq(
@@ -75,79 +77,6 @@ const diagnosticParser = map(
     ([_, __, diag]) => diag
 );
 
-const generateMockDocument = (path: string, text: string, textSplitted: string[]): TextDocument => {
-    return {
-        uri: Uri.file(path),
-        fileName: basename(path),
-        isUntitled: false,
-        languageId: 'si',
-        version: 1,
-        isDirty: false,
-        isClosed: false,
-        eol: EndOfLine.LF,
-        encoding: 'utf8',
-        lineCount: text.split("\n").length,
-        save: () => Promise.resolve(false),
-        lineAt: (lineOrPosition: number | Position) => {
-            const lineNumber = typeof lineOrPosition === 'number'
-                ? lineOrPosition
-                : lineOrPosition.line;
-            const lineText = textSplitted[lineNumber];
-            const nonWhiteSpaceIndex = lineText.search(/\S/);
-            return {
-                range: new Range(
-                    lineNumber,
-                    0,
-                    lineNumber,
-                    lineText.length
-                ),
-                text: lineText,
-                isEmptyOrWhitespace: nonWhiteSpaceIndex === -1,
-                rangeIncludingLineBreak: new Range(
-                    lineNumber,
-                    0,
-                    lineNumber,
-                    lineText.length + 1
-                ),
-                lineNumber,
-                firstNonWhitespaceCharacterIndex: nonWhiteSpaceIndex === -1
-                    ? lineText.length
-                    : nonWhiteSpaceIndex
-            }
-        },
-        offsetAt: (position: Position) => {
-            let index = 0;
-            for (let lineNumber = 0; lineNumber < textSplitted.length; lineNumber++) {
-                if (position.line === lineNumber) {
-                    index += textSplitted[lineNumber].length;
-                } else {
-                    index += position.character;
-                }
-            }
-            return index;
-        },
-        positionAt: (offset: number) => {
-            for (let lineNumber = 0; lineNumber < textSplitted.length; lineNumber++) {
-                if (offset > textSplitted[lineNumber].length + 1) {
-                    offset -= textSplitted[lineNumber].length + 1;
-                } else {
-                    return new Position(lineNumber, offset);
-                }
-            }
-            return new Position(textSplitted.length - 1, textSplitted[textSplitted.length - 1].length - 1);
-        },
-        getText: (range?: Range) => {
-            if (!range) return text;
-            throw 'unsupported';
-        },
-        getWordRangeAtPosition: (position: Position) => {
-            return new Range(position, position);
-        },
-        validatePosition: () => { throw 'unsupported'; },
-        validateRange: () => { throw 'unsupported'; }
-    };
-}
-
 function performTest(path: string, codeText: string, codeLines: string[]): SimplexDiagnostic[] {
     const document = generateMockDocument(path, codeText, codeLines);
     log.clear();
@@ -173,6 +102,9 @@ function performTest(path: string, codeText: string, codeLines: string[]): Simpl
             ],
             diags
         );
+        if (isSymphonyFile(document)) {
+            checkSymphonyDiagnostics(document, parseResult, diags);
+        }
     }
     return diags;
 }

@@ -1,12 +1,13 @@
 import { Position, TextDocument } from "vscode";
-import { any, between, Context, exhaust, map, oneOrMany, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators";
+import { any, between, Context, exhaust, isFailure, map, oneOrMany, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators";
 import { functionDeclaration } from "./parsers/functions";
 import { blockComment, lcb, lineComment, newline, variableName } from "./parsers/base";
 import { rValue, topmostVariableDeclaration, variableDeclaration, variableModification } from "./parsers/variables";
 import { typeDeclaration } from "./parsers/declaration";
 import { eof, lookaround, manyForSure, recoverByAddingChars, recoverBySkipping, rstr, token } from "./parsers/utils";
-import { BreakStatement, ContinueStatement, FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, TokenRange, TypeDefinition, VariableDeclaration, WhileStatement } from "./parsers/types/ast";
+import { BreakStatement, ContinueStatement, FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, Token, TokenRange, WhileStatement, AsmStatement } from "./parsers/types/ast";
 import { getTokensData } from "./storage";
+import { symphonyParser } from "./parsers/symphony";
 
 export const getPositionInfo = (document: TextDocument, position: Position): {
 	current: TokenRange,
@@ -100,22 +101,56 @@ const regAllocUse = map(
 	})
 );
 
-const asmDeclaration = map(
+const parseAssembler = (parser: Parser<AsmStatement>): Parser<AsmStatement> => {
+	return (ctx) => {
+		const result = parser(ctx);
+		if (isFailure(result)) return result;
+		const { architecture, code } = result.value;
+		if (architecture !== 'symphony') return result;
+		const symphonyResult = symphonyParser({
+			index: 0,
+			path: '',
+			text: code
+		});
+		if (isFailure(symphonyResult)) return {
+			ctx: {
+				...ctx,
+				index: symphonyResult.ctx.index + ctx.index,
+			},
+			expected: symphonyResult.expected,
+			history: symphonyResult.history,
+			success: symphonyResult.success
+		};
+		return {
+			...result,
+			value: {
+				...result.value,
+				code: JSON.stringify(symphonyResult.value)
+			}
+		};
+	}
+}
+
+const asmDeclaration = parseAssembler(map(
 	seq(
 		str('asm'),
 		spacesPlus,
 		regex(/\w+/, "architecture"),
 		spacesPlus,
 		surely(
-			seq(
+			between(
 				rstr('{'),
 				exhaust(regex(/[^}]/, 'any character'), str('}')),
 				str('}')
 			)
 		)
 	),
-	() => "asm block"
-)
+	([type, _, architecture, __, chars]) => (<AsmStatement>{
+		type,
+		architecture,
+		code: chars.join('')
+	})
+));
 
 const callConvDeclaration = map(
 	seq(
@@ -155,7 +190,7 @@ function statementsBlock(): Parser<StatementsBlock> {
 					wspaces,
 					recoverBySkipping(
 						map(
-							any<string | Statement>(
+							token(any<string | Statement>(
 								blockComment,
 								newline,
 								asmDeclaration,
@@ -197,8 +232,8 @@ function statementsBlock(): Parser<StatementsBlock> {
 								map(seq(variableDeclaration, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
 								map(seq(variableModification, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
 								map(seq(rValue(), any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value)
-							),
-							(s) => typeof s === 'string' ? null : s
+							)),
+							(s) => typeof s.value === 'string' ? null : (s as Token<Statement>)
 						),
 						regex(/.*?(?=})/, 'statement')
 					)
@@ -206,7 +241,7 @@ function statementsBlock(): Parser<StatementsBlock> {
 				seq(wspaces, rstr('}', false))
 			)
 		),
-		(statements) => (<StatementsBlock> statements.map(s => s[1]).filter((s): s is Statement => s != null))
+		(statements) => (<StatementsBlock> statements.map(s => s[1]).filter((s): s is Token<Statement> => s != null))
 	)(ctx);
 }
 
@@ -298,8 +333,30 @@ function ifBlock(): Parser<IfStatement> {
 			type: 'if',
 			value: ifBlock.value,
 			ifBlock: ifBlock.statements,
-			elifBlocks: elsifs,
-			elseBlock: elseBlock ?? []
+			elseBlock: (() => {
+				elseBlock ??= [];
+				if (elsifs.length === 0) return elseBlock;
+				let startBlock: IfStatement | null = null;
+				let currentBlock: IfStatement | null = null;
+				elsifs.forEach(ei => {
+					const block = <IfStatement> {
+						type: 'if',
+						value: ei.value,
+						ifBlock: ei.statements,
+						elseBlock
+					};
+					startBlock ??= block;
+					if (currentBlock) {
+						currentBlock.elseBlock = [{
+							start: ei.value.start - 3,
+							end: ei.statements[ei.statements.length - 1].end,
+							value: block
+						}];
+					}
+					currentBlock ??= block;
+				});
+				return startBlock;
+			})()
 		 })
 	)(ctx);
 }
@@ -368,7 +425,7 @@ export const languageParser = map(
 	exhaust(
 		seq(
 			spaces,
-			any<void | string | Statement>(
+			token(any<void | string | Statement>(
 				eof,
 				blockComment,
 				newline,
@@ -414,8 +471,8 @@ export const languageParser = map(
 				map(seq(variableDeclaration, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
 				map(seq(variableModification, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
 				map(seq(rValue(), any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value)
-			)
+			))
 		)
 	),
-	(data) => data.map(d => d[1]).filter((d): d is Statement => !!d && typeof d !== 'string')
+	(data) => data.map(d => d[1]).filter((d): d is Token<Statement> => !!d.value && typeof d.value !== 'string')
 );

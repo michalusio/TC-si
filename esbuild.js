@@ -16,16 +16,23 @@ async function main() {
     outfile: 'dist/extension.js',
     external: ['vscode'],
     logLevel: 'silent',
+    loader: { ".si": "text" },
     plugins: [
       /* add to the end of plugins array */
       esbuildProblemMatcherPlugin,
       copy({
-        // this is equal to process.cwd(), which means we use cwd path as base path to resolve `to` path
-        // if not specified, this plugin uses ESBuild.build outdir/outfile options as base path.
         resolveFrom: 'cwd',
         assets: {
           from: ['./src/si.tmLanguage.json'],
           to: ['./dist/si.tmLanguage.json'],
+        },
+        watch,
+      }),
+      copy({
+        resolveFrom: 'cwd',
+        assets: {
+          from: ['./src/symphony.tmLanguage.json'],
+          to: ['./dist/symphony.tmLanguage.json'],
         },
         watch,
       }),
