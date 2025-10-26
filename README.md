@@ -19,6 +19,6 @@ TC Simplex is a VSCode language extension that adds basic language support for t
 
 ## Contributing
 
-If you want to contribute to the language extension, feel free to make bugs, feature requests and PRs!
+If you want to contribute to the language extension, feel free to make bug reports, feature requests and PRs!
 
 **Enjoy!**
