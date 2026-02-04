@@ -291,53 +291,53 @@ export function activate(context: ExtensionContext)
     },
   }));
 
-  context.subscriptions.push(commands.registerCommand("si.showSymphonyAssembly", async () => {
-    const editor = window.activeTextEditor;
-    if (editor?.document?.languageId !== "si") {
-      await window.showErrorMessage("No open SI file found - try opening one.");
-      return;
-    }
-
-    const stripSymbols = await window.showQuickPick([
-      <QuickPickItem>{
-        label: "-S",
-        kind: QuickPickItemKind.Default,
-        detail: 'Comments will be stripped'
-      },
-      <QuickPickItem>{
-        label: "",
-        kind: QuickPickItemKind.Default,
-        detail: 'All comments will be kept'
-      }
-    ], {
-      title: "Choose stripping level"
-    });
-
-    const optimize = await window.showQuickPick([
-      <QuickPickItem>{
-        label: "-O2",
-        kind: QuickPickItemKind.Default,
-        detail: 'All optimizations will be applied'
-      },
-      <QuickPickItem>{
-        label: "-O1",
-        kind: QuickPickItemKind.Default,
-        detail: 'Optimizations which do not aggressively change the behavior will be applied'
-      },
-      <QuickPickItem>{
-        label: "-O0",
-        kind: QuickPickItemKind.Default,
-        detail: 'No optimizations after initial code emission will be applied'
-      },
-    ], {
-      title: "Choose optimization level",
-    });
-
-    const optimizationLevel = (optimize?.label.slice(1) as OptLevel | undefined) ?? "O0";
-    const stripDebugSymbols = stripSymbols?.label === '-S';
-
-    await compileDocument(editor.document, true, optimizationLevel, stripDebugSymbols);
-  }));
+  //context.subscriptions.push(commands.registerCommand("si.showSymphonyAssembly", async () => {
+  //  const editor = window.activeTextEditor;
+  //  if (editor?.document?.languageId !== "si") {
+  //    await window.showErrorMessage("No open SI file found - try opening one.");
+  //    return;
+  //  }
+  //
+  //  const stripSymbols = await window.showQuickPick([
+  //    <QuickPickItem>{
+  //      label: "-S",
+  //      kind: QuickPickItemKind.Default,
+  //      detail: 'Comments will be stripped'
+  //    },
+  //    <QuickPickItem>{
+  //      label: "",
+  //      kind: QuickPickItemKind.Default,
+  //      detail: 'All comments will be kept'
+  //    }
+  //  ], {
+  //    title: "Choose stripping level"
+  //  });
+  //
+  //  const optimize = await window.showQuickPick([
+  //    <QuickPickItem>{
+  //      label: "-O2",
+  //      kind: QuickPickItemKind.Default,
+  //      detail: 'All optimizations will be applied'
+  //    },
+  //    <QuickPickItem>{
+  //      label: "-O1",
+  //      kind: QuickPickItemKind.Default,
+  //      detail: 'Optimizations which do not aggressively change the behavior will be applied'
+  //    },
+  //    <QuickPickItem>{
+  //      label: "-O0",
+  //      kind: QuickPickItemKind.Default,
+  //      detail: 'No optimizations after initial code emission will be applied'
+  //    },
+  //  ], {
+  //    title: "Choose optimization level",
+  //  });
+  //
+  //  const optimizationLevel = (optimize?.label.slice(1) as OptLevel | undefined) ?? "O0";
+  //  const stripDebugSymbols = stripSymbols?.label === '-S';
+  //
+  //  await compileDocument(editor.document, true, optimizationLevel, stripDebugSymbols);
+  //}));
 }
 
 const compileDocument = async (document: TextDocument, warn: boolean, optimizationLevel: OptLevel, stripDebugSymbols: boolean) => {

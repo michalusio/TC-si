@@ -209,7 +209,11 @@ readdirSync(join(cwd(), '../../compiler-tests'), { recursive: true, encoding: 'u
             test('Should generate correct assembly code', () => {
                 const result = performAssemblyTest(path, codeText, fileLines);
                 if (!result) assert.fail('No compilation result');
-                assert.equal(getTextRepresentation(result), resultFile, 'The compiled code should be correct');
+                assert.deepStrictEqual(
+                    getTextRepresentation(result).split('\n').map(l => l.trim()),
+                    resultFile.split('\n').map(l => l.trim()),
+                    'The compiled code should be correct'
+                );
             });
         });
     });

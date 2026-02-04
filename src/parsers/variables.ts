@@ -1,9 +1,190 @@
-import { any, between, exhaust, expect, many, map, opt, Parser, recoverByAddingChars, ref, regex, seq, spaces, spacesPlus, str, surely, Token, token, wspaces } from "parser-combinators"
+import { any, between, exhaust, expect, lazy, many, map, opt, Parser, recoverByAddingChars, ref, regex, seq, spaces, spacesPlus, str, surely, Token, token, wspaces } from "parser-combinators"
 import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators, typeAliasDefinition, rpr, rbr } from "./base";
 import { ArrayRValue, BinaryRValue, CastedRValue, DefaultRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./types/rvalue";
 import { rstr, time } from "./utils";
 import { VariableDeclaration, VariableModification } from "./types/ast";
 import { precedence } from "../storage";
+
+export const rValue: Parser<Token<RValue>> = lazy(() => time('rvalues', map(
+    seq(
+        time('primary rValues', token(any<RValue>(
+            time('base rValues', any(castedRValue,
+                anyNumericLiteral,
+                stringLiteral,
+                stringInterpolatedLiteral,
+                unaryRValue,
+            )),
+            time('complex rValues', any(
+                parenthesisedRValue,
+                arrayLiteral,
+                defaultRValue,
+                functionCall,
+                variableLiteral
+            ))
+        ))),
+        time('indexings', many(between(
+            lbr,
+            recoverByAddingChars(rValue, '0'),
+            rstr(']')
+        ))),
+        opt(seq(spaces, blockComment)),
+        time('operators', any(
+            seq(
+                spaces,
+                str('?'),
+                surely(seq(
+                    between(
+                        spaces,
+                        recoverByAddingChars(rValue, '0'),
+                        spaces
+                    ),
+                    str(':'),
+                    spaces,
+                    recoverByAddingChars(rValue, '0')
+                ))
+            ),
+            seq(
+                many(seq(
+                    str('.'),
+                    surely(functionCall)
+                )),
+                opt(
+                    seq(
+                        between(
+                            spaces,
+                            binaryOperator,
+                            spaces
+                        ),
+                        surely(recoverByAddingChars(rValue, '0'))
+                    )
+                )
+            )
+        ))
+    ),
+    ([value, indexes, _, operation]) => {
+        let actualValue: Token<RValue> = value;
+        if (actualValue.value.type === 'cast' && actualValue.value.value.value.type === 'binary') {
+            const binary = actualValue.value.value.value;
+            actualValue = <Token<RValue>>{
+                start: actualValue.start,
+                end: actualValue.end,
+                value: <BinaryRValue>{
+                    ...binary,
+                    left: <Token<RValue>>{
+                        start: actualValue.start,
+                        end: binary.left.start,
+                        value: <CastedRValue>{
+                            type: 'cast',
+                            to: actualValue.value.to,
+                            value: binary.left
+                        }
+                    }
+                }
+            };
+        }
+        indexes.forEach(index => {
+            actualValue = <Token<RValue>>{
+                start: actualValue.start,
+                end: actualValue.end + 1,
+                value: <IndexRValue>{
+                    type: 'index',
+                    value: actualValue,
+                    parameter: index 
+                }
+            };
+        });
+
+        if (typeof operation[0] === 'string') {
+            const op = operation as [string, "?", [Token<RValue>, ":", string, Token<RValue>]];
+            const data = <Token<RValue>>{
+                start: actualValue.start,
+                end: op[2][3].end,
+                value: <TernaryRValue>{
+                    type: 'ternary',
+                    condition: actualValue,
+                    ifTrue: op[2][0],
+                    ifFalse: op[2][3]
+                }
+            };
+            return data;
+        } else {
+            const op = operation as [[".", FunctionRValue][], [BinaryOperators, Token<RValue>] | null];
+            const functionCall = op[0];
+            functionCall.forEach(([_, call]) => {
+                actualValue = <Token<RValue>>{
+                    start: actualValue.start,
+                    end: (call.parameters[call.parameters.length - 1]?.end ?? (actualValue.end + 1)) + 1,
+                    value: <DotMethodRValue>{
+                        type: 'dotMethod',
+                        object: actualValue,
+                        value: call.value,
+                        parameters: call.parameters
+                    }
+                };
+            });
+
+            const binaryOperator = op[1];
+            if (binaryOperator) {
+                const right = binaryOperator[1];
+                const left = actualValue;
+                if (right.value.type === 'binary' && precedence[right.value.operator] < precedence[binaryOperator[0]]) {
+                    actualValue = <Token<RValue>>{
+                        start: actualValue.start,
+                        end: right.end + 1,
+                        value: <BinaryRValue>{
+                            type: 'binary',
+                            operator: right.value.operator,
+                            left: <Token<RValue>>{
+                                start: actualValue.start,
+                                end: right.start + 1,
+                                value: <BinaryRValue>{
+                                    type: 'binary',
+                                    operator: binaryOperator[0],
+                                    left,
+                                    right: right.value.left
+                                }
+                            },
+                            right: right.value.right
+                        }
+                    }
+                } else if (right.value.type === 'ternary') {
+                    actualValue = <Token<RValue>>{
+                        start: actualValue.start,
+                        end: right.end,
+                        value: <TernaryRValue>{
+                            type: 'ternary',
+                            condition: <Token<RValue>>{
+                                start: left.start,
+                                end: right.value.condition.end,
+                                value: <BinaryRValue>{
+                                    type: 'binary',
+                                    operator: binaryOperator[0],
+                                    left,
+                                    right: right.value.condition
+                                }
+                            },
+                            ifTrue: right.value.ifTrue,
+                            ifFalse: right.value.ifFalse
+                        }
+                    };
+                } else {
+                    actualValue = <Token<RValue>>{
+                        start: actualValue.start,
+                        end: right.end + 1,
+                        value: <BinaryRValue>{
+                            type: 'binary',
+                            operator: binaryOperator[0],
+                            left,
+                            right
+                        }
+                    };
+                }
+            }
+
+            return actualValue;
+        }
+    }
+)));
 
 const variableKind = token(any(
     str('const'),
@@ -27,7 +208,7 @@ between(
             regex(/[^\n\r{`]+/, 'String character'),
             between(
                 lcb,
-                rValue(),
+                rValue,
                 rstr('}')
             )
         ),
@@ -102,7 +283,7 @@ const arrayLiteral = time('array literals', map(
             seq(
                 between(
                     wspaces,
-                    rValue(),
+                    rValue,
                     wspaces
                 ),
                 opt(str(',')),
@@ -128,13 +309,13 @@ export const functionCall = time('function calls', map(seq(
             opt(
                 seq(
                     wspaces,
-                    rValue(),
+                    rValue,
                     exhaust(
                         seq(
                             wspaces,
                             str(','),
                             wspaces,
-                            rValue()
+                            rValue
                         ),
                         seq(spaces, rpr)
                     )
@@ -159,14 +340,14 @@ export const functionCall = time('function calls', map(seq(
 
 const cast = between(
     lab,
-    typeAliasDefinition(),
+    typeAliasDefinition,
     rab
 );
 
 const castedRValue = map(seq(
     cast,
     spaces,
-    surely(rValue())
+    surely(rValue)
 ), ([cast, _, value]) => {
     return <CastedRValue>{
         type: 'cast',
@@ -177,7 +358,7 @@ const castedRValue = map(seq(
 
 const defaultRValue = map(seq(
     str('_default(:'),
-    typeAliasDefinition(),
+    typeAliasDefinition,
     rpr
 ), ([_, typeValue, __]) => {
     return <DefaultRValue>{
@@ -189,7 +370,7 @@ const defaultRValue = map(seq(
 const unaryRValue = map(seq(
     unaryOperator,
     spaces,
-    surely(rValue())
+    surely(rValue)
 ), ([operator, _, value]) => {
     return <UnaryRValue>{
         type: 'unary',
@@ -200,195 +381,12 @@ const unaryRValue = map(seq(
 
 const parenthesisedRValue = time('parentheses', map(between(
     seq(lpr, spaces),
-    rValue(),
+    rValue,
     seq(spaces, rstr(')'))
 ), (value) => (<ParenthesisedRValue>{
     type: 'parenthesis',
     value
 })));
-
-export function rValue(): Parser<Token<RValue>> {
-    return (ctx) => time('rvalues', map(
-        seq(
-            time('primary rValues', token(any<RValue>(
-                time('base rValues', any(castedRValue,
-                    anyNumericLiteral,
-                    stringLiteral,
-                    stringInterpolatedLiteral,
-                    unaryRValue,
-                )),
-                time('complex rValues', any(
-                    parenthesisedRValue,
-                    arrayLiteral,
-                    defaultRValue,
-                    functionCall,
-                    variableLiteral
-                ))
-            ))),
-            time('indexings', many(between(
-                lbr,
-                recoverByAddingChars(rValue(), '0'),
-                rstr(']')
-            ))),
-            opt(seq(spaces, blockComment)),
-            time('operators', any(
-                seq(
-                    spaces,
-                    str('?'),
-                    surely(seq(
-                        between(
-                            spaces,
-                            recoverByAddingChars(rValue(), '0'),
-                            spaces
-                        ),
-                        str(':'),
-                        spaces,
-                        recoverByAddingChars(rValue(), '0')
-                    ))
-                ),
-                seq(
-                    many(seq(
-                        str('.'),
-                        surely(functionCall)
-                    )),
-                    opt(
-                        seq(
-                            between(
-                                spaces,
-                                binaryOperator,
-                                spaces
-                            ),
-                            surely(recoverByAddingChars(rValue(), '0'))
-                        )
-                    )
-                )
-            ))
-        ),
-        ([value, indexes, _, operation]) => {
-            let actualValue: Token<RValue> = value;
-            if (actualValue.value.type === 'cast' && actualValue.value.value.value.type === 'binary') {
-                const binary = actualValue.value.value.value;
-                actualValue = <Token<RValue>>{
-                    start: actualValue.start,
-                    end: actualValue.end,
-                    value: <BinaryRValue>{
-                        ...binary,
-                        left: <Token<RValue>>{
-                            start: actualValue.start,
-                            end: binary.left.start,
-                            value: <CastedRValue>{
-                                type: 'cast',
-                                to: actualValue.value.to,
-                                value: binary.left
-                            }
-                        }
-                    }
-                };
-            }
-            indexes.forEach(index => {
-                actualValue = <Token<RValue>>{
-                    start: actualValue.start,
-                    end: actualValue.end + 1,
-                    value: <IndexRValue>{
-                        type: 'index',
-                        value: actualValue,
-                        parameter: index 
-                    }
-                };
-            });
-
-            if (typeof operation[0] === 'string') {
-                const op = operation as [string, "?", [Token<RValue>, ":", string, Token<RValue>]];
-                const data = <Token<RValue>>{
-                    start: actualValue.start,
-                    end: op[2][3].end,
-                    value: <TernaryRValue>{
-                        type: 'ternary',
-                        condition: actualValue,
-                        ifTrue: op[2][0],
-                        ifFalse: op[2][3]
-                    }
-                };
-                return data;
-            } else {
-                const op = operation as [[".", FunctionRValue][], [BinaryOperators, Token<RValue>] | null];
-                const functionCall = op[0];
-                functionCall.forEach(([_, call]) => {
-                    actualValue = <Token<RValue>>{
-                        start: actualValue.start,
-                        end: (call.parameters[call.parameters.length - 1]?.end ?? (actualValue.end + 1)) + 1,
-                        value: <DotMethodRValue>{
-                            type: 'dotMethod',
-                            object: actualValue,
-                            value: call.value,
-                            parameters: call.parameters
-                        }
-                    };
-                });
-
-                const binaryOperator = op[1];
-                if (binaryOperator) {
-                    const right = binaryOperator[1];
-                    const left = actualValue;
-                    if (right.value.type === 'binary' && precedence[right.value.operator] < precedence[binaryOperator[0]]) {
-                        actualValue = <Token<RValue>>{
-                            start: actualValue.start,
-                            end: right.end + 1,
-                            value: <BinaryRValue>{
-                                type: 'binary',
-                                operator: right.value.operator,
-                                left: <Token<RValue>>{
-                                    start: actualValue.start,
-                                    end: right.start + 1,
-                                    value: <BinaryRValue>{
-                                        type: 'binary',
-                                        operator: binaryOperator[0],
-                                        left,
-                                        right: right.value.left
-                                    }
-                                },
-                                right: right.value.right
-                            }
-                        }
-                    } else if (right.value.type === 'ternary') {
-                        actualValue = <Token<RValue>>{
-                            start: actualValue.start,
-                            end: right.end,
-                            value: <TernaryRValue>{
-                                type: 'ternary',
-                                condition: <Token<RValue>>{
-                                    start: left.start,
-                                    end: right.value.condition.end,
-                                    value: <BinaryRValue>{
-                                        type: 'binary',
-                                        operator: binaryOperator[0],
-                                        left,
-                                        right: right.value.condition
-                                    }
-                                },
-                                ifTrue: right.value.ifTrue,
-                                ifFalse: right.value.ifFalse
-                            }
-                        };
-                    } else {
-                        actualValue = <Token<RValue>>{
-                            start: actualValue.start,
-                            end: right.end + 1,
-                            value: <BinaryRValue>{
-                                type: 'binary',
-                                operator: binaryOperator[0],
-                                left,
-                                right
-                            }
-                        };
-                    }
-                }
-
-                return actualValue;
-            }
-        }
-    ))(ctx);
-}
 
 export const variableModification = map(
     expect(
@@ -396,14 +394,14 @@ export const variableModification = map(
             token(any(variableLiteral, between(lpr, castedRValue, rpr))),
             many(between(
                 lbr,
-                recoverByAddingChars(rValue(), '0'),
+                recoverByAddingChars(rValue, '0'),
                 rstr(']')
             )),
             spaces,
             ref(binaryOperator, op => op.endsWith('=')),
             surely(seq(
                 spaces,
-                recoverByAddingChars(rValue(), '0')
+                recoverByAddingChars(rValue, '0')
             ))
         ),
         'Variable modification statement'
@@ -446,7 +444,7 @@ export const topmostVariableDeclaration = map(
                     spaces,
                     rstr('='),
                     spaces,
-                    recoverByAddingChars(rValue(), '0')
+                    recoverByAddingChars(rValue, '0')
                 )
             )
         ),
@@ -476,7 +474,7 @@ export const variableDeclaration = map(
                     spaces,
                     rstr('='),
                     spaces,
-                    recoverByAddingChars(rValue(), '0')
+                    recoverByAddingChars(rValue, '0')
                 )
             )
         ),

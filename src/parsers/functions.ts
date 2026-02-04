@@ -16,7 +16,7 @@ const parameter = map(seq(
 	spaces,
 	rstr(':'),
 	spaces,
-	recoverByAddingChars(typeAliasDefinition(), 'Int')
+	recoverByAddingChars(typeAliasDefinition, 'Int')
 ), ([name, _, __, ___, type]) => <Parameter>({ name, type }));
 
 const parameterList = time('parameters', between(
@@ -41,7 +41,7 @@ const functionDeclarationWithoutOpeningBracket = time('function declarations', m
 				functionName,
 				parameterList,
 				spaces,
-				token(opt(map(typeAliasDefinition(), t => t.value)))
+				token(opt(map(typeAliasDefinition, t => t.value)))
 			))
 		), ([kind, _, [name, params, __, returnType]]) => {
 			params ??= [];
@@ -63,7 +63,7 @@ const functionDeclarationWithoutOpeningBracket = time('function declarations', m
 						opt(spaces),
 						parameterList,
 						spaces,
-						token(opt(map(typeAliasDefinition(), t => t.value)))
+						token(opt(map(typeAliasDefinition, t => t.value)))
 					))
 				),
 				seq(
@@ -74,7 +74,7 @@ const functionDeclarationWithoutOpeningBracket = time('function declarations', m
 						opt(spaces),
 						parameterList,
 						spaces,
-						token(opt(map(typeAliasDefinition(), t => t.value)))
+						token(opt(map(typeAliasDefinition, t => t.value)))
 					))
 				)
 			)

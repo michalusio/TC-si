@@ -87,3 +87,5 @@ pub def malloc(size: U16) Rc {
 pub def free(a: Rc) {
     
 }
+
+type MyOwnBool Enum[yes, no, notfound]

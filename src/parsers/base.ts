@@ -14,6 +14,7 @@ import {
   Token,
   token,
   wspaces,
+  lazy
 } from "parser-combinators";
 import { rstr, time } from "./utils";
 import { ParseReturnType, VariableName } from "./types/ast";
@@ -125,42 +126,66 @@ export const newline = regex(/[ \t]*\r?\n/, "End of line");
 
 export const functionKind = any(str("def"), str("dot"));
 
-export const typeDefinition = time('type definitions', any(
-  typeAliasDefinition(),
-  between(
-    lab,
-    token(
-      map(
-        seq(
-          wspaces,
-          regex(/\w+/, "Variable name"),
-          exhaust(
-            seq(
-              wspaces,
-              str(","),
-              opt(any(lineComment, blockComment)),
-              wspaces,
-              regex(/\w+/, "Variable name")
-            ),
-            seq(wspaces, rstr(">"))
-          )
-        ),
-        ([_, variant, variants]) => [variant, ...variants.map((p) => p[4])]
-      )
-    ),
-    seq(wspaces, rstr(">"))
+export const oldEnumDefinition = lazy(() => between(
+  lab,
+  token(
+    map(
+      seq(
+        wspaces,
+        regex(/\w+/, "Variable name"),
+        exhaust(
+          seq(
+            wspaces,
+            str(","),
+            opt(any(lineComment, blockComment)),
+            wspaces,
+            regex(/\w+/, "Variable name")
+          ),
+          seq(wspaces, rstr(">"))
+        )
+      ),
+      ([_, variant, variants]) => [variant, ...variants.map((p) => p[4])]
+    )
+  ),
+  seq(wspaces, rstr(">"))
+));
+
+export const newEnumDefinition = lazy(() =>  between(
+  str('Enum['),
+  token(
+    map(
+      seq(
+        wspaces,
+        regex(/\w+/, "Variable name"),
+        exhaust(
+          seq(
+            wspaces,
+            str(","),
+            opt(any(lineComment, blockComment)),
+            wspaces,
+            regex(/\w+/, "Variable name")
+          ),
+          seq(wspaces, rstr("]"))
+        )
+      ),
+      ([_, variant, variants]) => [variant, ...variants.map((p) => p[4])]
+    )
+  ),
+  seq(wspaces, rstr("]"))
+));
+
+export const typeAliasDefinition: Parser<Token<string>> = lazy(() => token(
+  any(
+    map(typeName, (t) => t.value),
+    map(
+      between(lbr, typeAliasDefinition, rstr("]")),
+      (t) => `[${t.value}]`
+    )
   )
 ));
 
-export function typeAliasDefinition(): Parser<Token<string>> {
-  return (ctx) =>
-    token(
-      any(
-        map(typeName, (t) => t.value),
-        map(
-          between(lbr, typeAliasDefinition(), rstr("]")),
-          (t) => `[${t.value}]`
-        )
-      )
-    )(ctx);
-}
+export const typeDefinition = time('type definitions', any(
+  oldEnumDefinition,
+  newEnumDefinition,
+  typeAliasDefinition
+));

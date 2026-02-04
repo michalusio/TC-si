@@ -70,7 +70,7 @@ const returnStatement = map(
 		token(opt(
 			between(
 				spacesPlus,
-				recoverByAddingChars(map(rValue(), v => v.value), '0'),
+				recoverByAddingChars(map(rValue, v => v.value), '0'),
 				any(newline, lineComment, spacesPlus, lookaround(str('}')))
 			)
 		))
@@ -241,7 +241,7 @@ function statementsBlock(): Parser<StatementsBlock> {
 								lineComment,
 								map(seq(variableDeclaration, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
 								map(seq(variableModification, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
-								map(seq(rValue(), any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value)
+								map(seq(rValue, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value)
 							)),
 							(s) => typeof s.value === 'string' ? ({...s, value: <CommentStatement>{ type: 'comment', value: s.value }}) : (s as Token<Statement>)
 						),
@@ -261,7 +261,7 @@ function whileBlock(): Parser<WhileStatement> {
 			str('while'),
 			spacesPlus,
 			surely(seq(
-				recoverByAddingChars(rValue(), 'true'),
+				recoverByAddingChars(rValue, 'true'),
 				spaces,
 				rstr('{'),
 				statementsBlock(),
@@ -286,7 +286,7 @@ function ifBlock(): Parser<IfStatement> {
 			surely(seq(
 				map(
 					seq(
-						recoverByAddingChars(rValue(), 'true'),
+						recoverByAddingChars(rValue, 'true'),
 						spaces,
 						rstr('{'),
 						statementsBlock(),
@@ -303,7 +303,7 @@ function ifBlock(): Parser<IfStatement> {
 							str('elif'),
 							spacesPlus,
 							surely(seq(
-								recoverByAddingChars(rValue(), 'true'),
+								recoverByAddingChars(rValue, 'true'),
 								spaces,
 								rstr('{'),
 								statementsBlock(),
@@ -389,7 +389,7 @@ function switchBlock(): Parser<SwitchStatement> {
 				spacesPlus,
 				surely(map(
 					seq(
-						rValue(),
+						rValue,
 						oneOrMany(newline),
 						manyForSure(
 							map(
@@ -406,7 +406,7 @@ function switchBlock(): Parser<SwitchStatement> {
 											seq(str('default'), lookaround(any(str(' '), str('{')))),
 											([v]) => v
 										),
-										map(rValue(), v => v.value)
+										map(rValue, v => v.value)
 									)),
 									spacesPlus,
 									rstr('{'),
@@ -489,7 +489,7 @@ export const languageParser = map(
 				map(seq(typeDeclaration, any(newline, lineComment, spacesPlus, eof)), ([v]) => v),
 				map(seq(variableDeclaration, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
 				map(seq(variableModification, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
-				map(seq(rValue(), any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value)
+				map(seq(rValue, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value)
 			))
 		)
 	),
