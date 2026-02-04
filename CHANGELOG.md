@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.7.3]
+- Faster parsing of large files with upgraded `parser-combinators` package
+- Added the new enum definition support: `type MyEnum Enum[yes, no, notfound]`
+
 ## [0.7.2]
 - Fixed while loops warning about infinite looping when the variable modification was done with `/=`
 - Improved string literals parsing performance
