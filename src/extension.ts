@@ -7,7 +7,6 @@ import {
   CompletionItemProvider,
   Declaration,
   DeclarationProvider,
-  Diagnostic,
   DiagnosticSeverity,
   DocumentSemanticTokensProvider,
   ExtensionContext,
@@ -34,39 +33,34 @@ import {
   QuickPickItemKind,
   TextDocumentContentProvider,
   EventEmitter,
-  TextDocument
+  TextDocument,
+  Position,
 } from "vscode";
 import path from 'path';
 import {
-  baseEnvironment,
   clearTokensData,
   diagnostics,
-  finalizeTokensData,
   isSymphonyFile,
   legend,
   log,
+  logLine,
+  migrateTokenData,
 } from "./storage";
-import { getPositionInfo, getDeclarations } from "./parser";
-import { getRecoveryIssues } from "./parsers/base";
-import {
-  checkVariableExistence,
-  performParsing,
-} from "./checks";
+import { getPositionInfo, getDeclarations, getPositionInformation } from "./parser";
 import { typeTokenToTypeString } from "./typeSetup";
 import './definitions';
-import { generateMockDocument, showInlayTypeHints } from "./workspace";
+import { showInlayTypeHints } from "./workspace";
 import { compile } from "./compiler";
 import { getTextRepresentation } from "./compiler/representation";
-import { FunctionDefinition, ParserOutput, Statement, TokenRange } from "./parsers/types/ast";
 import systemCode from "./compiler/systemCode.si";
-import { OptLevel, StripLevel } from "./compiler/optimizer";
-import { resetId } from "./compiler/utils";
-import { checkSymphonyDiagnostics } from "./parsers/symphony";
+import { OptLevel } from "./compiler/optimizer";
+import { SimplexDiagnostic } from "./SimplexDiagnostic";
+import { getDefinition, parseAndTypeCheck } from "./parseAndTypeCheck";
 
-const diagnosticsPerFile: Record<string, Diagnostic[]> = {};
-export const deduplicateDiagnostics = (diags: Diagnostic[]): Diagnostic[] => {
-  const key = (d: Diagnostic) => `${d.message}(${d.range.start.line}:${d.range.start.character},${d.range.end.line}:${d.range.end.character})`;
-  const container: Record<string, Diagnostic> = {};
+const diagnosticsPerFile: Record<string, SimplexDiagnostic[]> = {};
+export const deduplicateDiagnostics = (diags: SimplexDiagnostic[]): SimplexDiagnostic[] => {
+  const key = (d: SimplexDiagnostic) => `${d.message}(${d.range.start.line}:${d.range.start.character},${d.range.end.line}:${d.range.end.character})`;
+  const container: Record<string, SimplexDiagnostic> = {};
   diags.forEach(d => {
     const k = key(d);
     if (!(k in container)) {
@@ -143,7 +137,9 @@ export function activate(context: ExtensionContext)
   const hoverProvider: HoverProvider = {
     provideHover(document, position): ProviderResult<Hover> {
       const data = getPositionInfo(document, position);
-      if (!data) return;
+      if (!data) {
+        return;
+      }
 
       const range = new Range(
         document.positionAt(data.current.start),
@@ -159,8 +155,11 @@ export function activate(context: ExtensionContext)
         return new Hover(label, range);
       }
       
-      if (!data.info.range) return;
-      
+      if (!data.info.range) {
+        
+        return;
+      }
+
       const label = new MarkdownString();
       const startPosition = document.positionAt(data.info.range.start);
       const line = document.lineAt(startPosition.line);
@@ -206,10 +205,9 @@ export function activate(context: ExtensionContext)
 
       log.clear();
       clearTokensData(document);
-      getRecoveryIssues().length = 0;
       diagnostics.clear();
       
-      return new Promise<SemanticTokens>(res => {
+      return new Promise<SemanticTokens>((res, rej) => {
         const tokensBuilder = new SemanticTokensBuilder(legend);
 
         const startTime = Date.now();
@@ -217,35 +215,25 @@ export function activate(context: ExtensionContext)
         if (token.isCancellationRequested) {
           statusItem.busy = false;
           statusItem.text = "TC Simplex stopped parsing the file";
+          rej();
+          return;
         }
 
-        const [parseResult, diags] = performParsing(document);
+        const systemLines = systemCode.split('\n').length;
+        const combinedCode = isSymphonyFile(document)
+          ? `${systemCode}\n${document.getText()}`
+          : document.getText();
+
+        let [parseResult, diags, compiledDocument] = parseAndTypeCheck(combinedCode);
 
         if (token.isCancellationRequested) {
           statusItem.busy = false;
           statusItem.text = "TC Simplex stopped parsing the file";
+          rej();
+          return;
         }
 
         if (parseResult) {
-          checkVariableExistence(
-            document,
-            parseResult,
-            [
-              baseEnvironment,
-              {
-                type: "scope",
-                switchTypes: new Map(),
-                functions: [],
-                operators: [],
-                types: new Map(),
-                variables: new Map(),
-              },
-            ],
-            diags
-          );
-          if (isSymphonyFile(document)) {
-            checkSymphonyDiagnostics(document, parseResult, diags);
-          }
           statusItem.busy = false;
           statusItem.text = `TC Simplex parsed the file (in ${Date.now() - startTime}ms)`;
         } else {
@@ -254,24 +242,13 @@ export function activate(context: ExtensionContext)
           statusItem.text = `TC Simplex failed to parse the file (in ${Date.now() - startTime}ms)`;
         }
 
+        diags = migrateTokenData(compiledDocument, document, diags, systemLines);
         diagnosticsPerFile[document.uri.toString()] = deduplicateDiagnostics(diags);
         Object.entries(diagnosticsPerFile).forEach(([key, value]) => {
           diagnostics.set(Uri.parse(key, true), value);
         });
-        finalizeTokensData(document);
 
-        if (diags.every(d => d.severity !== DiagnosticSeverity.Error)) {
-          const docId = Uri.parse(document.uri.with({
-            scheme: 'symphony',
-          }).toString().replace('.si', '.symphony'));
-
-          const obj = docIdMap[docId.toString()];
-
-          if (obj) {
-            compileDocument(document, false, obj[1], obj[2]);
-          }
-        }
-
+        recompile(document, diags);
         res(tokensBuilder.build());
       });
     },
@@ -323,22 +300,14 @@ export function activate(context: ExtensionContext)
 
     const stripSymbols = await window.showQuickPick([
       <QuickPickItem>{
-        label: "-S2",
+        label: "-S",
         kind: QuickPickItemKind.Default,
-        detail: 'Comments will be stripped, public functions will be stripped if not used/inlined',
-        description: 'Good for executables'
+        detail: 'Comments will be stripped'
       },
       <QuickPickItem>{
-        label: "-S1",
+        label: "",
         kind: QuickPickItemKind.Default,
-        detail: 'Comments will be stripped, but all public functions will be kept, even if inlined',
-        description: 'Good for libraries'
-      },
-      <QuickPickItem>{
-        label: "-S0",
-        kind: QuickPickItemKind.Default,
-        detail: 'All public functions and comments will be kept',
-        description: 'Good for debugging'
+        detail: 'All comments will be kept'
       }
     ], {
       title: "Choose stripping level"
@@ -365,66 +334,50 @@ export function activate(context: ExtensionContext)
     });
 
     const optimizationLevel = (optimize?.label.slice(1) as OptLevel | undefined) ?? "O0";
-    const stripDebugSymbols = (stripSymbols?.label.slice(1) as StripLevel | undefined) ?? "S0";
+    const stripDebugSymbols = stripSymbols?.label === '-S';
 
     await compileDocument(editor.document, true, optimizationLevel, stripDebugSymbols);
   }));
 }
 
-const compileDocument = async (document: TextDocument, warn: boolean, optimizationLevel: OptLevel, stripDebugSymbols: StripLevel) => {
-    resetId();
-    const sysLib = await parseSystemLibrary();
-    if (!sysLib) {
-      if (warn) {
-        await window.showErrorMessage("Cannot load the simplex system library.");
-      }
-      return;
-    }
+const compileDocument = async (document: TextDocument, warn: boolean, optimizationLevel: OptLevel, stripDebugSymbols: boolean) => {
+  try {
+    const systemLines = systemCode.split('\n').length;
+    const combinedCode = `${systemCode}\n${document.getText()}`;
+    let [parseResult, diags, compiledDocument] = parseAndTypeCheck(combinedCode);
 
-    log.clear();
-    clearTokensData(document);
-    getRecoveryIssues().length = 0;
-    const [parseResult, diags] = performParsing(document);
     if (!parseResult) {
       if (warn) {
         await window.showErrorMessage("Cannot parse the file correctly.");
       }
       return;
     }
-    checkVariableExistence(
-      document,
-      parseResult,
-      [
-        baseEnvironment,
-        {
-          type: "scope",
-          switchTypes: new Map(),
-          functions: [],
-          operators: [],
-          types: new Map(),
-          variables: new Map(),
-        },
-      ],
-      diags
-    );
-    checkSymphonyDiagnostics(document, parseResult, diags);
-    finalizeTokensData(document);
 
-    if (diags.some(d => d.severity === DiagnosticSeverity.Error)) {
+    if (diags.some(d => d.range.start.line < systemLines && d.severity === DiagnosticSeverity.Error)) {
+      if (warn) {
+        await window.showErrorMessage("Library files have errors - please fix them first.");
+      }
+      return;
+    }
+    if (diags.some(d => d.range.start.line >= systemLines && d.severity === DiagnosticSeverity.Error)) {
       if (warn) {
         await window.showErrorMessage("File has errors - please fix them first.");
       }
       return;
     }
 
-    const compiledCode = compile(parseResult, sysLib, {
+    const systemLinesOffset = compiledDocument.offsetAt(new Position(systemLines - 1, 0));
+
+    const compiledCode = compile(parseResult, {
       name: path.parse(document.fileName).name,
+      librariesEndLineOffset: systemLinesOffset,
       optimizationLevel,
-      stripLevel: stripDebugSymbols
+      stripDebugSymbols
     }, {
-      document,
-      getSystemFunction: getDefinition(sysLib, true),
-      getDefinition: getDefinition(parseResult)
+      document: compiledDocument,
+      getDefinition: getDefinition(parseResult, systemLinesOffset),
+      typeGetter: range => getPositionInformation(compiledDocument, range)?.info?.type ?? null,
+      topmost: true
     });
 
     const docId = Uri.parse(document.uri.with({
@@ -440,134 +393,30 @@ const compileDocument = async (document: TextDocument, warn: boolean, optimizati
 
     const doc = await workspace.openTextDocument(docId);
     await window.showTextDocument(doc, { preview: true, viewColumn: ViewColumn.Beside, preserveFocus: true });
-  }
-
-const docIdMap: Record<string, [string, OptLevel, StripLevel]> = {};
-
-function getDefinition(nodes: ParserOutput, onlyPublic: boolean = false): (rangeOrName: TokenRange | string) => FunctionDefinition | null {
-  function traverse(node: Statement, rangeOrName: TokenRange | string): FunctionDefinition | null {
-    switch (node.type) {
-      case '_default':
-      case '_reg_alloc_use':
-      case 'array':
-      case "binary":
-      case 'break':
-      case 'cast':
-      case 'continue':
-      case 'declaration':
-      case 'dotMethod':
-      case 'function':
-      case 'index':
-      case 'interpolated':
-      case 'modification':
-      case 'number':
-      case 'parenthesis':
-      case 'return':
-      case 'string':
-      case 'ternary':
-      case 'type-definition':
-      case 'unary':
-      case 'variable':
-      case 'asm':
-        return null;
-      case 'statements': {
-          for (const s of node.statements) {
-            const def = traverse(s.value, rangeOrName);
-            if (def) return def;
-          }
-          return null;
-        }
-      case 'if': {
-          for (const s of node.ifBlock) {
-            const def = traverse(s.value, rangeOrName);
-            if (def) return def;
-          }
-          for (const s of node.elseBlock) {
-            const def = traverse(s.value, rangeOrName);
-            if (def) return def;
-          }
-          return null;
-        }
-      case 'switch': {
-          for (const c of node.cases) {
-            for (const s of c.statements) {
-              const def = traverse(s.value, rangeOrName);
-              if (def) return def;
-            }
-          }
-          return null;
-        }
-      case 'while': {
-        for (const s of node.statements) {
-          const def = traverse(s.value, rangeOrName);
-          if (def) return def;
-        }
-        return null;
-      }
-      case 'function-declaration': {
-        if (!onlyPublic || node.definition.public) {
-          if (typeof rangeOrName === 'string') {
-            if (node.definition.name.value === rangeOrName) {
-              return node.definition;
-            }
-          } else {
-            if (node.definition.name.start === rangeOrName.start && node.definition.name.end === rangeOrName.end) {
-              return node.definition;
-            }
-          }
-        }
-        for (const s of node.statements) {
-            const def = traverse(s.value, rangeOrName);
-            if (def) return def;
-          }
-        return null;
-      }
+  } catch (ex) {
+    if (ex instanceof Error) {
+      logLine(ex.stack + '');
+    } else {
+      logLine(ex + '');
     }
-  }
-  
-  return (rangeOrName: TokenRange | string) => {
-    for (const s of nodes) {
-      const def = traverse(s.value, rangeOrName);
-      if (def) return def;
-    }
-    return null;
+    throw ex;
   }
 }
 
-let cachedSystemLibrary: ParserOutput | null = null;
-async function parseSystemLibrary(): Promise<ParserOutput | null> {
-  if (cachedSystemLibrary) return cachedSystemLibrary;
+const docIdMap: Record<string, [string, OptLevel, boolean]> = {};
 
-  const document = generateMockDocument('simplex.system.lib.si', systemCode, systemCode.split('\n'));
+function recompile(document: TextDocument, diags: SimplexDiagnostic[]) {
+  if (diags.every(d => d.severity !== DiagnosticSeverity.Error)) {
+    const docId = Uri.parse(document.uri.with({
+      scheme: 'symphony',
+    }).toString().replace('.si', '.symphony'));
 
-  log.clear();
-  clearTokensData(document);
-  getRecoveryIssues().length = 0;
-  const [parseResult, diags] = performParsing(document);
-  if (!parseResult) {
-    return null;
+    const obj = docIdMap[docId.toString()];
+
+    if (obj) {
+      compileDocument(document, false, obj[1], obj[2]);
+    }
   }
-  checkVariableExistence(
-    document,
-    parseResult,
-    [
-      baseEnvironment,
-      {
-        type: "scope",
-        switchTypes: new Map(),
-        functions: [],
-        operators: [],
-        types: new Map(),
-        variables: new Map(),
-      },
-    ],
-    diags
-  );
-  checkSymphonyDiagnostics(document, parseResult, diags);
-  finalizeTokensData(document);
-
-  cachedSystemLibrary = parseResult;
-  return cachedSystemLibrary;
 }
 
 const onDidChangeEmitter = new EventEmitter<Uri>();

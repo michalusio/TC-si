@@ -1,13 +1,14 @@
-import { any, between, exhaust, intP, map, Parser, regex, seq, spaces, spacesPlus, str, wspaces } from "parser-combinators";
+import { any, between, exhaust, intP, map, Parser, regex, seq, spaces, spacesPlus, str, Token, wspaces } from "parser-combinators";
 import { Alu, In, Jump, JumpReg, Mem, Out } from "../compiler/instructions";
 import { AluInstruction, Immediate, JumpInstruction, LabelMarker, Register } from "../compiler/types";
 import { rstr } from "./utils";
 import { DiagnosticSeverity, Range, TextDocument } from "vscode";
-import { Statement, StatementsBlock, Token } from "./types/ast";
+import { Statement, StatementsBlock } from "./types/ast";
 import { SimplexDiagnostic } from "../SimplexDiagnostic";
 import { CP850TableMap, isRValue } from "../compiler";
 import { RValue } from "./types/rvalue";
 import { getInnerArrayType, getIntBitSize, isIntegerType, typeStringToTypeToken } from "../typeSetup";
+import { lineComment } from "./base";
 
 const register = any<Register>(
     regex(/r(?:(?:10)|(?:11)|(?:12)|(?:13)|[0-9])/i, 'register') as Parser<Register>,
@@ -141,11 +142,12 @@ export const symphonyParser = between(
                 jumps,
                 io,
                 stores,
-                loads
+                loads,
+                map(lineComment, comment => ({ type: 'comment', id: comment} as const))
             ),
             wspaces
         ),
-        seq(wspaces, rstr('}', false))
+        seq(wspaces, rstr('}'))
     ),
     spaces
 );

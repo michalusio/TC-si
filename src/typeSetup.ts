@@ -1,3 +1,4 @@
+import { TokenRange } from "parser-combinators";
 import type {
   Environment,
   EnvironmentFunction,
@@ -6,7 +7,7 @@ import type {
   EnvironmentVariable,
 } from "./environment";
 import { levenshtein } from "./levenshtein";
-import { FunctionDefinition, Parameter, TokenRange, TypeDefinition } from "./parsers/types/ast";
+import { FunctionDefinition, Parameter, TypeDefinition } from "./parsers/types/ast";
 import { baseEnvironment } from "./storage";
 
 /**

@@ -24,12 +24,13 @@ export type Variable = {
     type: 'static',
     value: number
 } | {
-    type: 'array_8',
-    offset: number,
+    type: 'string',
     size: number
 } | {
     type: 'array_16',
-    offset: number,
     size: number
+} | {
+    type: 'topmost',
+    offset: number
 }
 export type VariableState = Record<string, Variable>;

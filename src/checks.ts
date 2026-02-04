@@ -1,14 +1,12 @@
 import { DiagnosticSeverity, Range, TextDocument } from "vscode";
-import { getRecoveryIssues } from "./parsers/base";
 import { log, logLine, tokensData } from "./storage";
 import { languageParser } from "./parser";
-import { isFailure, ParseError, Parser } from "parser-combinators";
+import { isFailure, ParseError, Parser, Token } from "parser-combinators";
 import {
   FunctionDefinition,
   ParserOutput,
   Statement,
   StatementsBlock,
-  Token,
   VariableName,
 } from "./parsers/types/ast";
 import { SimplexDiagnostic } from './SimplexDiagnostic';
@@ -72,7 +70,7 @@ export const performParsing = (
     } else log.appendLine("Error: " + p);
   }
 
-  const issues = getRecoveryIssues();
+  const issues: { type: string, kind: string, index: number, text: string }[] = [];
   for (const issue of issues) {
     if (issue.type === "skipped") {
       diags.push(
@@ -205,6 +203,7 @@ export const checkVariableExistence = (
             ? tryGetDefFunction(environments, scope.definition.name.value, paramTypes)
             : tryGetDotFunction(environments, scope.definition.name.value, paramTypes);
           if (kind !== null) {
+            logLine(`function redeclared: ${scope.definition.name.value} at ${scope.definition.name.start}-${scope.definition.name.end}`);
             diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(scope.definition.name.start),
@@ -492,6 +491,9 @@ export const checkVariableExistence = (
       }
       case 'statements': {
         const nextEnvironments: Environment[] = [...environments, newScope()];
+        if (!scope.statements) {
+          logLine('in statements');
+        }
         checkVariableExistence(
           document,
           scope.statements,
@@ -561,6 +563,9 @@ export const checkVariableExistence = (
           }
         });
         addAssumptions(document, nextEnvironments, scope.definition.assumptions, diagnostics);
+        if (!scope.statements) {
+          logLine('in function declaration');
+        }
         checkVariableExistence(
           document,
           scope.statements,
@@ -586,6 +591,9 @@ export const checkVariableExistence = (
         diagnostics.push(...processRValue(document, environments, scope.value.value));
         diagnostics.push(...checkForSimplification(scope.value, document));
         const nextIfEnvironments: Environment[] = [...environments, newScope()];
+        if (!scope.ifBlock) {
+          logLine('in ifblock');
+        }
         checkVariableExistence(
           document,
           scope.ifBlock,
@@ -603,6 +611,9 @@ export const checkVariableExistence = (
           ));
         }
         const nextElseEnvironments: Environment[] = [...environments, newScope()];
+        if (!scope.elseBlock) {
+          logLine('in elseBlock');
+        }
         checkVariableExistence(
           document,
           scope.elseBlock,
@@ -693,6 +704,9 @@ export const checkVariableExistence = (
             `A while block condition has to be a boolean type - was ${typeTokenToTypeString(varType)}`
           ));
         }
+        break;
+      }
+      case 'comment': {
         break;
       }
       case 'type-definition': {
@@ -1091,6 +1105,7 @@ const doesReturnValue = (document: TextDocument, statements: StatementsBlock, en
   for (let index = statements.length - 1; index >= 0; index--) {
     const statement = statements[index].value;
     switch (statement.type) {
+      case 'asm': return 'empty';
       case 'return': {
         if (statement.value.value) {
           returnValue = 'value';
@@ -1227,6 +1242,7 @@ const hasBreakStatement = (statements: StatementsBlock): boolean => {
     const statement = s.value;
     switch (statement.type) {
       case 'break': return true;
+      case 'return': return true;
       case 'if': {
         const hasBreak = [
           statement.ifBlock,
@@ -1325,7 +1341,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
   const rValue = value.value;
   switch (rValue.type) {
     case 'number':
-      logLine(`Number: Int`);
       tokensData.push({
         definition: rValue.value.toString(),
         position: value,
@@ -1337,7 +1352,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       return 'Int';
     case 'string':
     case 'interpolated':
-      logLine(`String: String`);
       tokensData.push({
         definition: rValue.value.toString(),
         position: value,
@@ -1349,7 +1363,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       return 'String';
     case 'parenthesis': {
       const type = getType(rValue.value, document, environments, diagnostics);
-      logLine(`Parenthesis: ${type}`);
       tokensData.push({
         definition: "",
         position: value,
@@ -1394,7 +1407,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
         });
       }
-      logLine(`Unary: ${operator?.returnType ?? '?'}`);
       return transformGenericType(operator, [type]);
     }
     case 'binary': {
@@ -1438,7 +1450,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
         });
       }
-      logLine(`Binary: ${operator?.returnType ?? '?'}`);
       return transformGenericType(operator, [leftType, rightType]);
     }
     case 'ternary': {
@@ -1463,7 +1474,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           `Both ternary branches must have the same type - was ${typeTokenToTypeString(ifTrueType)} and ${typeTokenToTypeString(ifFalseType)}`
         ));
       }
-      logLine(`Ternary: ${ifTrueType}`);
       return ifTrueType;
     }
     case 'dotMethod': {
@@ -1525,7 +1535,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
         });
       }
-      logLine(`Dot Method: ${dotFunction?.returnType ?? '?'}`);
       return transformGenericType(dotFunction, paramTypes);
     }
     case 'function': {
@@ -1606,7 +1615,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
         });
       }
-      logLine(`Def Method: ${func?.returnType ?? '?'}`);
       return transformGenericType(func, paramTypes);
     }
     case 'cast': {
@@ -1664,7 +1672,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           ));
         }
       }
-      logLine(`Cast: ${castedToType}`);
       return castedToType;
     }
     case 'array': {
@@ -1695,10 +1702,8 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           }
           return false;
         })) {
-        logLine(`Array: *?`);
         return '*?';
       }
-      logLine(`Array: *${typeName}`);
       return `*${typeName}`;
     }
     case 'variable': {
@@ -1712,7 +1717,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           `Unknown variable type`
         ));
       }
-      logLine(`Variable: ${variableData?.varType ?? '?'}`);
       return variableData?.varType ?? '?';
     }
     case 'index': {
@@ -1737,7 +1741,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           `An indexed value has to be an array type - was ${typeTokenToTypeString(variableType)}`
         ));
       }
-      logLine(`Index: ${afterIndexType ?? '?'}`);
       return afterIndexType ?? '?';
     }
     case '_default': {
@@ -1751,7 +1754,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
           `Unknown type`
         ));
       }
-      logLine(`Type: ${type ?? '?'}`);
       tokensData.push({
         definition: "",
         position: value,

@@ -6,6 +6,9 @@
             "include": "#comments"
         },
         {
+            "include": "#constants"
+        },
+        {
             "include": "#label"
         },
         {
@@ -42,6 +45,15 @@
                 {
                     "name": "comment.line.symphony",
                     "match": "//.*\\n?"
+                },
+                {
+                    "name": "comment.line.symphony",
+                    "match": ";.*\\n?"
+                },
+                {
+                    "name": "comment.block.symphony",
+                    "begin": "/\\*",
+                    "end": "\\*/"
                 }
             ]
         },
@@ -58,8 +70,15 @@
             ]
         },
         "immediate": {
-            "name": "constant.numeric.symphony",
-            "match": "(0x[0-9a-fA-F]+)|([0-9]+)"
+            "patterns": [
+                {
+                    "name": "constant.numeric.symphony",
+                    "match": "(0x[0-9a-fA-F]+)|([0-9]+)"
+                },
+                {
+                    "include": "#constant"
+                }
+            ]
         },
         "registerOrImmediate": {
             "patterns": [
@@ -81,6 +100,28 @@
                     "name": "entity.name.function.symphony"
                 }
             ]
+        },
+        "constant": {
+            "name": "constant.language.symphony",
+            "match": "[_A-Z]+"
+        },
+        "constants": {
+            "match": "(const) (.+?)\\s*=\\s*(.+)",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.symphony"
+                },
+                "2": {
+                    "patterns": [{
+                        "include": "#constant"
+                    }]
+                },
+                "3": {
+                    "patterns": [{
+                        "include": "#immediate"
+                    }]
+                }
+            }
         },
         "label": {
             "match": "(.+?):",

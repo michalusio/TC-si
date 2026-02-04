@@ -1,0 +1,7 @@
+///symphony
+
+pub def main() {
+    var a = input()
+    var b = input()
+    output(a + b)
+}

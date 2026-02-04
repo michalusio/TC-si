@@ -11,19 +11,12 @@ import {
   regex,
   seq,
   str,
+  Token,
+  token,
   wspaces,
 } from "parser-combinators";
-import { rstr, time, token } from "./utils";
-import { ParseReturnType, Token, VariableName } from "./types/ast";
-
-const recoveryIssues: {
-  type: "added" | "skipped";
-  kind?: "warning";
-  text: string;
-  index: number;
-}[] = [];
-
-export const getRecoveryIssues = () => recoveryIssues;
+import { rstr, time } from "./utils";
+import { ParseReturnType, VariableName } from "./types/ast";
 
 export const lbr = str("[");
 export const rbr = str("]");
@@ -125,7 +118,7 @@ export const binaryOperator = time('operators', any(
 
 export type BinaryOperators = ParseReturnType<typeof binaryOperator>;
 
-export const lineComment = time('comments', regex(/\s*\/\/.*?\r?\n/s, "Line comment"));
+export const lineComment = time('comments', map(regex(/\s*\/\/.*?\r?\n/s, "Line comment"), s => s.trim().slice(2)));
 export const blockComment = time('comments', regex(/\s*\/\*.*?\*\//s, "Block comment"));
 
 export const newline = regex(/[ \t]*\r?\n/, "End of line");
@@ -149,7 +142,7 @@ export const typeDefinition = time('type definitions', any(
               wspaces,
               regex(/\w+/, "Variable name")
             ),
-            seq(wspaces, rstr(">", false))
+            seq(wspaces, rstr(">"))
           )
         ),
         ([_, variant, variants]) => [variant, ...variants.map((p) => p[4])]

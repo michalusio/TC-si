@@ -2,11 +2,10 @@ import { logLine } from "../storage";
 import { Instruction } from "./instructions";
 import * as optimizationsRecord from './optimizations';
 
-type Optimization = (instruction: Instruction, index: number, stream: Instruction[], stripLevel: StripLevel) => boolean;
+type Optimization = (instruction: Instruction, index: number, stream: Instruction[]) => boolean;
 export type OptLevel = 'O0' | 'O1' | 'O2';
-export type StripLevel = 'S0' | 'S1' | 'S2';
 
-export const optimize = (instructions: Instruction[], optimizationLevel: OptLevel, stripLevel: StripLevel): Instruction[] => {
+export const optimize = (instructions: Instruction[], optimizationLevel: OptLevel): Instruction[] => {
     if (optimizationLevel === 'O0') return instructions;
 
     const instr = [...instructions];
@@ -20,7 +19,7 @@ export const optimize = (instructions: Instruction[], optimizationLevel: OptLeve
         for (const opt of optimizations) {
             for (let index = instr.length - 1; index >= 0; index--) {
                 const instruction = instr[index];
-                const result = opt(instruction, index, instr, stripLevel);
+                const result = opt(instruction, index, instr);
                 anyChanges ||= result;
                 if (result) {
                     logLine(`Applied ${opt.name} on line ${index}`);

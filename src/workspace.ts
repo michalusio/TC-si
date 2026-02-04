@@ -1,5 +1,6 @@
 import { basename } from "path";
 import { EndOfLine, Position, Range, TextDocument, Uri, workspace } from "vscode";
+import { logLine } from "./storage";
 
 const setting = <T>(name: string, defaultValue: T) => {
     if (workspace.getConfiguration('tcsi').get(name) == null) {
@@ -16,7 +17,7 @@ export const showInlayTypeHints = setting('showInlayTypeHints', true);
 export const logDebugInfo = setting('logDebugInfo', false);
 
 export const generateMockDocument = (path: string, text: string, textSplitted: string[]): TextDocument => {
-    return {
+    const mock = <TextDocument>{
         uri: Uri.file(path),
         fileName: basename(path),
         isUntitled: false,
@@ -26,7 +27,7 @@ export const generateMockDocument = (path: string, text: string, textSplitted: s
         isClosed: false,
         eol: EndOfLine.LF,
         encoding: 'utf8',
-        lineCount: text.split("\n").length,
+        lineCount: textSplitted.length,
         save: () => Promise.resolve(false),
         lineAt: (lineOrPosition: number | Position) => {
             const lineNumber = typeof lineOrPosition === 'number'
@@ -59,17 +60,24 @@ export const generateMockDocument = (path: string, text: string, textSplitted: s
             let index = 0;
             for (let lineNumber = 0; lineNumber < textSplitted.length; lineNumber++) {
                 if (position.line === lineNumber) {
-                    index += textSplitted[lineNumber].length;
-                } else {
                     index += position.character;
+                    return index;
+                } else {
+                    index += textSplitted[lineNumber].length + 1;
                 }
             }
             return index;
         },
         positionAt: (offset: number) => {
+            if (Math.round(offset) !== offset) {
+                logLine(`Weird offset: ${offset}`);
+            }
             for (let lineNumber = 0; lineNumber < textSplitted.length; lineNumber++) {
-                if (offset > textSplitted[lineNumber].length + 1) {
+                if (offset >= textSplitted[lineNumber].length + 1) {
                     offset -= textSplitted[lineNumber].length + 1;
+                    if (offset === 0) {
+                        return new Position(lineNumber + 1, 0);
+                    }
                 } else {
                     return new Position(lineNumber, offset);
                 }
@@ -78,12 +86,15 @@ export const generateMockDocument = (path: string, text: string, textSplitted: s
         },
         getText: (range?: Range) => {
             if (!range) return text;
-            throw 'unsupported';
+            const start = mock.offsetAt(range.start);
+            const end = mock.offsetAt(range.end);
+            return text.slice(start, end);
         },
         getWordRangeAtPosition: (position: Position) => {
             return new Range(position, position);
         },
-        validatePosition: () => { throw 'unsupported'; },
-        validateRange: () => { throw 'unsupported'; }
+        validatePosition: (p) => p,
+        validateRange: (r) => r
     };
+    return mock;
 }

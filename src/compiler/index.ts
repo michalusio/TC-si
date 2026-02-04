@@ -1,20 +1,23 @@
-import { ParserOutput } from '../parsers/types/ast';
+import { FunctionDeclaration, ParserOutput, StatementsBlock } from '../parsers/types/ast';
 import { Comment, Instruction, InstructionOrBlock } from './instructions';
 import { CompilationResult, compileNode, CompileUtilities } from './compilation';
-import { optimize, OptLevel, StripLevel } from './optimizer';
+import { optimize, OptLevel } from './optimizer';
 import { RegisterState, VariableState } from './types';
 import { logLine } from '../storage';
+import { addRcHandling } from './rc';
+import { Token } from 'parser-combinators';
 
 export * from './compilation';
 export * from './representation';
 
 type FileMetadata = {
     name: string,
+    librariesEndLineOffset: number,
     optimizationLevel: OptLevel,
-    stripLevel: StripLevel
+    stripDebugSymbols: boolean
 };
 
-export function compile(ast: ParserOutput, libAst: ParserOutput, data: FileMetadata, utilities: CompileUtilities): CompilationResult {
+export function compile(ast: ParserOutput, data: FileMetadata, utilities: Omit<CompileUtilities, 'malloc_token' | 'increment_rc_token' | 'decrement_rc_token'>): CompilationResult {
     const regState: RegisterState = {
         r1: ['0'],
         r2: ['0'],
@@ -42,24 +45,51 @@ export function compile(ast: ParserOutput, libAst: ParserOutput, data: FileMetad
         }
     };
     try {
+        ast = stripPublicModifiers(ast, data.librariesEndLineOffset);
+
+        const declarationTokens = ast
+            .filter((s): s is Token<FunctionDeclaration> => s.value.type === 'function-declaration')
+            .map(s => s.value.definition.name);
+
+        const decrement_rc_token = declarationTokens.find(s => s.value === 'decrement_rc');
+        if (!decrement_rc_token) {
+            throw `Cannot find function "decrement_rc" in the system library`;
+        }
+
+        const increment_rc_token = declarationTokens.find(s => s.value === 'increment_rc');
+        if (!increment_rc_token) {
+            throw `Cannot find function "increment_rc" in the system library`;
+        }
+
+        const malloc_token = declarationTokens.find(s => s.value === 'malloc');
+        if (!malloc_token) {
+            throw `Cannot find function "malloc" in the system library`;
+        }
+
+        ast = addRcHandling(ast, utilities.typeGetter, decrement_rc_token);
+
         const compiled = compileNode({
             start: 0,
             end: 99999,
             value: {
                 type: 'statements',
-                statements: [
-                    ...ast,
-                    ...libAst,
-                ]
+                statements: ast
             }
-        }, regState, varState, utilities);
+        }, regState, varState, {
+            ...utilities,
+            malloc_token,
+            increment_rc_token,
+            decrement_rc_token
+        });
         const codeWithBlocks = [
             Comment(`Symphony assembly of file ${data.name}`),
             ...compiled
         ];
         let code = destructureBlocks(codeWithBlocks);
-        code = removeComments(code, data.stripLevel);
-        code = optimize(code, data.optimizationLevel, data.stripLevel);
+        if (data.stripDebugSymbols) {
+            code = removeComments(code);
+        }
+        code = optimize(code, data.optimizationLevel);
         return {
             type: 'ok',
             value: code
@@ -82,12 +112,28 @@ const destructureBlocks = (stream: InstructionOrBlock[]): Instruction[] => {
     return result;
 }
 
-const removeComments = (stream: Instruction[], stripLevel: StripLevel): Instruction[] => {
-    if (stripLevel === 'S0') {
-        return stream;
-    }
+const removeComments = (stream: Instruction[]): Instruction[] => {
     logLine(`Stripped comments`);
     return stream
         .filter(s => s.type !== 'comment')
         .filter(s => s.type !== 'newline');
+}
+
+const stripPublicModifiers = (ast: StatementsBlock, librariesEndLineOffset: number): StatementsBlock => {
+    return ast.map(s => {
+        if (s.value.type === 'function-declaration') {
+            return {
+                ...s,
+                value: {
+                    ...s.value,
+                    definition: {
+                        ...s.value.definition,
+                        public: s.start < librariesEndLineOffset ? false : s.value.definition.public
+                    }
+                }
+            }
+        } else {
+            return s;
+        }
+    });
 }

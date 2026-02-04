@@ -31,8 +31,6 @@ addDef("ui_set_text", "pub def ui_set_text(id: String, text: String) {", null, [
 addDef("ui_set_position", "pub def ui_set_position(id: String, x: Int, y: Int) {", null, [stringType, intType, intType]);
 addDef("set_error", "pub def set_error(text: String) {", null, [stringType]);
 addDef("output", "pub def output(text: String) {", null, [stringType]);
-addDef("output", "pub def output(text: U16) {", null, ['U16']);
-addDef("input", "pub def input() U16 {", 'U16', []);
 addDef("add_keyboard_value", "pub def add_keyboard_value(value: Int) {", null, [intType]);
 addDef("has_time_component", "pub def has_time_component() Bool {", boolType, []);
 addDef("has_keyboard_component", "pub def has_keyboard_component() Bool {", boolType, []);

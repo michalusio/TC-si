@@ -1,0 +1,5 @@
+///symphony
+
+pub def main() Int {
+    return 12
+}

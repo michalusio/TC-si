@@ -138,3 +138,36 @@ export const getTargetingRegister = (instruction: Instruction): Register | null 
     }
     return null;
 }
+
+export const getUsedRegisters = (instruction: Instruction): Register[] => {
+    if (isALUInstruction(instruction)) {
+        return [
+            instruction.argument1,
+            ...(typeof instruction.argument2 === 'string' ? [instruction.argument2] : [])
+        ];
+    } else switch (instruction.type) {
+        case 'mov':
+        case 'neg':
+        case 'not':
+            return typeof instruction.argument === 'string' ? [instruction.argument] : [];
+        case 'load_16':
+        case 'load_8':
+            return typeof instruction.address === 'string' ? [instruction.address] : [];
+        case 'store_16':
+        case 'store_8':
+            return [
+                instruction.register,
+                ...(typeof instruction.address === 'string' ? [instruction.address] : [])
+            ];
+        case 'cmp':
+            return [
+                instruction.register,
+                ...(typeof instruction.argument === 'string' ? [instruction.argument] : [])
+            ];
+        case 'out':
+        case 'push':
+            return [instruction.register];
+        default:
+            return [];
+    }
+}

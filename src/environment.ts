@@ -1,4 +1,5 @@
-import { FunctionDefinition, FunctionKind, OperatorKind, TokenRange, TypeDefinition, VariableKind } from "./parsers/types/ast";
+import { TokenRange } from "parser-combinators";
+import { FunctionDefinition, FunctionKind, OperatorKind, TypeDefinition, VariableKind } from "./parsers/types/ast";
 
 export type EnvironmentVariable = {
   type: 'user-defined';

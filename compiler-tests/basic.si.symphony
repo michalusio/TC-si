@@ -1,0 +1,4 @@
+pub-function-start-main:
+	mov r1, 12
+	ret
+pub-function-end-main:

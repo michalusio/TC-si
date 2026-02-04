@@ -1,4 +1,4 @@
-import { Token } from "../parsers/types/ast";
+import { Token } from "parser-combinators";
 import { AssignableRegister, Register, RegisterState, RegisterValueMarker, TempValueMarker, VariableState, VariableValueMarker } from "./types";
 
 export const tempValueMarker = <T>(node: Token<T>): TempValueMarker => {
@@ -130,7 +130,7 @@ export const combineRegisterState = (state: RegisterState, states: RegisterState
 
 export const offsetVariableState = (state: VariableState, offset: number) => {
     for (const v in state) {
-        if (state[v].type !== 'static') {
+        if (state[v].type !== 'static' && 'offset' in state[v]) {
             state[v].offset += offset;
         }
     }
@@ -139,7 +139,7 @@ export const offsetVariableState = (state: VariableState, offset: number) => {
 export const copyVariableState = (state: VariableState): VariableState => {
     const result: VariableState = {};
     for (const v in state) {
-        if (state[v].type === 'static') {
+        if (state[v].type === 'static' || state[v].type === 'topmost') {
             result[v] = state[v];
         }
     }

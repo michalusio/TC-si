@@ -4,102 +4,22 @@ import {
   Failure,
   isFailure,
   Parser,
+  recoverByAddingChars,
   Result,
   str,
   success,
 } from "parser-combinators";
-import { getRecoveryIssues } from "./base";
-import { Token } from "./types/ast";
-
-export function recoverBySkippingChars<T>(
-  chars: number,
-  parser: Parser<T>
-): Parser<T> {
-  return (ctx) => {
-    let firstFailure: Failure | null = null;
-    for (let i = 0; i <= chars; i++) {
-      const result = parser({
-        index: ctx.index + i,
-        path: ctx.path,
-        text: ctx.text,
-      });
-      if (isFailure(result)) {
-        if (firstFailure == null) {
-          firstFailure = result;
-        }
-      } else {
-        if (i > 0) {
-          getRecoveryIssues().push({
-            type: "skipped",
-            index: ctx.index,
-            text: ctx.text.slice(ctx.index, ctx.index + i),
-          });
-        }
-        return result;
-      }
-    }
-    if (firstFailure == null) throw "Missing failure info";
-    return firstFailure;
-  };
-}
-
-export function recoverByAddingChars<T>(
-  chars: string,
-  parser: Parser<T>,
-  log: boolean = true,
-  message?: string
-): Parser<T> {
-  return (ctx) => {
-    let firstFailure: Failure | null = null;
-
-    for (let i = 0; i <= chars.length; i++) {
-      const addedChars = chars.slice(0, i);
-      const result = parser({
-        index: ctx.index,
-        path: ctx.path,
-        text: `${ctx.text.slice(0, ctx.index)}${addedChars}${ctx.text.slice(
-          ctx.index
-        )}`,
-      });
-      if (isFailure(result)) {
-        if (firstFailure == null) {
-          firstFailure = result;
-        }
-      } else {
-        if (log && i > 0) {
-          getRecoveryIssues().push({
-            type: "added",
-            index: ctx.index,
-            text: message ?? `\`${addedChars}\``,
-          });
-        }
-        return result;
-      }
-    }
-    if (firstFailure == null) throw "Missing failure info";
-    return firstFailure;
-  };
-}
 
 export function recoverBySkipping<T, V>(
   parser: Parser<T>,
-  skipBy: Parser<V>,
-  log: boolean = true
+  skipBy: Parser<V>
 ): Parser<T | null> {
   return (ctx) => {
     const result = parser(ctx);
     if (isFailure(result)) {
       if (result.history.includes("surely")) {
-        const skipped = skipBy(ctx);
-        if (log && !isFailure(skipped)) {
-          getRecoveryIssues().push({
-            type: "skipped",
-            index: ctx.index,
-            text: result.ctx.text.slice(ctx.index, skipped.ctx.index),
-          });
-        }
         return {
-          ...skipped,
+          ...skipBy(ctx),
           value: null
         };
       }
@@ -108,17 +28,9 @@ export function recoverBySkipping<T, V>(
   }
 }
 
-export function rstr<T extends string>(value: T, log: boolean = true): Parser<T> {
-  return recoverByAddingChars(value, str(value), log);
+export function rstr<T extends string>(value: T): Parser<T> {
+  return recoverByAddingChars(str(value), value);
 }
-
-export const eof: Parser<void> = (ctx) => {
-  if (ctx.index === ctx.text.length) {
-    return success(ctx, void 0);
-  } else {
-    return failure(ctx, "End Of File", ["EOF"]);
-  }
-};
 
 export const timings: Record<string, number> = {};
 
@@ -154,34 +66,4 @@ export function manyForSure<T>(parser: Parser<T>): Parser<T[]> {
       results.push(res.value);
     }
   };
-}
-
-export function token<T>(parser: Parser<T>): Parser<Token<T>> {
-  return (ctx) => {
-    const result = parser(ctx);
-    if (result.success) {
-      return {
-        ...result,
-        value: {
-          value: result.value,
-          start: ctx.index,
-          end: result.ctx.index
-        }
-      }
-    }
-    return result;
-  }
-}
-
-/**
- * Checks whether the parser parses successfully, but doesn't move the cursor forward
- */
-export function lookaround<T>(parser: Parser<T>): Parser<void> {
-  return (ctx) => {
-    const result = parser(ctx);
-    if (result.success) {
-      return success(ctx, void 0);
-    }
-    return failure(ctx, result.expected, ['lookaround', ...result.history]);
-  }
 }

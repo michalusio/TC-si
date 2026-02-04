@@ -4,6 +4,7 @@ pub def input() U16 {
     asm symphony {
         in r1
     }
+    return <U16>0
 }
 
 pub def output(a: U16) {

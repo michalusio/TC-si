@@ -1,7 +1,7 @@
-import { any, between, exhaust, many, map, opt, Parser, regex, seq, spaces, spacesPlus, str, surely } from "parser-combinators";
+import { any, between, exhaust, many, map, opt, Parser, recoverByAddingChars, regex, seq, spaces, spacesPlus, str, surely, token } from "parser-combinators";
 import { functionBinaryOperator, functionKind, functionName, lpr, newline, typeAliasDefinition, unaryOperator, variableName } from "./base";
 import { FunctionDefinition, Parameter } from "./types/ast";
-import { recoverByAddingChars, rstr, time, token } from "./utils";
+import { rstr, time } from "./utils";
 
 function assumption(): Parser<FunctionDefinition> {
 	return (ctx) => map(seq(
@@ -16,14 +16,14 @@ const parameter = map(seq(
 	spaces,
 	rstr(':'),
 	spaces,
-	recoverByAddingChars('Int', typeAliasDefinition(), true, 'parameter type')
+	recoverByAddingChars(typeAliasDefinition(), 'Int')
 ), ([name, _, __, ___, type]) => <Parameter>({ name, type }));
 
 const parameterList = time('parameters', between(
 	lpr,
 	opt(map(seq(
 		parameter,
-		exhaust(seq(spaces, str(','), spaces, parameter), seq(spaces, rstr(')', false)))
+		exhaust(seq(spaces, str(','), spaces, parameter), seq(spaces, rstr(')')))
 	), ([param, params]) => [
 			param,
 			...params.map(p => p[3])

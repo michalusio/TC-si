@@ -1,0 +1,10 @@
+pub-function-start-main:
+	in r1
+	push r1
+	in r1
+	mov r2, r1
+	pop r1
+	add r1, r1, r2
+	out r1
+	ret
+pub-function-end-main:

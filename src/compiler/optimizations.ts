@@ -1,6 +1,4 @@
-import { logLine } from "../storage";
-import { Instruction, swapJump, isALUInstruction, isJumpInstruction, isTargeting, Jump, Mov, Label, getTargetingRegister } from "./instructions";
-import { StripLevel } from "./optimizer";
+import { Instruction, swapJump, isALUInstruction, isJumpInstruction, isTargeting, Jump, Mov, Label, getTargetingRegister, getUsedRegisters } from "./instructions";
 import { AluInstruction, Immediate, Register } from "./types";
 import { id } from "./utils";
 
@@ -262,19 +260,10 @@ export const O1_sortMovs = (instruction: Instruction, index: number, stream: Ins
 /**
  * Functions which are not called anywhere (except main) can be removed
  */
-export const O1_optimizeUnusedFunctions = (instruction: Instruction, index: number, stream: Instruction[], stripLevel: StripLevel): boolean => {
+export const O1_optimizeUnusedFunctions = (instruction: Instruction, index: number, stream: Instruction[]): boolean => {
     if (instruction.type !== 'label') return false;
     const id = instruction.id;
-    switch (stripLevel) {
-        case 'S0':
-        case 'S1':
-            if (!id.startsWith('function-start-')) return false;
-            break;
-        case 'S2':
-            if (!id.startsWith('function-start-') && !id.startsWith('pub-function-start-')) return false;
-            if (id === 'pub-function-start-main') return false;
-            break;
-    }
+    if (!id.startsWith('function-start-')) return false;
 
     if (!isLabelUsed(stream, id)) {
         const endId = id.replace('function-start-', 'function-end-');
@@ -633,6 +622,48 @@ export const O2_optimizeMovAfterAlu = (instruction: Instruction, index: number, 
         return true;
     }
     return false;
+}
+
+/**
+ * If we have a MOV and a series of operations not using the target (assuming target is not r1), and then a RET or an overwrite:
+ * ```
+ * MOV r4, r1
+ * ADD r1, r1, r2
+ * OUT r1
+ * RET
+ * ```
+ * We can remove the MOV
+ */
+export const O2_optimizeUnusedMov = (instruction: Instruction, index: number, stream: Instruction[]): boolean => {
+    if (instruction.type !== 'mov') return false;
+    if (instruction.target === 'r1') return false;
+
+    if (follow(instruction.target)) {
+        stream.splice(index, 1);
+        return true;
+    }
+    return false;
+
+    function follow(target: Register): boolean {
+        for (let i = index + 1; i < stream.length; i++) {
+            const next = stream[i];
+            if (isJumpInstruction(next)) {
+                return false;
+            } else {
+                // When encountering a label, we cannot replace anything as the register may come from another branch too
+                if (next.type === 'label') return false;
+                if (next.type === 'call') return false;
+                if (next.type === 'ret') return true;
+
+                if (getUsedRegisters(next).includes(target)) return false;
+
+                if (isTargeting(next, target)) {
+                    return true;
+                }
+            }
+        }
+        return true;
+    }
 }
 
 /**

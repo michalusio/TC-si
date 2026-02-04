@@ -1,15 +1,15 @@
 import { Position, TextDocument } from "vscode";
-import { any, between, Context, exhaust, isFailure, map, oneOrMany, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators";
+import { any, between, Context, eof, exhaust, isFailure, lookaround, map, oneOrMany, opt, Parser, recoverByAddingChars, ref, regex, seq, spaces, spacesPlus, str, surely, Token, token, TokenRange, wspaces } from "parser-combinators";
 import { functionDeclaration } from "./parsers/functions";
 import { blockComment, lcb, lineComment, newline, variableName } from "./parsers/base";
 import { rValue, topmostVariableDeclaration, variableDeclaration, variableModification } from "./parsers/variables";
 import { typeDeclaration } from "./parsers/declaration";
-import { eof, lookaround, manyForSure, recoverByAddingChars, recoverBySkipping, rstr, token } from "./parsers/utils";
-import { BreakStatement, ContinueStatement, FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, Token, TokenRange, WhileStatement, AsmStatement } from "./parsers/types/ast";
+import { manyForSure, recoverBySkipping, rstr } from "./parsers/utils";
+import { BreakStatement, ContinueStatement, FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, WhileStatement, AsmStatement, CommentStatement } from "./parsers/types/ast";
 import { getTokensData } from "./storage";
 import { symphonyParser } from "./parsers/symphony";
 
-export const getPositionInfo = (document: TextDocument, position: Position): {
+type PositionInfo = {
 	current: TokenRange,
 	definition: TokenRange | string,
 	info: {
@@ -18,10 +18,14 @@ export const getPositionInfo = (document: TextDocument, position: Position): {
 	},
 	all: TokenRange[],
 	dotFunctionSuggestions: [string, string | TokenRange][]
- } | null => {
+};
+
+export const getPositionInfo = (document: TextDocument, position: Position): PositionInfo | null => {
 	const index = document.offsetAt(position);
 	const token = getTokensData(document).find(token => token.position.start <= index && token.position.end >= index);
-	if (!token) return null;
+	if (!token) {
+		return null;
+	}
 	const definitionToken = (typeof token.definition !== 'string')
 		? getTokensData(document).find(t => t.position.start === (token.definition as TokenRange).start && t.position.end === (token.definition as TokenRange).end)
 		: undefined;
@@ -36,6 +40,12 @@ export const getPositionInfo = (document: TextDocument, position: Position): {
 		all: allTokens.map(t => t.position),
 		dotFunctionSuggestions: token.info.dotFunctionSuggestions ?? []
 	};
+}
+
+export const getPositionInformation = (document: TextDocument, token: TokenRange): PositionInfo | null => {
+	return getPositionInfo(document,
+		document.positionAt(Math.floor((token.end + token.start) / 2))
+	);
 }
 
 export const getDeclarations = (document: TextDocument): {
@@ -60,7 +70,7 @@ const returnStatement = map(
 		token(opt(
 			between(
 				spacesPlus,
-				recoverByAddingChars('0', map(rValue(), v => v.value), true, 'return value'),
+				recoverByAddingChars(map(rValue(), v => v.value), '0'),
 				any(newline, lineComment, spacesPlus, lookaround(str('}')))
 			)
 		))
@@ -233,15 +243,15 @@ function statementsBlock(): Parser<StatementsBlock> {
 								map(seq(variableModification, any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value),
 								map(seq(rValue(), any(newline, lineComment, lookaround(seq(spaces, str('}'))))), ([v]) => v.value)
 							)),
-							(s) => typeof s.value === 'string' ? null : (s as Token<Statement>)
+							(s) => typeof s.value === 'string' ? ({...s, value: <CommentStatement>{ type: 'comment', value: s.value }}) : (s as Token<Statement>)
 						),
 						regex(/.*?(?=})/, 'statement')
 					)
 				),
-				seq(wspaces, rstr('}', false))
+				seq(wspaces, rstr('}'))
 			)
 		),
-		(statements) => (<StatementsBlock> statements.map(s => s[1]).filter((s): s is Token<Statement> => s != null))
+		(statements) => (<StatementsBlock> statements.map(s => s[1]).filter((s): s is Token<Statement> => s != null && (s.value.type !== 'comment' || !!s.value.value.trim())))
 	)(ctx);
 }
 
@@ -251,7 +261,7 @@ function whileBlock(): Parser<WhileStatement> {
 			str('while'),
 			spacesPlus,
 			surely(seq(
-				recoverByAddingChars('true', rValue(), true, 'condition'),
+				recoverByAddingChars(rValue(), 'true'),
 				spaces,
 				rstr('{'),
 				statementsBlock(),
@@ -276,7 +286,7 @@ function ifBlock(): Parser<IfStatement> {
 			surely(seq(
 				map(
 					seq(
-						recoverByAddingChars('true', rValue(), true, 'condition'),
+						recoverByAddingChars(rValue(), 'true'),
 						spaces,
 						rstr('{'),
 						statementsBlock(),
@@ -293,7 +303,7 @@ function ifBlock(): Parser<IfStatement> {
 							str('elif'),
 							spacesPlus,
 							surely(seq(
-								recoverByAddingChars('true', rValue(), true, 'condition'),
+								recoverByAddingChars(rValue(), 'true'),
 								spaces,
 								rstr('{'),
 								statementsBlock(),
@@ -333,12 +343,13 @@ function ifBlock(): Parser<IfStatement> {
 			type: 'if',
 			value: ifBlock.value,
 			ifBlock: ifBlock.statements,
-			elseBlock: (() => {
+			elseBlock: ((): StatementsBlock => {
 				elseBlock ??= [];
 				if (elsifs.length === 0) return elseBlock;
+
 				let startBlock: IfStatement | null = null;
 				let currentBlock: IfStatement | null = null;
-				elsifs.forEach(ei => {
+				for (const ei of elsifs) {
 					const block = <IfStatement> {
 						type: 'if',
 						value: ei.value,
@@ -353,9 +364,17 @@ function ifBlock(): Parser<IfStatement> {
 							value: block
 						}];
 					}
-					currentBlock ??= block;
-				});
-				return startBlock;
+					currentBlock = block;
+				}
+
+				const statement = elseBlock[elseBlock.length - 1]
+					?? startBlock!.elseBlock[startBlock!.elseBlock.length - 1]
+					?? startBlock!.ifBlock[startBlock!.ifBlock.length - 1];
+				return [{
+					start: startBlock!.value.start - 3,
+					end: statement.end + 1,
+					value: startBlock!
+				}];
 			})()
 		 })
 	)(ctx);
@@ -474,5 +493,8 @@ export const languageParser = map(
 			))
 		)
 	),
-	(data) => data.map(d => d[1]).filter((d): d is Token<Statement> => !!d.value && typeof d.value !== 'string')
+	(data) => data
+		.map(d => d[1])
+		.filter((d): d is Token<Statement | string> => !!d.value && (typeof d.value !== 'string' || !!d.value.trim()))
+		.map(d => typeof d.value === 'string' ? ({ ...d, value: <CommentStatement>{ type: 'comment', value: d.value } }) : (d as Token<Statement>))
 );

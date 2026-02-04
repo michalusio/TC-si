@@ -1,8 +1,8 @@
-import { any, between, exhaust, expect, many, map, opt, Parser, ref, regex, seq, spaces, spacesPlus, str, surely, wspaces } from "parser-combinators"
+import { any, between, exhaust, expect, many, map, opt, Parser, recoverByAddingChars, ref, regex, seq, spaces, spacesPlus, str, surely, Token, token, wspaces } from "parser-combinators"
 import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators, typeAliasDefinition, rpr, rbr } from "./base";
 import { ArrayRValue, BinaryRValue, CastedRValue, DefaultRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./types/rvalue";
-import { recoverByAddingChars, rstr, time, token } from "./utils";
-import { Token, VariableDeclaration, VariableModification } from "./types/ast";
+import { rstr, time } from "./utils";
+import { VariableDeclaration, VariableModification } from "./types/ast";
 import { precedence } from "../storage";
 
 const variableKind = token(any(
@@ -31,7 +31,7 @@ between(
                 rstr('}')
             )
         ),
-        rstr('`', false)
+        rstr('`')
     ),
     str('`')
 ),
@@ -227,7 +227,7 @@ export function rValue(): Parser<Token<RValue>> {
             ))),
             time('indexings', many(between(
                 lbr,
-                recoverByAddingChars('0', rValue(), true, 'index'),
+                recoverByAddingChars(rValue(), '0'),
                 rstr(']')
             ))),
             opt(seq(spaces, blockComment)),
@@ -238,12 +238,12 @@ export function rValue(): Parser<Token<RValue>> {
                     surely(seq(
                         between(
                             spaces,
-                            recoverByAddingChars('0', rValue(), true, 'on-true value'),
+                            recoverByAddingChars(rValue(), '0'),
                             spaces
                         ),
                         str(':'),
                         spaces,
-                        recoverByAddingChars('0', rValue(), true, 'on-false value')
+                        recoverByAddingChars(rValue(), '0')
                     ))
                 ),
                 seq(
@@ -258,7 +258,7 @@ export function rValue(): Parser<Token<RValue>> {
                                 binaryOperator,
                                 spaces
                             ),
-                            surely(recoverByAddingChars('0', rValue(), true, 'second operand'))
+                            surely(recoverByAddingChars(rValue(), '0'))
                         )
                     )
                 )
@@ -396,14 +396,14 @@ export const variableModification = map(
             token(any(variableLiteral, between(lpr, castedRValue, rpr))),
             many(between(
                 lbr,
-                recoverByAddingChars('0', rValue(), true, 'value'),
+                recoverByAddingChars(rValue(), '0'),
                 rstr(']')
             )),
             spaces,
             ref(binaryOperator, op => op.endsWith('=')),
             surely(seq(
                 spaces,
-                recoverByAddingChars('0', rValue(), true, 'value')
+                recoverByAddingChars(rValue(), '0')
             ))
         ),
         'Variable modification statement'
@@ -442,11 +442,11 @@ export const topmostVariableDeclaration = map(
             spacesPlus,
             surely(
                 seq(
-                    recoverByAddingChars('variable', variableName, true, 'variable name'),
+                    recoverByAddingChars(variableName, 'variable'),
                     spaces,
                     rstr('='),
                     spaces,
-                    recoverByAddingChars('0', rValue(), true, 'value')
+                    recoverByAddingChars(rValue(), '0')
                 )
             )
         ),
@@ -472,11 +472,11 @@ export const variableDeclaration = map(
             spacesPlus,
             surely(
                 seq(
-                    recoverByAddingChars('variable', variableName, true, 'variable name'),
+                    recoverByAddingChars(variableName, 'variable'),
                     spaces,
                     rstr('='),
                     spaces,
-                    recoverByAddingChars('0', rValue(), true, 'value')
+                    recoverByAddingChars(rValue(), '0')
                 )
             )
         ),

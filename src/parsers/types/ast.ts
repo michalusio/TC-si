@@ -1,16 +1,7 @@
-import { Parser } from "parser-combinators";
+import { Parser, Token } from "parser-combinators";
 import { CastedRValue, IndexRValue, RValue, VariableRValue } from "./rvalue";
 
 export type ParseReturnType<T> = T extends Parser<infer R> ? R : never;
-
-export type TokenRange = {
-    start: number, 
-    end: number
-}
-
-export type Token<T> = TokenRange & {
-    value: T
-};
 
 export type Parameter = {
     name: Token<VariableName>,
@@ -79,11 +70,16 @@ export type AsmStatement = {
 
 export type StatementsBlock = Token<Statement>[];
 
-export type Statement = TypeDefinition | FunctionDeclaration | StatementsStatement | VariableDeclaration | VariableModification | RegAllocUseStatement | AsmStatement | ReturnStatement | BreakStatement | ContinueStatement | SwitchStatement | WhileStatement | IfStatement | RValue;
+export type Statement = TypeDefinition | FunctionDeclaration | StatementsStatement | VariableDeclaration | VariableModification | RegAllocUseStatement | AsmStatement | ReturnStatement | BreakStatement | ContinueStatement | SwitchStatement | WhileStatement | IfStatement | RValue | CommentStatement;
 
 export type StatementsStatement = {
     type: 'statements',
     statements: StatementsBlock
+}
+
+export type CommentStatement = {
+    type: 'comment',
+    value: string;
 }
 
 export type RegAllocUseStatement = {
@@ -93,7 +89,8 @@ export type RegAllocUseStatement = {
 
 export type ReturnStatement = {
     type: 'return',
-    value: Token<RValue | null>
+    value: Token<RValue | null>,
+    variablesToDeallocate?: VariableName[]
 };
 
 export type BreakStatement = {

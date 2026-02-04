@@ -1,11 +1,14 @@
 import { TextDocument } from "vscode";
 import { getPositionInfo } from "../parser";
-import { FunctionDefinition, Statement, StatementsBlock, Token, TokenRange, VariableName } from "../parsers/types/ast";
+import { FunctionDefinition, Statement, StatementsBlock, VariableName } from "../parsers/types/ast";
 import { RValue } from "../parsers/types/rvalue";
 import { Alu, Block, Cmp, Instruction, Jump, Label, Comment, Mov, Neg, Not, Ret, Mem, Push, Call, Pop, InstructionOrBlock, NewLine } from "./instructions";
-import { combineRegisterState, copyVariableState, findRegisterValue, findVariableRegister, offsetVariableState, releaseRegister, releaseRegisterMarker, renameMarker, reserveRegister, reserveRegisterValue, tempValueMarker, variableMarker } from "./registers";
+import { combineRegisterState, copyVariableState, findRegisterValue, findVariableRegister, markRegister, offsetVariableState, releaseRegisterMarker, renameMarker, reserveRegister, reserveRegisterValue, tempValueMarker, variableMarker } from "./registers";
 import { AssignableRegister, RegisterState, TempValueMarker, VariableState } from "./types";
 import { id } from './utils';
+import { isIntegerType } from "../typeSetup";
+import { rcDecrementStatements, rcIncrementStatements } from "./rc";
+import { Token, TokenRange } from "parser-combinators";
 
 export type CompilationResult = {
     type: 'ok',
@@ -17,8 +20,14 @@ export type CompilationResult = {
 
 export type CompileUtilities = {
     document: TextDocument,
-    getSystemFunction: (name: string) => FunctionDefinition | null,
+    topmost: boolean,
+    malloc_token: Token<string>,
+    increment_rc_token: Token<string>
+    decrement_rc_token: Token<string>,
     getDefinition: (range: TokenRange) => FunctionDefinition | null;
+    typeGetter: (range: TokenRange) => string | null;
+    currentStartLabel?: string;
+    currentEndLabel?: string;
 };
 
 export function compileNode(node: Token<Statement>, regState: RegisterState, varState: VariableState, utilities: CompileUtilities): InstructionOrBlock[] {
@@ -64,14 +73,18 @@ function compileStatementNode(token: Exclude<Token<Statement>, Token<RValue>>, r
             const conditionRegister = findRegisterValue(regState, conditionMarker);
             releaseRegisterMarker(regState, conditionMarker);
 
-            const statementsRegState = {...regState}
-            const statementsResult = compileStatements(node.statements, statementsRegState, varState, utilities);
-            
-            combineRegisterState(regState, [statementsRegState, regState]);
-
             const whileId = id();
             const start = `while-start-${whileId}`;
             const end = `while-end-${whileId}`;
+
+            const statementsRegState = {...regState}
+            const statementsResult = compileStatements(node.statements, statementsRegState, varState, {
+                ...utilities,
+                currentStartLabel: start,
+                currentEndLabel: end
+            });
+            
+            combineRegisterState(regState, [statementsRegState, regState]);
             
             return [
                 Block('while', [
@@ -128,7 +141,10 @@ function compileStatementNode(token: Exclude<Token<Statement>, Token<RValue>>, r
                         }
                     }
                 }
-            ], functionRegState, functionVarState, utilities);
+            ], functionRegState, functionVarState, {
+                ...utilities,
+                topmost: false
+            });
 
             return [
                 NewLine(),
@@ -142,11 +158,32 @@ function compileStatementNode(token: Exclude<Token<Statement>, Token<RValue>>, r
                 statementsResult.push(...compileNode(token, regState, varState, utilities));
                 const marker = tempValueMarker(token);
                 const reg = findRegisterValue(regState, marker);
-                releaseRegisterMarker(regState, marker);
-                reserveRegister(regState, 'r1', marker);
+                regState['r1'] = regState[reg as AssignableRegister];
                 if (reg !== 'r1') {
+                    regState[reg as AssignableRegister] = ['0'];
                     statementsResult.push(Mov('r1', reg));
                 }
+                const variableInRegister = regState['r1'].find(m => m.startsWith('var-'))?.slice(4);
+                if (variableInRegister) {
+                    const varType = varState[variableInRegister].type;
+                    if (varType === 'array_16' || varType === 'string') {
+                        const [s1, s2] = rcIncrementStatements({
+                            front: '',
+                            name: variableInRegister
+                        }, utilities.increment_rc_token);
+                        statementsResult.push(...compileNode(s1, regState, varState, utilities));
+                        statementsResult.push(...compileNode(s2, regState, varState, utilities));
+                    }
+                }
+            }
+            if (node.variablesToDeallocate) {
+                node.variablesToDeallocate.forEach(v => {
+                    const [s1, s2] = rcDecrementStatements(v, utilities.decrement_rc_token);
+                    statementsResult.push(
+                        ...compileNode(s1, regState, varState, utilities),
+                        ...compileNode(s2, regState, varState, utilities)
+                    );
+                });
             }
             const variablesSize = getDeclaredVariableSize(varState);
             statementsResult.push(...deallocate(varState, variablesSize));
@@ -194,9 +231,32 @@ function compileStatementNode(token: Exclude<Token<Statement>, Token<RValue>>, r
             }
         }
         case 'declaration': {
+            let newValueNode = node.value;
+            const staticValue = tryGetStaticValue(node.value.value);
+            if (staticValue != null) {
+                if (utilities.topmost) {
+                    // if we're at the top of the file, we can change it to a static variable
+                    const varName = node.name.value.front + node.name.value.name;
+                    varState[varName] = {
+                        type: 'static',
+                        value: staticValue
+                    }
+                    return [];
+                } else {
+                    // if not, we can use it as the precalculated value
+                    newValueNode = {
+                        start: node.value.start,
+                        end: node.value.end,
+                        value: {
+                            type: 'number',
+                            value: staticValue
+                        }
+                    };
+                }
+            }
             return [
                 // Allocating the variable first
-                ...allocateVariable(varState, node.name.value),
+                ...allocateVariable(varState, node.name.value, utilities.topmost),
                 // Treat the assignment of initial value as a modification
                 ...compileStatementNode({
                     start: token.start,
@@ -212,7 +272,7 @@ function compileStatementNode(token: Exclude<Token<Statement>, Token<RValue>>, r
                             }
                         },
                         operator: undefined,
-                        value: node.value
+                        value: newValueNode
                     }
                 }, regState, varState, utilities)
             ];
@@ -290,7 +350,7 @@ function compileStatementNode(token: Exclude<Token<Statement>, Token<RValue>>, r
 
                         const spOffset = varState[varName];
                         if (spOffset == null) throw `Could not find stack position of variable ${varName}`;
-                        if (spOffset.type !== 'declared') throw `Cannot modify a not-declared variable ${varName}`;
+                        if (spOffset.type !== 'declared' && spOffset.type !== 'topmost') throw `Cannot modify a not-declared variable ${varName}`;
 
                         const rValue: Token<RValue> = node.operator
                             ? {
@@ -329,15 +389,20 @@ function compileStatementNode(token: Exclude<Token<Statement>, Token<RValue>>, r
 
                         return [
                             ...statements,
-                            //Comment(`Storing variable ${varName}`),
-                            //Alu('add', reg, 'sp', { type: 'immediate', value: spOffset.offset }),
-                            //Mem('store_16', rValueRegister, reg),
+                            ...(utilities.topmost ? [
+                                Comment(`Storing variable ${varName}`),
+                                Alu('add', 'sp', 'sp', { type: 'immediate', value: spOffset.offset }),
+                                Mem('store_16', rValueRegister, 'sp'),
+                                Alu('sub', 'sp', 'sp', { type: 'immediate', value: spOffset.offset }),
+                            ] : []),
                             ...(varReg === rValueRegister ? [] : [Mov(varReg, rValueRegister)])
                         ];
                     }
             }            
         }
-        case '_reg_alloc_use': return [];
+        case '_reg_alloc_use': {
+            return [];
+        }
         case 'type-definition': {
             if (Array.isArray(node.definition.value)) {
                 allocateEnum(varState, node.definition.value);
@@ -351,7 +416,30 @@ function compileStatementNode(token: Exclude<Token<Statement>, Token<RValue>>, r
                 ...(JSON.parse(node.code) as InstructionOrBlock[]),
             ];
         }
-        default: throw `Unsupported statement type: ${node.type}`;
+        case 'break': {
+            if (!utilities.currentEndLabel) {
+                throw `Break used without a loop`;
+            }
+            return [Jump('jmp', { type: 'label', value: utilities.currentEndLabel })];
+        }
+        case 'continue': {
+            if (!utilities.currentStartLabel) {
+                throw `Continue used without a loop`;
+            }
+            return [Jump('jmp', { type: 'label', value: utilities.currentStartLabel })];
+        }
+        case 'switch': {
+            throw `Switches are currently not supported`;
+        }
+        case 'comment': {
+            return [
+                Comment(node.value)
+            ];
+        }
+        default: {
+            const _: never = node;
+            throw `Unsupported statement: ${JSON.stringify(node, null, 2)}`;
+        }
     }
 }
 
@@ -502,11 +590,10 @@ function compileRValueNode(node: Token<RValue>, regState: RegisterState, varStat
                 Comment(`Calling function ${node.value.value.value}`)
             ];
             
-            let data = getPositionInfo(utilities.document, utilities.document.positionAt(node.value.value.start + 1));
+            const position = utilities.document.positionAt(node.value.value.start + 1);
+            let data = getPositionInfo(utilities.document, position);
             let functionDefinition: FunctionDefinition | null = null;
-            if (!data || typeof data.definition === 'string') {
-                functionDefinition = utilities.getSystemFunction(node.value.value.value);
-            } else {
+            if (data && typeof data.definition !== 'string') {
                 functionDefinition = utilities.getDefinition(data.definition);
             }
             if (!functionDefinition) throw `Cannot find function ${node.value.value.value}`;
@@ -532,6 +619,10 @@ function compileRValueNode(node: Token<RValue>, regState: RegisterState, varStat
                         statementsResult.push(Mov(regParam, regIn));
                     }
                 }
+            });
+
+            functionDefinition.parameters.forEach((_, i) => {
+                releaseRegisterMarker(regState, tempValueMarker(parameters[i]));
             });
 
             const needsReturnRegister = functionDefinition.returnType.value != null;
@@ -563,19 +654,18 @@ function compileRValueNode(node: Token<RValue>, regState: RegisterState, varStat
             const spOffset = varState[varName];
             if (spOffset == null) throw `Could not find stack position of variable ${varName}`;
 
-            const statementsResult: Instruction[] = [];
-            const marker = variableMarker(varName);
-
             const varReg = findVariableRegister(regState, varName);
             if (varReg) {
                 regState[varReg].push(nodeMarker);
                 return [];
             } else {
+                const statementsResult: Instruction[] = [];
+                const marker = variableMarker(varName);
                 const reg = reserveRegisterValue(regState, varState, marker);
                 regState[reg as AssignableRegister].push(nodeMarker);
                 if (spOffset.type === 'static') {
                     statementsResult.push(Mov(reg, { type: 'immediate', value: spOffset.value }));
-                } else {
+                } else if (spOffset.type === 'argument' || spOffset.type === 'declared' || spOffset.type === 'topmost') {
                     statementsResult.push(Comment(`Loading variable ${varName}`));
                     statementsResult.push(Alu('add', reg, 'sp', { type: 'immediate', value: spOffset.offset }));
                     statementsResult.push(Mem('load_16', reg, reg));
@@ -585,41 +675,44 @@ function compileRValueNode(node: Token<RValue>, regState: RegisterState, varStat
         }
         case 'array': {
             const name = `array-${id()}`;
-            const allocation = allocateArray(varState, {
+            const allocation = allocateArray({
                 front: '',
                 name
-            }, node.value.values.length, 2);
+            }, node.value.values.length, 2, regState, varState, utilities);
 
             const spOffset = varState[name];
-            if (spOffset == null) throw `Could not find stack position of variable ${name}`;
-            if (spOffset.type !== 'array_8' && spOffset.type !== 'array_16') throw `Cannot initialize a non-array variable ${name}`;
+            if (spOffset == null) throw `Could not find information about variable ${name}`;
+            if (spOffset.type !== 'array_16') throw `Cannot initialize a non-array variable ${name}`;
+
+            const varReg = findRegisterValue(regState, `var-${name}`);
 
             const statements = node.value.values.flatMap((v, i) => {
                 const statements = compileNode(v, regState, varState, utilities);
                 const rValueMarker = tempValueMarker(v);
                 const rValueRegister = findRegisterValue(regState, rValueMarker);
 
-                const reg = reserveRegisterValue(regState, varState, nodeMarker);
-                releaseRegister(regState, reg as AssignableRegister);
                 releaseRegisterMarker(regState, rValueMarker);
 
                 return [
                     ...statements,
-                    Alu('add', reg, 'sp', { type: 'immediate', value: spOffset.offset + i * 2 }),
-                    Mem('store_16', rValueRegister, reg)
+                    Alu('add', 'flags', varReg, { type: 'immediate', value: i * 2 }),
+                    Mem('store_16', rValueRegister, 'flags')
                 ]
             });
 
-            const reg = reserveRegisterValue(regState, varState, nodeMarker);
+            markRegister(regState, varReg as AssignableRegister, nodeMarker);
+
             return [
                 ...allocation,
                 ...statements,
-                Alu('add', reg, 'sp', { type: 'immediate', value: spOffset.offset })
             ];
         }
         case 'index': {
             const indexStatements = compileRValueNode(node.value.parameter, regState, varState, utilities);
             const valueStatements = compileRValueNode(node.value.value, regState, varState, utilities);
+
+            const valueType = utilities.typeGetter(node.value.value);
+            const isString = valueType === 'String';
 
             const valueMarker = tempValueMarker(node.value.value);
             const indexMarker = tempValueMarker(node.value.parameter);
@@ -629,28 +722,41 @@ function compileRValueNode(node: Token<RValue>, regState: RegisterState, varStat
 
             releaseRegisterMarker(regState, valueMarker);
             releaseRegisterMarker(regState, indexMarker);
-            var outputReg = reserveRegisterValue(regState, varState, nodeMarker);
+            const outputReg = reserveRegisterValue(regState, varState, nodeMarker);
 
-            return [
-                ...indexStatements,
-                Alu('add', indexReg, indexReg, indexReg),
-                ...valueStatements,
-                Alu('add', valueReg, valueReg, indexReg),
-                Mem('load_16', outputReg, valueReg)
-            ]
+            if (isString) {
+                 return [
+                    ...indexStatements,
+                    Alu('add', indexReg, indexReg, { type: 'immediate', value: 2 }),
+                    ...valueStatements,
+                    Alu('add', valueReg, valueReg, indexReg),
+                    Mem('load_8', outputReg, valueReg)
+                ];
+            } else {
+                return [
+                    ...indexStatements,
+                    Alu('add', indexReg, indexReg, indexReg),
+                    Alu('add', indexReg, indexReg, { type: 'immediate', value: 2 }),
+                    ...valueStatements,
+                    Alu('add', valueReg, valueReg, indexReg),
+                    Mem('load_16', outputReg, valueReg)
+                ];
+            }
         }
         case "string": {
-            const name = `array-${id()}`;
-            const allocation = allocateArray(varState, {
+            const name = `string-${id()}`;
+            const allocation = allocateArray({
                 front: '',
                 name
-            }, node.value.value.length, 1);
+            }, node.value.value.length, 1, regState, varState, utilities);
 
             const spOffset = varState[name];
-            if (spOffset == null) throw `Could not find stack position of variable ${name}`;
-            if (spOffset.type !== 'array_8' && spOffset.type !== 'array_16') throw `Cannot initialize a non-array variable ${name}`;
+            if (spOffset == null) throw `Could not find information about variable ${name}`;
+            if (spOffset.type !== 'string') throw `Cannot initialize a non-array variable ${name}`;
 
+            const varReg = findRegisterValue(regState, `var-${name}`);
             const reg = reserveRegisterValue(regState, varState, nodeMarker);
+
             const statements = node.value.value.split('').flatMap((v, i) => {
                 const value = v[0];
                 if (!CP850TableMap.has(value)) {
@@ -658,19 +764,33 @@ function compileRValueNode(node: Token<RValue>, regState: RegisterState, varStat
                 }
                 const cpValue = CP850TableMap.get(value)!;
                 return [
-                    Mov(reg, { type: 'immediate', value: cpValue }),
-                    Alu('sub', 'sp', 'sp', { type: 'immediate', value: 1 }),
-                    Mem('store_8', reg, 'sp')
+                    Mov('flags', { type: 'immediate', value: cpValue }),
+                    Alu('add', reg, varReg, { type: 'immediate', value: i }),
+                    Mem('store_8', 'flags', reg)
                 ]
             });
 
+            releaseRegisterMarker(regState, nodeMarker);
+            markRegister(regState, varReg as AssignableRegister, nodeMarker);
+
             return [
                 ...allocation,
-                Alu('add', 'sp', 'sp', { type: 'immediate', value: node.value.value.length }),
                 ...statements
             ];
         }
-        default: throw `Unsupported rvalue type: ${node.value.type}`;
+        case 'dotMethod': {
+            throw `Dot methods are currently not supported`
+        }
+        case 'interpolated': {
+            throw `String interpolation is currently not supported`
+        }
+        case 'ternary': {
+            throw `Ternaries are currently not supported`;
+        }
+        default: {
+            const _: never = node.value;
+            throw `Unsupported rvalue type: ${JSON.stringify(node.value, null, 2)}`;
+        }
     }
 }
 
@@ -688,32 +808,59 @@ const compileStatements = (statements: StatementsBlock, regState: RegisterState,
     return result;
 }
 
-const allocateVariable = (varState: VariableState, name: VariableName, slots: number = 1): Instruction[] => {
-    offsetVariableState(varState, slots * 2);
+const allocateVariable = (varState: VariableState, name: VariableName, topmost: boolean): Instruction[] => {
+    offsetVariableState(varState, 2);
     const varName = name.front + name.name;
     varState[varName] = {
-        type: 'declared',
+        type: topmost ? 'topmost' : 'declared',
         offset: 0
     };
 
-    return [
-        //Comment(`Allocating variable ${varName} of size ${slots * 2} bytes`),
-        //Alu('sub', 'sp', 'sp', { type: 'immediate', value: slots * 2 }),
-    ];
+    if (topmost) {
+        return [
+            Comment(`Allocating topmost variable ${varName}`),
+            Alu('sub', 'sp', 'sp', { type: 'immediate', value: 2 }),
+        ];
+    } else {
+        return [];
+    }
 }
 
-const allocateArray = (varState: VariableState, name: VariableName, length: number, size: 1 | 2): Instruction[] => {
-    offsetVariableState(varState, length * size);
+const allocateArray = (name: VariableName, length: number, bytesPerElement: 1 | 2, regState: RegisterState, varState: VariableState, utilities: CompileUtilities): InstructionOrBlock[] => {
     const varName = name.front + name.name;
     varState[varName] = {
-        type: size === 1 ? 'array_8' : 'array_16',
-        offset: 0,
-        size: length * size
+        type: bytesPerElement === 1 ? 'string' : 'array_16',
+        size: length * bytesPerElement
     };
 
+    const mallocCall: Token<RValue> = {
+        start: -100,
+        end: 0,
+        value: {
+            type: 'function',
+            value: utilities.malloc_token,
+            parameters: [{
+                start: -Math.random(),
+                end: -Math.random(),
+                value: {
+                    type: 'number',
+                    value: length * bytesPerElement + 2
+                }
+            }]
+        }
+    };
+    const malloc = compileRValueNode(mallocCall, regState, varState, utilities);
+
+    const reg = findRegisterValue(regState, tempValueMarker(mallocCall));
+    renameMarker(regState, tempValueMarker(mallocCall), variableMarker(varName));
+
     return [
-        Comment(`Allocating array ${varName} of length ${length}, ${size === 1 ? '1 byte' : '2 bytes'} each`),
-        Alu('sub', 'sp', 'sp', { type: 'immediate', value: length * size }),
+        Comment(`Allocating ${varState[varName].type} ${varName} of length ${length}, ${bytesPerElement === 1 ? '1 byte' : '2 bytes'} each`),
+        ...malloc,
+        Alu('add', reg, reg, { type: 'immediate', value: 2 }),
+        Mov('flags', { type: 'immediate', value: length }),
+        Mem('store_16', 'flags', reg),
+        Alu('add', reg, reg, { type: 'immediate', value: 2 })
     ];
 }
 
@@ -727,16 +874,18 @@ const allocateEnum = (varState: VariableState, names: string[]) => {
 }
 
 const getDeclaredVariableSize = (varState: VariableState): number => {
-    const vars = Object.values(varState);
-    const declaredVars = vars.filter(v => /*v.type === 'declared' ||*/ v.type === 'array_8' || v.type === 'array_16');
-    return declaredVars
-        .map(v => v.size)
-        .reduce((a, b) => a + b, 0);
+    // const vars = Object.values(varState);
+    // const declaredVars = vars.filter(v => /*v.type === 'declared' ||*/ v.type === 'string' || v.type === 'array_16');
+    // return declaredVars
+    //     .map(v => v.size)
+    //     .reduce((a, b) => a + b, 0);
+    return 0;
 }
 
 const deallocate = (varState: VariableState, size: number): Instruction[] => {
     for (const v in varState) {
-        if (varState[v].type !== 'static') {
+        const type = varState[v].type;
+        if (type !== 'static' && type !== 'array_16' && type !== 'string') {
             if (varState[v].offset < size) {
                 delete varState[v];
             }
@@ -752,3 +901,64 @@ const deallocate = (varState: VariableState, size: number): Instruction[] => {
 const CP850Table = ' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\bÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ðÐÊËÈıÍÎÙ┘┌█▄¦Ì▀ÓßÔÒõÕµþÞÚÛÙýÝ¯´\u2010±‗¾¶§÷¸°¨·¹³²■\u00a0';
 
 export const CP850TableMap = new Map(CP850Table.split('').map((c, i) => [c, i + 32] as const));
+
+const tryGetStaticValue = (rValue: RValue): number | null => {
+    switch (rValue.type) {
+        case '_default': return 0;
+        case 'dotMethod':
+        case 'function':
+        case 'index':
+        case 'interpolated':
+        case 'string':
+        case 'ternary':
+        case 'variable':
+        case 'array':
+            return null;
+        case 'number':
+            return rValue.value;
+        case 'cast': {
+            if (isIntegerType(rValue.to.value)) {
+                return tryGetStaticValue(rValue.value.value);
+            } else {
+                return null;
+            }
+        }
+        case 'parenthesis':
+            return tryGetStaticValue(rValue.value.value);
+        case 'binary': {
+            const left = tryGetStaticValue(rValue.left.value);
+            const right = tryGetStaticValue(rValue.right.value);
+            if (left == null || right == null) return null;
+            switch (rValue.operator) {
+                case '+':
+                    return left + right;
+                case '-':
+                    return left - right;
+                case '&':
+                    return left & right;
+                case '|':
+                    return left | right;
+                case '^':
+                    return left ^ right;
+                case '<<':
+                    return left << right;
+                case '>>':
+                    return left >> right;
+                case '*':
+                    return left * right;
+            }
+            return null;
+        }
+        case 'unary': {
+            const inner = tryGetStaticValue(rValue.value.value);
+            if (inner == null) return null;
+            switch (rValue.operator) {
+                case '~':
+                    return ~inner;
+                case '-':
+                    return -inner;
+            }
+            return null;
+        }
+    }
+}

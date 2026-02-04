@@ -4,14 +4,18 @@ import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { map, seq, intP, str, spaces, spacesPlus, regex, ParseText, any } from 'parser-combinators';
 import { checkVariableExistence, performParsing } from './checks';
-import { baseEnvironment, isSymphonyFile, log, tokensData } from './storage';
-import { getRecoveryIssues } from './parsers/base';
-import { DiagnosticSeverity } from 'vscode';
+import { baseEnvironment, emptyScope, isSymphonyFile, log, tokensData } from './storage';
+import { DiagnosticSeverity, Position } from 'vscode';
 import { deduplicateDiagnostics } from './extension';
 import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { timings } from './parsers/utils';
 import { generateMockDocument } from './workspace';
 import { checkSymphonyDiagnostics } from './parsers/symphony';
+import systemCode from "./compiler/systemCode.si";
+import { getDefinition, parseAndTypeCheck } from './parseAndTypeCheck';
+import { CompilationResult, compile, getTextRepresentation } from './compiler';
+import path from 'path';
+import { getPositionInformation } from './parser';
 
 const diagnosticParser = map(
     seq(
@@ -81,7 +85,6 @@ function performTest(path: string, codeText: string, codeLines: string[]): Simpl
     const document = generateMockDocument(path, codeText, codeLines);
     log.clear();
     tokensData.length = 0;
-    getRecoveryIssues().length = 0;
     let [parseResult, diags] = performParsing(document);
     diags = deduplicateDiagnostics(diags);
 
@@ -90,15 +93,8 @@ function performTest(path: string, codeText: string, codeLines: string[]): Simpl
             document,
             parseResult,
             [
-            baseEnvironment,
-            {
-                type: "scope",
-                switchTypes: new Map(),
-                functions: [],
-                operators: [],
-                types: new Map(),
-                variables: new Map(),
-            },
+                baseEnvironment,
+                emptyScope(),
             ],
             diags
         );
@@ -107,6 +103,38 @@ function performTest(path: string, codeText: string, codeLines: string[]): Simpl
         }
     }
     return diags;
+}
+
+function performAssemblyTest(docPath: string, codeText: string, codeLines: string[]): CompilationResult | null {
+    const document = generateMockDocument(docPath, codeText, codeLines);
+    const systemLines = systemCode.split('\n').length;
+    const combinedCode = `${systemCode}\n${document.getText()}`;
+    let [parseResult, diags, compiledDocument] = parseAndTypeCheck(combinedCode);
+
+    if (!parseResult) {
+      return null;
+    }
+
+    if (diags.some(d => d.range.start.line < systemLines && d.severity === DiagnosticSeverity.Error)) {
+      return null;
+    }
+    if (diags.some(d => d.range.start.line >= systemLines && d.severity === DiagnosticSeverity.Error)) {
+      return null;
+    }
+
+    const systemLinesOffset = compiledDocument.offsetAt(new Position(systemLines - 1, 0));
+
+    return compile(parseResult, {
+      name: path.parse(document.fileName).name,
+      librariesEndLineOffset: systemLinesOffset,
+      optimizationLevel: 'O2',
+      stripDebugSymbols: true
+    }, {
+      document: compiledDocument,
+      getDefinition: getDefinition(parseResult, systemLinesOffset),
+      typeGetter: range => getPositionInformation(compiledDocument, range)?.info?.type ?? null,
+      topmost: true
+    });
 }
 
 readdirSync(join(cwd(), '../../tests'), { recursive: true, encoding: 'utf-8' })
@@ -166,3 +194,64 @@ readdirSync(join(cwd(), '../../tests'), { recursive: true, encoding: 'utf-8' })
             });
         });
     });
+
+readdirSync(join(cwd(), '../../compiler-tests'), { recursive: true, encoding: 'utf-8' })
+    .filter(fileName => fileName.endsWith('.si'))
+    .forEach(fileName => {
+        const path = join(cwd(), '../../compiler-tests', fileName);
+        const fileLines = readFileSync(path, { encoding: 'utf-8' })
+            .split('\n')
+            .map(line => line.replaceAll('\r', ''));
+        const resultFile = readFileSync(path+'.symphony', { encoding: 'utf-8' });
+        const codeText = fileLines.join('\n');
+
+        suite(fileName, function () {
+            test('Should generate correct assembly code', () => {
+                const result = performAssemblyTest(path, codeText, fileLines);
+                if (!result) assert.fail('No compilation result');
+                assert.equal(getTextRepresentation(result), resultFile, 'The compiled code should be correct');
+            });
+        });
+    });
+
+suite('general', () => {
+    const text = `pub def malloc(size: U16) Rc {
+    var heap = (<[U16]>HEAP_ALLOCATOR_START)
+    var block_end_pointer = 0
+    while (true) {
+        var next_block_pointer = heap[block_end_pointer]
+        if (next_block_pointer == 0) {
+            return <Rc> 0
+        }
+
+        var block_length = heap[next_block_pointer]
+        if (block_length == size) {
+            heap[block_end_pointer] = next_block_pointer + block_length - 1
+            return <Rc> (HEAP_ALLOCATOR_START + next_block_pointer + next_block_pointer)
+        } elif (block_length > size + 1) {
+            var new_next_block_pointer = next_block_pointer + size - 1
+            heap[block_end_pointer] = new_next_block_pointer
+            heap[new_next_block_pointer] = block_length - size
+            return <Rc> (HEAP_ALLOCATOR_START + next_block_pointer + next_block_pointer)
+        }
+
+        block_end_pointer += block_length - 1
+    }
+    return <Rc> 0
+}`;
+    const document = generateMockDocument('test.txt', text, text.split('\n'));
+    let anyFail = false
+    for (let offset = 0; offset < text.length; offset++) {
+        if (offset !== document.offsetAt(document.positionAt(offset))) {
+            anyFail = true;
+            const p = document.positionAt(offset);
+            test(`positionAt <=> offsetAt (${offset})`, () => {
+                assert.equal(offset, document.offsetAt(document.positionAt(offset)), `Calculated position is ${p.line}:${p.character}`);
+            });
+        }
+    }
+    if (!anyFail) {
+        test(`positionAt <=> offsetAt (${text.length} tests)`, () => {
+        });
+    }
+});

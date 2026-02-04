@@ -12,6 +12,7 @@ async function main() {
     outfile: 'dist-test/test.js',
     external: ['vscode'],
     logLevel: 'silent',
+    loader: { ".si": "text" },
     plugins: [
       esbuildProblemMatcherPlugin
     ]
