@@ -5,8 +5,10 @@
 vsc-extension-quickstart.md
 tsconfig.json
 esbuild.js
+esbuild-test.js
 src/**
 tests/**
+compiler-tests/**
 dist-test/**
 node_modules
-lib.si
+*.si
