@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.8.1]
+- Fixed hints and hovers not showing up for non-compilation files
+
 ## [0.8.0]
 - Added support for the new Simplex version for TC 2.0
 

@@ -6,7 +6,7 @@ import { rValue, topmostVariableDeclaration, variableDeclaration, variableModifi
 import { typeDeclaration } from "./parsers/declaration";
 import { manyForSure, recoverBySkipping, rstr } from "./parsers/utils";
 import { BreakStatement, ContinueStatement, FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, WhileStatement, AsmStatement, CommentStatement } from "./parsers/types/ast";
-import { getTokensData } from "./storage";
+import { getTokensData, logLine } from "./storage";
 import { symphonyParser } from "./parsers/symphony";
 import { ioDeclaration } from "./parsers/iodeclaration";
 

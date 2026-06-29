@@ -49,7 +49,7 @@ import {
 import { getPositionInfo, getDeclarations, getPositionInformation } from "./parser";
 import { typeTokenToTypeString } from "./typeSetup";
 import './definitions';
-import { showInlayTypeHints } from "./workspace";
+import { logDebugInfo, showInlayTypeHints } from "./workspace";
 import { compile } from "./compiler";
 import { getTextRepresentation } from "./compiler/representation";
 import systemCode from "./compiler/systemCode.si";
@@ -156,7 +156,6 @@ export function activate(context: ExtensionContext)
       }
       
       if (!data.info.range) {
-        
         return;
       }
 
@@ -242,7 +241,7 @@ export function activate(context: ExtensionContext)
           statusItem.text = `TC Simplex failed to parse the file (in ${Date.now() - startTime}ms)`;
         }
 
-        diags = migrateTokenData(compiledDocument, document, diags, systemLines);
+        diags = migrateTokenData(compiledDocument, document, diags, isSymphonyFile(document) ? systemLines : 0);
         diagnosticsPerFile[document.uri.toString()] = deduplicateDiagnostics(diags);
         Object.entries(diagnosticsPerFile).forEach(([key, value]) => {
           diagnostics.set(Uri.parse(key, true), value);

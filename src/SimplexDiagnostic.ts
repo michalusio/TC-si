@@ -13,4 +13,23 @@ export class SimplexDiagnostic extends Diagnostic {
         );
         return this;
     }
+
+    public toString(): string {
+        let sev: string;
+        switch (this.severity) {
+            case DiagnosticSeverity.Error:
+                sev = "Error";
+                break;
+            case DiagnosticSeverity.Warning:
+                sev = "Warning";
+                break;
+            case DiagnosticSeverity.Information:
+                sev = "Information";
+                break;
+            case DiagnosticSeverity.Hint:
+                sev = "Hint";
+                break;
+        }
+        return `${sev} at ${this.range.start.line}:${this.range.start.character} - ${this.range.end.line}:${this.range.end.character} : ${this.message}`;
+    }
 }

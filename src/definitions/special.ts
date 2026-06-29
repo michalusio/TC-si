@@ -3,6 +3,7 @@ import { boolType } from "./bool";
 import { intType } from "./int";
 import { stringType } from "./string";
 
+addDef('default', 'pub def default(@Any) @Any {', anyType, [anyType]);
 addDef('assert', 'pub def assert(condition: Bool, error_code: Int) {', null, [boolType, intType]);
 addDef('breakpoint', 'pub def breakpoint() {', null, []);
 addDef("exit", "pub def exit() {", null, []);

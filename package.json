@@ -10,7 +10,7 @@
   "description": "Turing Complete Simplex language extension",
   "version": "0.8.0",
   "engines": {
-    "vscode": "^1.102.0"
+    "vscode": "^1.125.0"
   },
   "categories": [
     "Programming Languages"
