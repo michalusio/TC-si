@@ -48,8 +48,8 @@ def save_rc_counter(a: Rc, value: U16) {
 
 /** MEMORY ALLOCATOR **/
 
-const HEAP_ALLOCATOR_START = <U16>0x2000
-const HEAP_ALLOCATOR_END = <U16>0xE000
+const #HEAP_ALLOCATOR_START = U16 0x2000
+const #HEAP_ALLOCATOR_END = U16 0xE000
 
 pub def init_allocator() {
     var heap = (<[U16]>HEAP_ALLOCATOR_START)
@@ -64,23 +64,23 @@ pub def malloc(size: U16) Rc {
     while (true) {
         var next_block_pointer = heap[block_end_pointer]
         if (next_block_pointer == 0) {
-            return <Rc> 0
+            return Rc 0
         }
 
         var block_length = heap[next_block_pointer]
         if (block_length == size) {
             heap[block_end_pointer] = next_block_pointer + block_length - 1
-            return <Rc> (HEAP_ALLOCATOR_START + next_block_pointer + next_block_pointer)
+            return Rc (HEAP_ALLOCATOR_START + next_block_pointer + next_block_pointer)
         } elif (block_length > size + 1) {
             var new_next_block_pointer = next_block_pointer + size - 1
             heap[block_end_pointer] = new_next_block_pointer
             heap[new_next_block_pointer] = block_length - size
-            return <Rc> (HEAP_ALLOCATOR_START + next_block_pointer + next_block_pointer)
+            return Rc (HEAP_ALLOCATOR_START + next_block_pointer + next_block_pointer)
         }
 
         block_end_pointer += block_length - 1
     }
-    return <Rc> 0
+    return Rc 0
 }
 
 pub def free(a: Rc) {

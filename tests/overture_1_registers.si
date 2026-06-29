@@ -1,0 +1,107 @@
+/***
+pub type Input {
+    instruction: U8,
+    input:       U8
+}
+***/
+/***
+pub type Output {
+    output:         U8,
+    output_enabled: Bool
+}
+***/
+
+const #INPUT  = 0b110_000
+const #OUTPUT = 0b000_110
+const #MOV    = 0b1000_0000
+
+var instructions = array(<Int>, 256)
+var registers    = [U8 0,0,0,0,0,0]
+
+var h = 0
+while h < 6 {
+    registers[h] = 0
+    h += 1
+}
+var s = 0
+var d = 0
+instructions[0] = #INPUT | #OUTPUT
+instructions[1] = #INPUT | 0
+instructions[2] = #INPUT | 1
+instructions[3] = #INPUT | 2
+instructions[4] = #INPUT | 3
+instructions[5] = #INPUT | 4
+instructions[6] = #INPUT | 5
+var i = 7
+while s <= 6 {
+    d = 0
+    instructions[i] = #INPUT | s
+    i += 1
+    while d <= 6 {
+        instructions[i] = (s << 3) | d
+        i += 1
+        d += 1
+    }
+    s += 1
+}
+
+
+def get_input(tick: Int) Input {
+
+    let instruction = .instructions[tick]
+
+    return Input {instruction: U8 instruction, input: U8 random(256)}
+
+}
+
+def check_output(tick: Int, input: Input, output: Output) TestResult {
+
+    let instruction = Int input.instruction
+    let from = instruction & 0b111
+    let to   = instruction >> 3
+    
+    ui_set_instruction(0, #MOV | instruction, tick)
+
+    var value = U8 0
+
+    if from <= 5 {
+        value = .registers[from]
+    } elif from == 6 {
+        value = input.input
+    }
+
+
+    if to <= 5 {
+        .registers[to] = value
+    } elif to == 6 {
+        if !output.output_enabled {
+            set_error((31337_51132330915663, `Output not enabled.`))
+            return fail    
+        }
+        if output.output != value {
+            set_error((31337_75546240775660, `Expected output: {value}.`))
+            return fail
+        }    
+    }
+
+    var reg_i = 0
+    while reg_i < 6 {
+        let value = U8 get_memory(`Reg {reg_i}`)
+        if .registers[reg_i] != value {
+            let value = .registers[reg_i]
+            set_error((31337_18540192543555, `Register {reg_i} should have value {value}.`))
+            return fail
+        }
+
+        reg_i += 1
+    }
+
+    if tick == 63 {
+        return win
+    }
+
+}
+
+//# 57:59-57:69 -Warning -A function with return type should return a value in all cases
+//# 89:13-89:18 -Warning -You should not redeclare variables: 'value'
+//# 91:17-91:22 -Warning -You should not redeclare variables: 'value'

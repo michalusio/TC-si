@@ -1,7 +1,6 @@
 import {
   Context,
   failure,
-  Failure,
   isFailure,
   Parser,
   recoverByAddingChars,
@@ -66,4 +65,18 @@ export function manyForSure<T>(parser: Parser<T>): Parser<T[]> {
       results.push(res.value);
     }
   };
+}
+
+export function logg<T>(parser: Parser<T>): Parser<T> {
+  return (ctx: Context): Result<T> => {
+    const res = parser(ctx);
+    if (isFailure(res)) {
+      console.log(`Failure at ${res.ctx.index}: ${res.expected}`);
+      console.log(`History: [${res.history.join(', ')}]`)
+      return res;
+    } else {
+      console.log(`Success at ${res.ctx.index}: ${JSON.stringify(res.value, null, 2)}`);
+      return res;
+    }
+  }
 }

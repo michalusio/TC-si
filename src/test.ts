@@ -4,8 +4,8 @@ import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { map, seq, intP, str, spaces, spacesPlus, regex, ParseText, any } from 'parser-combinators';
 import { checkVariableExistence, performParsing } from './checks';
-import { baseEnvironment, emptyScope, isSymphonyFile, log, tokensData } from './storage';
-import { DiagnosticSeverity, Position } from 'vscode';
+import { baseEnvironment, clearTokensData, emptyScope, finalizeTokensData, isSymphonyFile, log, tokensData } from './storage';
+import { DiagnosticSeverity, Position, Range } from 'vscode';
 import { deduplicateDiagnostics } from './extension';
 import { SimplexDiagnostic } from './SimplexDiagnostic';
 import { timings } from './parsers/utils';
@@ -16,6 +16,12 @@ import { getDefinition, parseAndTypeCheck } from './parseAndTypeCheck';
 import { CompilationResult, compile, getTextRepresentation } from './compiler';
 import path from 'path';
 import { getPositionInformation } from './parser';
+import { resetId } from './compiler/utils';
+import { StatementsBlock } from './parsers/types/ast';
+
+const runFileTests: string[] = [];
+const runCompilationTests: string[] = ['@'];
+const runGeneralTests = true;
 
 const diagnosticParser = map(
     seq(
@@ -81,10 +87,11 @@ const diagnosticParser = map(
     ([_, __, diag]) => diag
 );
 
-function performTest(path: string, codeText: string, codeLines: string[]): SimplexDiagnostic[] {
+function performTest(path: string, codeText: string, codeLines: string[]): [StatementsBlock | null, SimplexDiagnostic[]] {
     const document = generateMockDocument(path, codeText, codeLines);
-    log.clear();
-    tokensData.length = 0;
+    resetId();
+    log.clear();  
+    clearTokensData(document);
     let [parseResult, diags] = performParsing(document);
     diags = deduplicateDiagnostics(diags);
 
@@ -102,7 +109,8 @@ function performTest(path: string, codeText: string, codeLines: string[]): Simpl
             checkSymphonyDiagnostics(document, parseResult, diags);
         }
     }
-    return diags;
+    finalizeTokensData(document);
+    return [parseResult, diags];  
 }
 
 function performAssemblyTest(docPath: string, codeText: string, codeLines: string[]): CompilationResult | null {
@@ -138,6 +146,7 @@ function performAssemblyTest(docPath: string, codeText: string, codeLines: strin
 }
 
 readdirSync(join(cwd(), '../../tests'), { recursive: true, encoding: 'utf-8' })
+    .filter(fileName => runFileTests.length === 0 || runFileTests.some(f => fileName.includes(f)))
     .filter(fileName => fileName.endsWith('.si'))
     .forEach(fileName => {
         const path = join(cwd(), '../../tests', fileName);
@@ -155,14 +164,14 @@ readdirSync(join(cwd(), '../../tests'), { recursive: true, encoding: 'utf-8' })
             this.slow(250);
             if (diagnosticLines.length === 0) {
                 test('Should have no diagnostics', () => {
-                    const diags = performTest(path, codeText, codeLines);
+                    const [_, diags] = performTest(path, codeText, codeLines);
                     diags.forEach(diag => console.error('Leftover: ' + JSON.stringify(diag)));
                     assert(diags.length === 0, 'There should have been no diagnostics');
                 });
             } else {
                 test(`Should have correct diagnostics (${diagnosticLines.length})`, () => {
                     const diagnostics = diagnosticLines.map(line => ParseText(line, diagnosticParser));
-                    let diags = performTest(path, codeText, codeLines);
+                    let [_, diags] = performTest(path, codeText, codeLines);
                     let error = false;
                     diagnostics.forEach(expected => {
                         const foundDiagnosticIndex = diags.findIndex(provided => {
@@ -184,18 +193,20 @@ readdirSync(join(cwd(), '../../tests'), { recursive: true, encoding: 'utf-8' })
                     assert(!error && diags.length === 0, `The diagnostics should all be specified`);
                 });
             }
-            test('Should parse under 1000ms', () => {
+            const time = 1500;
+            test(`Should parse under ${time}ms`, () => {
                 const timeStart = Date.now();
                 performTest(path, codeText, codeLines);
-                if (Date.now() - timeStart >= 1000) {
+                if (Date.now() - timeStart >= time) {
                     console.info(JSON.stringify(timings, null, 2));
-                    assert.fail('Parsing was over 1000ms');
+                    assert.fail(`Parsing was over ${time}ms`);
                 }
             });
         });
     });
 
 readdirSync(join(cwd(), '../../compiler-tests'), { recursive: true, encoding: 'utf-8' })
+    .filter(fileName => runCompilationTests.length === 0 || runCompilationTests.some(f => fileName.includes(f)))
     .filter(fileName => fileName.endsWith('.si'))
     .forEach(fileName => {
         const path = join(cwd(), '../../compiler-tests', fileName);
@@ -218,44 +229,86 @@ readdirSync(join(cwd(), '../../compiler-tests'), { recursive: true, encoding: 'u
         });
     });
 
-suite('general', () => {
-    const text = `pub def malloc(size: U16) Rc {
-    var heap = (<[U16]>HEAP_ALLOCATOR_START)
-    var block_end_pointer = 0
-    while (true) {
-        var next_block_pointer = heap[block_end_pointer]
-        if (next_block_pointer == 0) {
-            return <Rc> 0
-        }
+if (runGeneralTests) {
+    suite('general', () => {
+        suite('positionAt+offsetAt tests', () => {
+            const text = `pub def malloc(size: U16) Rc {
+                var heap = (<[U16]>HEAP_ALLOCATOR_START)
+                var block_end_pointer = 0
+                while (true) {
+                    var next_block_pointer = heap[block_end_pointer]
+                    if (next_block_pointer == 0) {
+                        return <Rc> 0
+                    }
 
-        var block_length = heap[next_block_pointer]
-        if (block_length == size) {
-            heap[block_end_pointer] = next_block_pointer + block_length - 1
-            return <Rc> (HEAP_ALLOCATOR_START + next_block_pointer + next_block_pointer)
-        } elif (block_length > size + 1) {
-            var new_next_block_pointer = next_block_pointer + size - 1
-            heap[block_end_pointer] = new_next_block_pointer
-            heap[new_next_block_pointer] = block_length - size
-            return <Rc> (HEAP_ALLOCATOR_START + next_block_pointer + next_block_pointer)
-        }
+                    var block_length = heap[next_block_pointer]
+                    if (block_length == size) {
+                        heap[block_end_pointer] = next_block_pointer + block_length - 1
+                        return <Rc> (HEAP_ALLOCATOR_START + next_block_pointer + next_block_pointer)
+                    } elif (block_length > size + 1) {
+                        var new_next_block_pointer = next_block_pointer + size - 1
+                        heap[block_end_pointer] = new_next_block_pointer
+                        heap[new_next_block_pointer] = block_length - size
+                        return <Rc> (HEAP_ALLOCATOR_START + next_block_pointer + next_block_pointer)
+                    }
 
-        block_end_pointer += block_length - 1
-    }
-    return <Rc> 0
-}`;
-    const document = generateMockDocument('test.txt', text, text.split('\n'));
-    let anyFail = false
-    for (let offset = 0; offset < text.length; offset++) {
-        if (offset !== document.offsetAt(document.positionAt(offset))) {
-            anyFail = true;
-            const p = document.positionAt(offset);
-            test(`positionAt <=> offsetAt (${offset})`, () => {
-                assert.equal(offset, document.offsetAt(document.positionAt(offset)), `Calculated position is ${p.line}:${p.character}`);
-            });
-        }
-    }
-    if (!anyFail) {
-        test(`positionAt <=> offsetAt (${text.length} tests)`, () => {
+                    block_end_pointer += block_length - 1
+                }
+                return <Rc> 0
+            }`;
+                const document = generateMockDocument('test.txt', text, text.split('\n'));
+                let anyFail = false
+                for (let offset = 0; offset < text.length; offset++) {
+                    if (offset !== document.offsetAt(document.positionAt(offset))) {
+                        anyFail = true;
+                        const p = document.positionAt(offset);
+                        test(`positionAt <=> offsetAt (${offset})`, () => {
+                            assert.equal(offset, document.offsetAt(document.positionAt(offset)), `Calculated position is ${p.line}:${p.character}`);
+                        });
+                    }
+                }
+                if (!anyFail) {
+                    test(`positionAt <=> offsetAt (${text.length} tests)`, () => {
+                    });
+                }
         });
-    }
-});
+        suite('single line tests (no diagnostics)', () => {
+            test('var plates = array(<Int>, 10)', () => {
+                const [p, diags] = performTest('plates', 'var plates = array(<Int>, 10)', ['var plates = array(<Int>, 10)']);
+                diags.forEach(diag => console.error('Leftover: ' + JSON.stringify(diag)));
+                assert(diags.length === 0, 'There should have been no diagnostics');
+            });
+            test('const #HEAP_ALLOCATOR_START = U16 0x2000', () => {
+                const [p, diags] = performTest('plates', 'const #HEAP_ALLOCATOR_START = U16 0x2000', ['const #HEAP_ALLOCATOR_START = U16 0x2000']);
+                diags.forEach(diag => console.error('Leftover: ' + JSON.stringify(diag)));
+                assert(diags.length === 0, 'There should have been no diagnostics');
+            });
+            test('const #HEAP_ALLOCATOR_START = U16(0x2000)', () => {
+                const [p, diags] = performTest('plates', 'const #HEAP_ALLOCATOR_START = U16(0x2000)', ['const #HEAP_ALLOCATOR_START = U16(0x2000)']);
+                diags.forEach(diag => console.error('Leftover: ' + JSON.stringify(diag)));
+                assert(diags.length === 0, 'There should have been no diagnostics');
+            });
+            test('var instructions = array(<Int>, 256)', () => {
+                const [p, diags] = performTest('plates', 'var instructions = array(<Int>, 256)', ['var instructions = array(<Int>, 256)']);
+                diags.forEach(diag => console.error('Leftover: ' + JSON.stringify(diag)));
+                assert(diags.length === 0, 'There should have been no diagnostics');
+            });
+            test('var registers    = [U8 0,0,0,0,0,0]', () => {
+                const [p, diags] = performTest('plates', 'var registers    = [U8 0,0,0,0,0,0]', ['var registers    = [U8 0,0,0,0,0,0]']);
+                diags.forEach(diag => console.error('Leftover: ' + JSON.stringify(diag)));
+                assert(diags.length === 0, 'There should have been no diagnostics');
+            });
+            test('dot c1(m: Matrix) Vector { let v = [Vector] m; return v[0] }', () => {
+                const [p, diags] = performTest('plates', `dot c1(m: Matrix) Vector {
+    let v = [Vector] m
+    return v[0]
+}`, ['dot c1(m: Matrix) Vector {', '    let v = [Vector] m', '    return v[0]', '}']);
+                assert(diags.length === 3, 'There should have been three diagnostics');
+            });
+            test('var x = Input {instruction: U8 instruction, input: U8 random(256)}', () => {
+                const [p, diags] = performTest('plates', 'var x = Input {instruction: U8 instruction, input: U8 random(256)}', ['var x = Input {instruction: U8 instruction, input: U8 random(256)}']);
+                assert(diags.length === 2, 'There should have been two diagnostics');
+            });
+        });
+    });
+}

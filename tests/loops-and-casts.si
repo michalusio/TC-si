@@ -6,14 +6,14 @@ def a() Int {
 }
 
 def b() Int {
-    var x = array(12, <U8>0)
+    var x = array(12, U8 0)
 
 
 
 
-    var y = <[U19]> x
+    var y = [U19] x
 
-    var z = <Int>true
+    var z = Int true
 }
 
 def c() {
@@ -23,8 +23,8 @@ def c() {
     }
 }
 
-//# 1:9-1:12 -Warning -A function with return type should return a value
+//# 1:9-1:12 -Warning -A function with return type should return a value in all cases
 //# 3:11-3:15 -Warning -This while statement is an infinite loop (always true condition, no returns or breaks)
-//# 8:9-8:12 -Warning -A function with return type should return a value
-//# 14:13-14:22 -Warning -You are casting to an array with bigger elements - make sure the array's length is a multiple of 4 to avoid out-of-bounds errors
-//# 16:13-16:22 -Warning -You are casting an enum to a signed integer - this will result in some values having negative value!
+//# 8:9-8:12 -Warning -A function with return type should return a value in all cases
+//# 14:12-14:20 -Warning -You are casting to an array with bigger elements - make sure the array's length is a multiple of 4 to avoid out-of-bounds errors
+//# 16:12-16:21 -Warning -You are casting an enum to a signed integer - this will result in some values having negative value!

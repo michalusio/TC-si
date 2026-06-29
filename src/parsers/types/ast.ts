@@ -12,11 +12,11 @@ export type TypeDefinition = {
     type: 'type-definition',
     public: boolean,
     name: Token<string>,
-    definition: Token<string> | Token<string[]>
+    definition: Token<string> | Token<string[]> | Token<Record<string, string>>
 }
 
 export type VariableName = {
-    front: '$' | '.' | '$.' | '.$' | '',
+    front: '$' | '.' | '$.' | '.$' | '' | '#',
     name: string
 }
 export type VariableKind = 'const' | 'let' | 'var';

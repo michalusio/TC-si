@@ -14,9 +14,10 @@ import {
   Token,
   token,
   wspaces,
-  lazy
+  lazy,
+  spaces
 } from "parser-combinators";
-import { rstr, time } from "./utils";
+import { logg, rstr, time } from "./utils";
 import { ParseReturnType, VariableName } from "./types/ast";
 
 export const lbr = str("[");
@@ -47,18 +48,23 @@ const disallowedNames = new Set([
   "default",
 ]);
 
+export const variableNameText = ref(
+  regex(/\w+/, "Variable name"),
+  (p) => !disallowedNames.has(p)
+);
+
 export const variableName = token(
   map(
     seq(
-      many(any(str("$"), str("."))),
-      ref(regex(/\w+/, "Variable name"), (p) => !disallowedNames.has(p))
+      many(any(str("$"), str("."), str('#'))),
+      variableNameText
     ),
     ([front, name]) => <VariableName>{ front: front.join(""), name }
   )
 );
 export const typeName = token(regex(/@?[A-Z]\w*/, "Type name"));
 export const functionName = token(
-  ref(regex(/\w+/, "Function name"), (p) => !disallowedNames.has(p))
+  ref(regex(/[a-z_][a-z_0-9]*/, "Function name"), (p) => !disallowedNames.has(p))
 );
 
 const operatable = [
@@ -178,14 +184,48 @@ export const typeAliasDefinition: Parser<Token<string>> = lazy(() => token(
   any(
     map(typeName, (t) => t.value),
     map(
-      between(lbr, typeAliasDefinition, rstr("]")),
+      between(lbr, typeAliasDefinition, rbr),
       (t) => `[${t.value}]`
     )
   )
 ));
 
+const structDefinitionParamList = exhaust(
+    map(
+        seq(
+            wspaces,
+            variableNameText,
+            spaces,
+            str(':'),
+            spaces,
+            typeAliasDefinition,
+            wspaces,
+            opt(
+                seq(
+                    str(','),
+                    wspaces
+                )
+            )
+        ),
+        ([_, name, __, ___, ____, type]) => [name, type.value] as const
+    ),
+    rcb
+);
+
+export const structDefinition = token(
+  between(
+    lcb,
+    map(
+      structDefinitionParamList,
+      (kv) => Object.fromEntries(kv)
+    ),
+    rcb
+  )
+)
+
 export const typeDefinition = time('type definitions', any(
   oldEnumDefinition,
   newEnumDefinition,
+  structDefinition,
   typeAliasDefinition
 ));

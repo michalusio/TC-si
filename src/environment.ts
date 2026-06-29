@@ -52,8 +52,8 @@ export type EnvironmentType = {
   data: TypeDefinition;
 } | {
   type: 'built-in';
-  data: string;
-}
+  data: string | Record<string, string>;
+};
 
 export type StaticValue =
   | { type: 'string', value: string }

@@ -101,12 +101,6 @@ addIntOperations(sintType);
 addIntOperations(uintType);
 addIntOperations(intType);
 
-addConst(
-  "Z_STATE",
-  "Constant denoting the `Hi-Z` state of the wire.\n\nEquivalent to `0x8000_0000_0000_0000`.",
-  intType
-);
-
 addDef("random", "pub def random(max: Int) Int {", intType, [intType]);
 addDef("min", "pub def min(a: Int, b: Int) Int {", intType, [intType, intType]);
 addDef("max", "pub def max(a: Int, b: Int) Int {", intType, [intType, intType]);

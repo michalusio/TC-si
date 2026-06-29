@@ -82,7 +82,7 @@
             "patterns": [
                 {
                     "name": "keyword.control.si",
-                    "match": "\\b(if|while|return|break|continue|else|elif|switch|_reg_alloc_use|_default|default|asm)\\b"
+                    "match": "\\b(if|while|return|break|continue|else|elif|switch|_reg_alloc_use|default|asm)\\b"
                 },
                 {
                     "name": "keyword.other.si",
@@ -98,7 +98,7 @@
             "patterns": [
                 {
                     "name": "constant.numeric.si",
-                    "match": "\\b(Z_STATE|TestResult|win|fail|pass)\\b"
+                    "match": "\\b(TestResult|win|fail|pass)\\b"
                 },
                 {
                     "name": "constant.numeric.si",

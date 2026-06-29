@@ -40,18 +40,21 @@ function typeCheckDocumentAfterParsing(document: TextDocument, parseResult: Stat
 export function getDefinition(nodes: ParserOutput, librariesEndLineOffset: number): (rangeOrName: TokenRange | string) => FunctionDefinition | null {
   function traverse(node: Statement, rangeOrName: TokenRange | string): FunctionDefinition | null {
     switch (node.type) {
-      case '_default':
       case '_reg_alloc_use':
       case 'array':
       case "binary":
       case 'break':
       case 'cast':
+      case 'type':
       case 'continue':
       case 'declaration':
       case 'dotMethod':
+      case 'dotProperty':
       case 'function':
+      case 'struct':
       case 'index':
       case 'interpolated':
+      case 'translation':
       case 'modification':
       case 'number':
       case 'parenthesis':

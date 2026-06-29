@@ -42,7 +42,10 @@ export const composeTypeDefinition = (definition: TypeDefinition): string => {
   if (Array.isArray(definition.definition.value)) {
     return `${definition.public ? 'pub ' : ''}type ${definition.name.value} <${definition.definition.value.join(', ')}>`;
   }
-  return `${definition.public ? 'pub ' : ''}type ${definition.name.value} ${definition.definition.value}`;
+  if (typeof definition.definition.value === 'string') {
+    return `${definition.public ? 'pub ' : ''}type ${definition.name.value} ${definition.definition.value}`;
+  }
+  return `${definition.public ? 'pub ' : ''}type ${definition.name.value} {\n${Object.entries(definition.definition.value).map(kv => `  ${kv[0]}: ${kv[1]}`).join('\n')}\n}`;
 }
 
 export const composeFunctionDefinition = (definition: FunctionDefinition, params: string[]): string => {
@@ -266,18 +269,12 @@ export const getArrayType = (
   environments: Environment[],
   typeName: string
 ): string => {
-  const type = tryGetType(environments, typeName) ?? {
-    type: "built-in",
-    data: typeName,
-  };
   const arrayTypeName = `*${typeName}`;
   const arrayType = environments[0].types.get(arrayTypeName);
   if (!arrayType) {
-    const typeString =
-      type.type === "user-defined" ? type.data.definition.value : type.data;
     const arrayType: EnvironmentType = {
       type: "built-in",
-      data: `[${typeString}]`,
+      data: `[${typeName}]`,
     };
     environments[0].types.set(arrayTypeName, arrayType);
   }
@@ -436,15 +433,23 @@ export const getAfterIndexType = (
   environments: Environment[]
 ): string | null => {
   if (type.startsWith("*")) return type.slice(1);
+
   if (type === "String") return "Char";
+
   const typeInfo = tryGetType(environments, type);
   if (
     !typeInfo ||
     typeInfo.type === "built-in" ||
     Array.isArray(typeInfo.data.definition.value)
-  )
+  ) {
     return null;
-  return getAfterIndexType(typeInfo.data.definition.value, environments);
+  }
+
+  if (typeof typeInfo.data.definition.value === 'string') {
+    return getAfterIndexType(typeInfo.data.definition.value, environments);
+  }
+
+  return null;
 };
 
 export const isIntegerType = (type: string): boolean => {
@@ -644,6 +649,15 @@ export const addType = (name: string, description: string): string => {
   const type: EnvironmentType = {
     type: "built-in",
     data: description,
+  };
+  baseEnvironment.types.set(name, type);
+  return name;
+};
+
+export const addStructType = (name: string, params: Record<string, string>): string => {
+  const type: EnvironmentType = {
+    type: "built-in",
+    data: params
   };
   baseEnvironment.types.set(name, type);
   return name;

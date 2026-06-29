@@ -80,10 +80,10 @@ var mazes = [[
     0b1111111111111111111111111,
 ]]
 
-const X = 0
-const Y = 1
-const ROT = 2
-const MAZE = 3
+const #X = 0
+const #Y = 1
+const #ROT = 2
+const #MAZE = 3
 
 def looking_at($scratch_space: [Int], x: Int, y: Int) Int {
     let row = .mazes[scratch_space[MAZE]][y]
@@ -248,4 +248,4 @@ def arch_check_output($scratch_space: [Int], test: Int, input: Int, output: Int)
     }
 
 }
-//# 238:82-238:92 -Warning -A function with return type should return a value
+//# 238:82-238:92 -Warning -A function with return type should return a value in all cases

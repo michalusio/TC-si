@@ -310,9 +310,6 @@ const checkSymphonyRValueNode = (node: Token<RValue>, document: TextDocument, di
             checkSymphonyRValueNode(node.value.value, document, diags);
             break;
         }
-        case '_default': {
-            break;
-        }
         case 'variable': {
             break;
         }

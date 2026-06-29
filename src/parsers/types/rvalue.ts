@@ -38,6 +38,17 @@ export type ParenthesisedRValue = {
     value: Token<RValue>
 };
 
+export type TranslationRValue = {
+    type: 'translation',
+    code: number,
+    value: InterpolatedRValue
+}
+
+export type TypeRValue = {
+    type: 'type',
+    typeValue: Token<string>
+}
+
 export type ArrayRValue = {
     type: 'array',
     values: Token<RValue>[]
@@ -49,9 +60,16 @@ export type FunctionRValue = {
     parameters: Token<RValue>[]
 }
 
-export type DefaultRValue = {
-    type: '_default',
-    typeValue: Token<string>
+export type StructRValue = {
+    type: 'struct',
+    typeValue: Token<string>,
+    parameters: [Token<VariableName>, Token<RValue>][]
+}
+
+export type DotPropertyRValue = {
+    type: 'dotProperty',
+    object: Token<RValue>,
+    value: Token<string>
 }
 
 export type DotMethodRValue = {
@@ -86,4 +104,4 @@ export type TernaryRValue = {
     ifFalse: Token<RValue>
 }
 
-export type RValue = ParenthesisedRValue | CastedRValue | UnaryRValue | StringRValue | InterpolatedRValue | NumberRValue | ArrayRValue | FunctionRValue | DefaultRValue | DotMethodRValue | IndexRValue | VariableRValue | BinaryRValue | TernaryRValue;
+export type RValue = TranslationRValue | TypeRValue | ParenthesisedRValue | CastedRValue | UnaryRValue | StringRValue | InterpolatedRValue | NumberRValue | ArrayRValue | StructRValue | FunctionRValue | DotPropertyRValue | DotMethodRValue | IndexRValue | VariableRValue | BinaryRValue | TernaryRValue;

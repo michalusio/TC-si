@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.8.0]
+- Added support for the new Simplex version for TC 2.0
+
 ## [0.7.3]
 - Faster parsing of large files with upgraded `parser-combinators` package
 - Added the new enum definition support: `type MyEnum Enum[yes, no, notfound]`

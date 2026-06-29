@@ -1,0 +1,60 @@
+
+var min = 0
+var max = 255 // Inclusive
+var over = 0
+
+def arch_get_input(test: Int) Int {
+    return .over
+}
+
+def arch_check_output(test: Int, input: Int, output: Int) TestResult {
+
+    if (.min == .max) && (.min == output) {
+
+        // The value is pinned down
+        return win
+
+    }
+
+    // If the player guessed below the interval where the correct value could possibly be found.
+    if output < .min {
+
+        .over = 0
+
+        return pass
+
+    }
+
+    // If the player guessed above the interval where the correct value could possibly be found.
+    if output > .max {
+
+        .over = 1
+
+        return pass
+
+    }
+
+    // Getting a sample from the interval [min .. max - 1] may seem unintuitive,
+    // but it makes the selection fair (i.e. more correct) and does away with an edge case.
+    // The reason is that any of the comparisons "<", ">", "<=" or ">=" (of which we use ">" below)
+    // splits the interval between two adjacent integers rather than exactly _at_ a single one.
+    // (Or in other words value a cannot be simultaneously > than value b AND NOT > than value b.)
+    let sample = .min + random(.max - .min)
+
+    // Select one of the intervals [min .. guess - 1] or [guess + 1 .. max]
+    // probabilistically (with the help of the random sample) based on their relative sizes.
+    if output > sample {
+
+        .max  = output - 1
+        .over = 1
+
+    } else {
+
+        .min  = output + 1
+        .over = 0
+
+    }
+
+    return pass
+
+}

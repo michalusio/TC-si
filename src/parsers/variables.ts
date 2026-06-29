@@ -1,23 +1,26 @@
-import { any, between, exhaust, expect, lazy, many, map, opt, Parser, recoverByAddingChars, ref, regex, seq, spaces, spacesPlus, str, surely, Token, token, wspaces } from "parser-combinators"
-import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators, typeAliasDefinition, rpr, rbr } from "./base";
-import { ArrayRValue, BinaryRValue, CastedRValue, DefaultRValue, DotMethodRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, TernaryRValue, UnaryRValue, VariableRValue } from "./types/rvalue";
-import { rstr, time } from "./utils";
+import { any, between, exhaust, expect, lazy, many, map, opt, Parser, recoverByAddingChars, ref, regex, seq, spaces, spacesPlus, str, surely, Token, token, wspaces, lookaround } from "parser-combinators"
+import { lab, rab, lbr, variableName, functionName, lpr, unaryOperator, binaryOperator, lcb, blockComment, lineComment, BinaryOperators, typeAliasDefinition, rpr, rbr, variableNameText, rcb, typeName } from "./base";
+import { ArrayRValue, BinaryRValue, CastedRValue, DotMethodRValue, DotPropertyRValue, FunctionRValue, IndexRValue, InterpolatedRValue, NumberRValue, ParenthesisedRValue, RValue, StringRValue, StructRValue, TernaryRValue, TranslationRValue, TypeRValue, UnaryRValue, VariableRValue } from "./types/rvalue";
+import { logg, rstr, time } from "./utils";
 import { VariableDeclaration, VariableModification } from "./types/ast";
 import { precedence } from "../storage";
 
 export const rValue: Parser<Token<RValue>> = lazy(() => time('rvalues', map(
     seq(
         time('primary rValues', token(any<RValue>(
-            time('base rValues', any(castedRValue,
+            time('base rValues', any(
                 anyNumericLiteral,
                 stringLiteral,
                 stringInterpolatedLiteral,
+                typeLiteral,
+                structRValue,
+                castedRValue,
                 unaryRValue,
+                translationLiteral,
             )),
             time('complex rValues', any(
                 parenthesisedRValue,
                 arrayLiteral,
-                defaultRValue,
                 functionCall,
                 variableLiteral
             ))
@@ -46,7 +49,12 @@ export const rValue: Parser<Token<RValue>> = lazy(() => time('rvalues', map(
             seq(
                 many(seq(
                     str('.'),
-                    surely(functionCall)
+                    surely(
+                        any(
+                            functionCall,
+                            token(variableNameText)
+                        )
+                    )
                 )),
                 opt(
                     seq(
@@ -108,19 +116,31 @@ export const rValue: Parser<Token<RValue>> = lazy(() => time('rvalues', map(
             };
             return data;
         } else {
-            const op = operation as [[".", FunctionRValue][], [BinaryOperators, Token<RValue>] | null];
+            const op = operation as [[".", FunctionRValue | Token<string>][], [BinaryOperators, Token<RValue>] | null];
             const functionCall = op[0];
             functionCall.forEach(([_, call]) => {
-                actualValue = <Token<RValue>>{
-                    start: actualValue.start,
-                    end: (call.parameters[call.parameters.length - 1]?.end ?? (actualValue.end + 1)) + 1,
-                    value: <DotMethodRValue>{
-                        type: 'dotMethod',
-                        object: actualValue,
-                        value: call.value,
-                        parameters: call.parameters
-                    }
-                };
+                if ('end' in call) {
+                    actualValue = <Token<RValue>>{
+                        start: actualValue.start,
+                        end: call.end + 1,
+                        value: <DotPropertyRValue>{
+                            type: 'dotProperty',
+                            object: actualValue,
+                            value: call
+                        }
+                    };
+                } else {
+                    actualValue = <Token<RValue>>{
+                        start: actualValue.start,
+                        end: (call.parameters[call.parameters.length - 1]?.end ?? (actualValue.end + 1)) + 1,
+                        value: <DotMethodRValue>{
+                            type: 'dotMethod',
+                            object: actualValue,
+                            value: call.value,
+                            parameters: call.parameters
+                        }
+                    };
+                }
             });
 
             const binaryOperator = op[1];
@@ -286,7 +306,7 @@ const arrayLiteral = time('array literals', map(
                     rValue,
                     wspaces
                 ),
-                opt(str(',')),
+                any(str(','), lookaround(rbr)),
                 wspaces,
                 opt(any(lineComment, blockComment))
             ),
@@ -338,14 +358,17 @@ export const functionCall = time('function calls', map(seq(
     };
 }));
 
-const cast = between(
+const typeLiteral = map(between(
     lab,
     typeAliasDefinition,
     rab
-);
+), (v) => (<TypeRValue> {
+    type: 'type',
+    typeValue: v
+}));
 
 const castedRValue = map(seq(
-    cast,
+    typeAliasDefinition,
     spaces,
     surely(rValue)
 ), ([cast, _, value]) => {
@@ -356,16 +379,43 @@ const castedRValue = map(seq(
     }
 });
 
-const defaultRValue = map(seq(
-    str('_default(:'),
-    typeAliasDefinition,
-    rpr
-), ([_, typeValue, __]) => {
-    return <DefaultRValue>{
-        type: '_default',
-        typeValue
-    }
-})
+const structParamList = exhaust(
+    map(
+        seq(
+            variableName,
+            spaces,
+            str(':'),
+            spaces,
+            rValue,
+            spaces,
+            opt(
+                seq(
+                    str(','),
+                    spaces
+                )
+            )
+        ),
+        ([name, _, __, ___, value]) => [name, value] as const
+    ),
+    rcb
+);
+
+const structRValue = map(
+    seq(
+        typeName,
+        spaces,
+        between(
+            lcb,
+            structParamList,
+            rcb
+        )
+    ),
+    ([type, _, params]) => (<StructRValue> {
+        type: 'struct',
+        typeValue: type,
+        parameters: params
+    })
+);
 
 const unaryRValue = map(seq(
     unaryOperator,
@@ -378,6 +428,22 @@ const unaryRValue = map(seq(
         value
     }
 });
+
+const translationLiteral = map(between(
+    seq(lpr, spaces),
+    seq(
+        numericBase10Literal,
+        spaces,
+        str(','),
+        spaces,
+        stringInterpolatedLiteral
+    ),
+    seq(spaces, rstr(')'))
+), ([code, _, __, ___, value]) => (<TranslationRValue>{
+    type: 'translation',
+    code: code.value,
+    value
+}))
 
 const parenthesisedRValue = time('parentheses', map(between(
     seq(lpr, spaces),

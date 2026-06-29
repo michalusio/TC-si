@@ -8,6 +8,7 @@ import { manyForSure, recoverBySkipping, rstr } from "./parsers/utils";
 import { BreakStatement, ContinueStatement, FunctionDeclaration, IfStatement, RegAllocUseStatement, ReturnStatement, Statement, StatementsBlock, StatementsStatement, SwitchStatement, WhileStatement, AsmStatement, CommentStatement } from "./parsers/types/ast";
 import { getTokensData } from "./storage";
 import { symphonyParser } from "./parsers/symphony";
+import { ioDeclaration } from "./parsers/iodeclaration";
 
 type PositionInfo = {
 	current: TokenRange,
@@ -446,6 +447,7 @@ export const languageParser = map(
 			spaces,
 			token(any<void | string | Statement>(
 				eof,
+				ioDeclaration,
 				blockComment,
 				newline,
 				asmDeclaration,

@@ -1,7 +1,7 @@
 import { DiagnosticSeverity, Range, TextDocument } from "vscode";
 import { log, logLine, tokensData } from "./storage";
 import { languageParser } from "./parser";
-import { isFailure, ParseError, Parser, Token } from "parser-combinators";
+import { isFailure, ParseError, Parser, str, Token } from "parser-combinators";
 import {
   FunctionDefinition,
   ParserOutput,
@@ -279,6 +279,16 @@ export const checkVariableExistence = (
         diagnostics.push(...processRValue(document, environments, scope.value.value));
         diagnostics.push(...checkForSimplification(scope.value, document));
         if (scope.kind.value === 'const') {
+          if (scope.name.value.front !== '#') {
+            diagnostics.push(new SimplexDiagnostic(
+              new Range(
+                document.positionAt(scope.name.start),
+                document.positionAt(scope.name.end)
+              ),
+              `Constants have to begin with a hash (#)`,
+              DiagnosticSeverity.Error
+            ));
+          }
           if (scope.name.value.name.search(/[a-z]/) >= 0) {
             diagnostics.push(new SimplexDiagnostic(
               new Range(
@@ -290,13 +300,13 @@ export const checkVariableExistence = (
             ));
           }
         } else {
-          if (scope.name.value.name.substring(0, 1).search(/[A-Z]/) >= 0) {
+          if (scope.name.value.name.search(/[A-Z#]/) >= 0) {
             diagnostics.push(new SimplexDiagnostic(
               new Range(
                 document.positionAt(scope.name.start),
                 document.positionAt(scope.name.end)
               ),
-              `Variables have to start with a lowercase letter`,
+              `Variables have to use only lowercase letters and an underscore (_)`,
               DiagnosticSeverity.Error
             ));
           }
@@ -580,7 +590,7 @@ export const checkVariableExistence = (
                 document.positionAt(scope.definition.returnType.start),
                 document.positionAt(scope.definition.returnType.end)
               ),
-              `A function with return type should return a value`,
+              `A function with return type should return a value in all cases`,
               DiagnosticSeverity.Warning
             ));
           }
@@ -797,7 +807,8 @@ const processRValue = (
   const results: SimplexDiagnostic[] = [];
   switch (rValue.type) {
     case 'number':
-    case 'string': {
+    case 'string':
+    case 'type': {
       // Nothing to do here
       break;
     }
@@ -917,6 +928,67 @@ const processRValue = (
       }
       break;
     }
+    case 'dotProperty': {
+      results.push(...processRValue(document, environments, rValue.object.value));
+      const structType = getType(rValue.object, document, environments, results);
+      const structTypeDefinition = tryGetType(environments, structType);
+      if (!structTypeDefinition) {
+        results.push(
+          new SimplexDiagnostic(
+            new Range(
+              document.positionAt(rValue.object.start),
+              document.positionAt(rValue.object.end)
+            ),
+            `Cannot find name '${structType}'`
+          )
+        );
+      } else {
+        let props: Record<string, string>;
+        if (structTypeDefinition.type === 'built-in') {
+          if (typeof structTypeDefinition.data === 'string') {
+            results.push(
+              new SimplexDiagnostic(
+                new Range(
+                  document.positionAt(rValue.value.start),
+                  document.positionAt(rValue.value.end)
+                ),
+                `Cannot extract property from a type that is not a struct`
+              )
+            );
+            break;
+          }
+          props = structTypeDefinition.data;
+        } else {
+          const def = structTypeDefinition.data.definition.value;
+          if (typeof def === 'string' || Array.isArray(def)) {
+            results.push(
+              new SimplexDiagnostic(
+                new Range(
+                  document.positionAt(rValue.value.start),
+                  document.positionAt(rValue.value.end)
+                ),
+                `Cannot extract property from a type that is not a struct`
+              )
+            );
+            break;
+          }
+          props = def;
+        }
+        const propName = rValue.value.value;
+        if (!(propName in props)) {
+          results.push(
+            new SimplexDiagnostic(
+              new Range(
+                document.positionAt(rValue.value.start),
+                document.positionAt(rValue.value.end)
+              ),
+              `Cannot find property ${propName} in struct type ${structType}`
+            )
+          );
+        }
+      }
+      break;
+    }
     case 'function': {
       rValue.parameters.forEach(p => {
         results.push(...processRValue(document, environments, p.value));
@@ -970,34 +1042,18 @@ const processRValue = (
       }
       break;
     }
+    case 'struct': {
+      rValue.parameters.forEach(p => {
+        results.push(...processRValue(document, environments, p[1].value));
+      });
+      break;
+    }
     case "parenthesis": {
       results.push(...processRValue(document, environments, rValue.value.value));
       break;
     }
-    case '_default': {
-      getType({
-        start: rValue.typeValue.start,
-        end: rValue.typeValue.end,
-        value: rValue
-      }, document, environments, results);
-      const kind = tryGetDefFunction(
-        environments,
-        rValue.type,
-        ['@']
-      );
-      if (kind !== null) {
-        tokensData.push({
-          definition: kind.data,
-          position: {
-            start: rValue.typeValue.start - 9,
-            end: rValue.typeValue.end + 1
-          },
-          info: {
-            type: kind.returnType ?? undefined,
-            dotFunctionSuggestions: getDotFunctionsFor(environments, kind.returnType ?? '?')
-          }
-        });
-      }
+    case 'translation': {
+      results.push(...processRValue(document, environments, rValue.value));
       break;
     }
     default: {
@@ -1089,7 +1145,10 @@ const checkType = (typeToken: Token<string | null>, document: TextDocument, envi
   } else {
     tokensData.push({
       definition: envType.type === 'built-in'
-        ? ';' + envType.data
+        ? ';' + (typeof envType.data === 'string'
+          ? envType.data
+          : Object.entries(envType.data).map(kv => `${kv[0]}: ${kv[1]}`).join('\n')
+        )
         : composeTypeDefinition(envType.data),
       position: typeToken,
       info: {
@@ -1361,6 +1420,27 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         }
       });
       return 'String';
+    case 'type': {
+      const type = checkType(rValue.typeValue, document, environments, diagnostics);
+      if (typeCheck() && (!type || type.endsWith('?'))) {
+        diagnostics.push(new SimplexDiagnostic(
+          new Range(
+            document.positionAt(rValue.typeValue.start),
+            document.positionAt(rValue.typeValue.end)
+          ),
+          `Unknown type`
+        ));
+      }
+      tokensData.push({
+        definition: "",
+        position: value,
+        info: {
+          type: type ?? '?',
+          dotFunctionSuggestions: getDotFunctionsFor(environments, type ?? '?')
+        }
+      });
+      return type ?? '?';
+    }
     case 'parenthesis': {
       const type = getType(rValue.value, document, environments, diagnostics);
       tokensData.push({
@@ -1372,6 +1452,17 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         }
       });
       return type;
+    }
+    case 'translation': {
+      tokensData.push({
+        definition: rValue.value.toString(),
+        position: value,
+        info: {
+          type: 'String',
+          dotFunctionSuggestions: getDotFunctionsFor(environments, 'String')
+        }
+      });
+      return 'String';
     }
     case 'unary': {
       const type = getType(rValue.value, document, environments, diagnostics);
@@ -1537,6 +1628,34 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       }
       return transformGenericType(dotFunction, paramTypes);
     }
+    case 'dotProperty': {
+      const structType = getType(rValue.object, document, environments, diagnostics);
+      const structTypeDefinition = tryGetType(environments, structType);
+      if (!structTypeDefinition) {
+        if (structType === 'Output' && rValue.value.value.endsWith("_is_z")) {
+          return 'Bool';
+        }
+        if (structType === 'Output' && rValue.value.value.endsWith("_enabled")) {
+          return 'Bool';
+        }
+        return '?';
+      }
+      let props: Record<string, string>;
+      if (structTypeDefinition.type === 'built-in') {
+        if (typeof structTypeDefinition.data === 'string') {
+          return '?';
+        }
+        props = structTypeDefinition.data;
+      } else {
+        const def = structTypeDefinition.data.definition.value;
+        if (typeof def === 'string' || Array.isArray(def)) {
+          return '?';
+        }
+        props = def;
+      }
+      const propName = rValue.value.value;
+      return props[propName] ?? '?';
+    }
     case 'function': {
       const paramTypes = rValue.parameters.map(param => getType(param, document, environments, diagnostics));
       const func = tryGetDefFunction(environments, rValue.value.value, paramTypes);
@@ -1617,6 +1736,10 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
       }
       return transformGenericType(func, paramTypes);
     }
+    case 'struct': {
+      const paramTypes = rValue.parameters.map(param => getType(param[1], document, environments, diagnostics));
+      return rValue.typeValue.value;
+    }
     case 'cast': {
       const castedFromType = getType(rValue.value, document, environments, diagnostics);
       const castedToType = typeStringToTypeToken(rValue.to.value);
@@ -1687,8 +1810,10 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         ));
       }
       const typeName = type?.[1] ?? '?';
+      const isFirstAnIntegerCast = type[0].value.type === 'cast' && isIntegerType(typeName);
       if (valuesTypes.some(([token, t]) => {
-          if (t !== typeName) {
+          // special case for when the first number in an array is casted to a specific integer type
+          if (t !== typeName && !(isFirstAnIntegerCast && t === 'Int')) {
             if (typeCheck()) {
               diagnostics.push(new SimplexDiagnostic(
                 new Range(
@@ -1742,27 +1867,6 @@ const getType = (value: Token<RValue>, document: TextDocument, environments: Env
         ));
       }
       return afterIndexType ?? '?';
-    }
-    case '_default': {
-      const type = checkType(rValue.typeValue, document, environments, diagnostics);
-      if (typeCheck() && (!type || type.endsWith('?'))) {
-        diagnostics.push(new SimplexDiagnostic(
-          new Range(
-            document.positionAt(rValue.typeValue.start),
-            document.positionAt(rValue.typeValue.end)
-          ),
-          `Unknown type`
-        ));
-      }
-      tokensData.push({
-        definition: "",
-        position: value,
-        info: {
-          type: type ?? '?',
-          dotFunctionSuggestions: getDotFunctionsFor(environments, type ?? '?')
-        }
-      });
-      return type ?? '?';
     }
     default: {
       const x: never = rValue;
@@ -1861,18 +1965,9 @@ function checkMethodConstraints(definition: FunctionDefinition, diagnostics: Sim
   }
 }
 
+const complicated: StaticValue = { type: 'complicated' };
 const getStaticValue = (rvalue: Token<RValue>): StaticValue => {
-  const complicated: StaticValue = { type: 'complicated' };
   switch (rvalue.value.type) {
-    case "_default": {
-      if (isIntegerType(rvalue.value.typeValue.value)) {
-        return { type: 'number', value: 0 };
-      }
-      if (rvalue.value.typeValue.value === 'String') {
-        return { type: 'string', value: "" };
-      }
-      return complicated;
-    }
     case 'number': return { type: 'number', value: rvalue.value.value };
     case 'string': return { type: 'string', value: rvalue.value.value };
 
@@ -1925,12 +2020,16 @@ const getStaticValue = (rvalue: Token<RValue>): StaticValue => {
       }
     }
 
+    case 'type':
     case 'cast':
     case 'dotMethod':
+    case 'dotProperty':
     case 'array':
     case 'index':
     case 'function':
+    case 'struct':
     case 'interpolated':
+    case 'translation':
     case 'ternary':
       return complicated;
 

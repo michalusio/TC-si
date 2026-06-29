@@ -1,16 +1,39 @@
 
-const INPUT = 0
-const SOURCE = 1
-const DEST = 2
-const HEIGHT = 3
-const MAG_POS = 4
-const MAG_LIFTED = 5
-const FAIL = 6
-const PLATES = 7
+var input = 0
+var source = random(3)
+var destination = source
+var height = 3 + random(3)
+var mag_pos = 0
+var mag_lifted = -1
+var failed = 0
+var plates = array(<Int>, 10)
 
-def redraw(scratch_space: [Int]) {
 
-    if scratch_space[FAIL] == 1 {
+while source == destination {
+
+    destination = random(3)
+
+}
+
+var i = 0
+while i < height {
+
+    plates[i] = source
+    i += 1
+
+}
+
+while i < 5 {
+
+    plates[i] = -1
+    i += 1
+
+}
+
+
+def redraw() {
+
+    if .failed == 1 {
 
         ui_set_hidden("0", true)
         ui_set_hidden("1", true)
@@ -26,13 +49,13 @@ def redraw(scratch_space: [Int]) {
     ui_set_hidden("3", true)
     ui_set_hidden("4", true)
 
-    let plate_0 = scratch_space[PLATES + 0]
-    let plate_1 = scratch_space[PLATES + 1]
-    let plate_2 = scratch_space[PLATES + 2]
-    let plate_3 = scratch_space[PLATES + 3]
-    let plate_4 = scratch_space[PLATES + 4]
+    let plate_0 = .plates[0]
+    let plate_1 = .plates[1]
+    let plate_2 = .plates[2]
+    let plate_3 = .plates[3]
+    let plate_4 = .plates[4]
 
-    var y_pos = [205, 205, 205]
+    var y_pos = [140, 140, 140]
 
     if plate_4 != -1 { 
 
@@ -65,53 +88,53 @@ def redraw(scratch_space: [Int]) {
     
     // Magnet
 
-    ui_set_position("magnet", -200 + 200 * scratch_space[MAG_POS], 0)
+    ui_set_position("magnet", -200 + 200 * .mag_pos, -100)
 
-    if scratch_space[MAG_LIFTED] != -1 {
+    if .mag_lifted != -1 {
 
-        let x = -200 + 200 * scratch_space[MAG_POS]
+        let x = -200 + 200 * .mag_pos
 
-        switch scratch_space[MAG_LIFTED] 
-            0 { ui_set_position("0", x, 80) }
-            1 { ui_set_position("1", x, 80) }
-            2 { ui_set_position("2", x, 80) }
-            3 { ui_set_position("3", x, 80) }
-            4 { ui_set_position("4", x, 80) }
+        switch .mag_lifted 
+            0 { ui_set_position("0", x, -50) }
+            1 { ui_set_position("1", x, -50) }
+            2 { ui_set_position("2", x, -50) }
+            3 { ui_set_position("3", x, -50) }
+            4 { ui_set_position("4", x, -50) }
 
     }
 
 }
 
-def level_input($scratch_space: [Int], input: Int) {
+def level_input(input: Int) {
     
     switch input
         0 {
 
-            scratch_space[MAG_POS] = 0
+            .mag_pos = 0
 
         }
         1 {
 
-            scratch_space[MAG_POS] = 1
+            .mag_pos = 1
 
         }
         2 {
 
-            scratch_space[MAG_POS] = 2
+            .mag_pos = 2
 
         }
         5 {
 
-            if scratch_space[MAG_LIFTED] == -1 {
+            if .mag_lifted == -1 {
 
-                let pos = scratch_space[MAG_POS]
+                let pos = .mag_pos
 
                 var i = 0
                 while i < 5 {
 
-                    if pos == scratch_space[PLATES + i] {
+                    if pos == .plates[i] {
 
-                        scratch_space[MAG_LIFTED] = i
+                        .mag_lifted = i
                         break
 
                     }
@@ -121,15 +144,15 @@ def level_input($scratch_space: [Int], input: Int) {
 
             } else {
 
-                let pos = scratch_space[MAG_POS]
-                let lifted = scratch_space[MAG_LIFTED]
+                let pos = .mag_pos
+                let lifted = .mag_lifted
 
                 var i = 0
                 while i < lifted {
 
-                    if scratch_space[PLATES + i] == pos {
+                    if .plates[i] == pos {
 
-                        scratch_space[FAIL] = 1
+                        .failed = 1
                         break
 
                     }
@@ -138,36 +161,34 @@ def level_input($scratch_space: [Int], input: Int) {
 
                 }
 
-                scratch_space[PLATES + lifted] = pos
-                scratch_space[MAG_LIFTED] = -1
+                .plates[lifted] = pos
+                .mag_lifted = -1
 
             }
 
         } 
 
-    redraw(scratch_space)
+    redraw()
            
 }
 
-def on_manual_input($scratch_space: [Int], input: Int) {
+def on_manual_input(input: Int) {
 
     switch input
         0 { // left
 
-            if scratch_space[MAG_POS] > 0 {
+            if .mag_pos > 0 {
 
-                scratch_space[MAG_POS] -= 1
-                level_input($scratch_space, scratch_space[MAG_POS])
+                level_input(.mag_pos - 1)
 
             }
 
         }
         2 { // right
 
-            if scratch_space[MAG_POS] < 2 {
+            if .mag_pos < 2 {
 
-                scratch_space[MAG_POS] += 1
-                level_input($scratch_space, scratch_space[MAG_POS])
+                level_input(.mag_pos + 1)
 
             }
 
@@ -175,78 +196,42 @@ def on_manual_input($scratch_space: [Int], input: Int) {
         5 { // enter
 
 
-            level_input($scratch_space, 5)
+            level_input(5)
 
         }
 
 }
 
-def on_reset($scratch_space: [Int], test: Int) {
 
-    scratch_space[MAG_LIFTED] = -1
+def arch_get_input(test: Int) Int {
 
-    let source  = random(3)
-    var destination = source
-    let height = 3 + random(3)
-
-    while source == destination {
-
-        destination = random(3)
-
-    }
-
-    scratch_space[SOURCE] = source
-    scratch_space[DEST] = destination
-    scratch_space[HEIGHT] = height
-
-    var i = 0
-    while i < height {
-
-        scratch_space[PLATES + i] = source
-        i += 1
-
-    }
-
-    while i < 5 {
-
-        scratch_space[PLATES + i] = -1
-        i += 1
-
-    }
-
-    redraw(scratch_space)
-
-}
-
-def arch_get_input($scratch_space: [Int], test: Int) Int {
-
-    let count = scratch_space[INPUT]
-    scratch_space[INPUT] = count + 1
+    let count = .input
+    .input = count + 1
 
     switch count
-        0 { return scratch_space[HEIGHT] - 1 }
-        1 { return scratch_space[SOURCE] }
-        2 { return scratch_space[DEST]}
-        3 { return 3 - scratch_space[SOURCE] - scratch_space[DEST] }
+        0 { return .height - 1 }
+        1 { return .source }
+        2 { return .destination}
+        3 { return 3 - .source - .destination }
 
 }
 
-def arch_check_output($scratch_space: [Int], test: Int, input: Int, output: Int) TestResult {
+def arch_check_output(test: Int, input: Int, output: Int) TestResult {
 
-    level_input($scratch_space, output)
+    level_input(output)
 
-    if scratch_space[FAIL] == 1 {
+    if .failed == 1 {
 
         return fail
 
     }
 
-    let target = scratch_space[DEST]
+    let target = .destination
 
     var i = 0
     while i < 5 {
 
-        let pos = scratch_space[PLATES + i]
+        let pos = .plates[i]
         if pos == -1 {
 
             return win
@@ -269,5 +254,10 @@ def arch_check_output($scratch_space: [Int], test: Int, input: Int, output: Int)
     }
 
 }
-//# 221:54-221:57 -Warning -A function with return type should return a value
-//# 234:82-234:92 -Warning -A function with return type should return a value
+
+
+redraw()
+
+
+//# 206:31-206:34 -Warning -A function with return type should return a value in all cases
+//# 219:59-219:69 -Warning -A function with return type should return a value in all cases

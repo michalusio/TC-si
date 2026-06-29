@@ -1,12 +1,12 @@
 
-const REGS = 0
-const COUNTER = 16
+const #REGS = 0
+const #COUNTER = 16
 
-const OP_IO  = 0
-const OP_ALU = 1
-const OP_JMP = 2
-const OP_RAM = 3
-const FLAG_REG = 15
+const #OP_IO  = 0
+const #OP_ALU = 1
+const #OP_JMP = 2
+const #OP_RAM = 3
+const #FLAG_REG = 15
 
 def instruction_to_str(instruction: Int) String {
 
@@ -55,16 +55,16 @@ def instruction_to_str(instruction: Int) String {
 
         OP_IO {
 
-            const NOP      = 0
-            const IN       = 1
-            const OUT      = 2
-            const CONSOLE  = 3
-            const TIME_0   = 4
-            const TIME_1   = 5
-            const TIME_2   = 6
-            const TIME_3   = 7
-            const COUNTER  = 8
-            const KEYBOARD = 9
+            const #NOP      = 0
+            const #IN       = 1
+            const #OUT      = 2
+            const #CONSOLE  = 3
+            const #TIME_0   = 4
+            const #TIME_1   = 5
+            const #TIME_2   = 6
+            const #TIME_3   = 7
+            const #COUNTER  = 8
+            const #KEYBOARD = 9
 
             switch opcode
                 NOP      { return `nop (does nothing)` }
@@ -121,8 +121,8 @@ def instruction_to_str(instruction: Int) String {
 
         OP_RAM {
 
-            const LOAD  = 0
-            const STORE = 1
+            const #LOAD  = 0
+            const #STORE = 1
 
             switch opcode
                 LOAD  { return `load {dest_str}, [{b_str}]` }
@@ -141,16 +141,16 @@ def retire_instruction(instruction: Int, $scratch_space: [Int], input: Int) Int 
     let immediate       = (instruction >> 28) & 1 != 0
     let immediate_value =  instruction & 0xffff
 
-    scratch_space[REGS + 0] = 0
+    scratch_space[#REGS + 0] = 0
 
-    let a_value = scratch_space[REGS + a]
-    let b_value = immediate ? immediate_value : scratch_space[REGS + b]
+    let a_value = scratch_space[#REGS + a]
+    let b_value = immediate ? immediate_value : scratch_space[#REGS + b]
 
     def flag_result(a: Int, b: Int) Int {
 
-        let equal = <Int> (a == b)
-        let uless = <Int> (<U16> a < <U16> b) & 1
-        let sless = <Int> (<S16> a < <S16> b) & 1
+        let equal = Int (a == b)
+        let uless = Int (U16 a < U16 b) & 1
+        let sless = Int (S16 a < S16 b) & 1
 
         return (sless << 2) | (uless << 1) | equal
 
@@ -164,7 +164,7 @@ def retire_instruction(instruction: Int, $scratch_space: [Int], input: Int) Int 
             switch opcode
                 1 {
 
-                    scratch_space[REGS + dest] = input
+                    scratch_space[#REGS + dest] = input
 
                 }
                 2 {
@@ -212,7 +212,7 @@ def retire_instruction(instruction: Int, $scratch_space: [Int], input: Int) Int 
                     result = flag_result(a_value, b_value)
                 }
 
-            scratch_space[REGS + dest] = result & 0xffff
+            scratch_space[#REGS + dest] = result & 0xffff
 
         }
 
@@ -221,7 +221,7 @@ def retire_instruction(instruction: Int, $scratch_space: [Int], input: Int) Int 
             let flags   = a_value & 0b111
             let matched = (opcode & flags) > 0
             let met     = matched != ((opcode & 0b1000) > 0)
-            scratch_space[REGS + FLAG_REG] = scratch_space[COUNTER] + 4
+            scratch_space[#REGS + FLAG_REG] = scratch_space[COUNTER] + 4
 
             if met {
                 
@@ -235,7 +235,7 @@ def retire_instruction(instruction: Int, $scratch_space: [Int], input: Int) Int 
 
         }
 
-    return Z_STATE
+    return 0
 
 }
 
@@ -261,7 +261,7 @@ def check_output($scratch_space: [Int], tick: Int, inputs: [Int], outputs: [Int]
     ui_set_text("description", instruction_to_str(instruction))
     let output = retire_instruction(instruction, $scratch_space, inputs[0])
 
-    if output != Z_STATE && output != outputs[1] & 0xffff {
+    if output != 0 && output != outputs[1] & 0xffff {
 
         set_error(`Output should have been {output}.`)
         return fail
@@ -271,9 +271,9 @@ def check_output($scratch_space: [Int], tick: Int, inputs: [Int], outputs: [Int]
     var reg = 1
     while reg < 16 {
 
-        let value = get_register_value(reg - 1)
+        let value = get_memory(`{reg - 1}`)
 
-        if value != scratch_space[REGS + reg] {
+        if value != scratch_space[#REGS + reg] {
 
             var register = ""
             switch reg
@@ -281,7 +281,7 @@ def check_output($scratch_space: [Int], tick: Int, inputs: [Int], outputs: [Int]
                 15 { register = "'flags'" }
                 default { register = `r{reg}`}
 
-            set_error(`{register} should have value {scratch_space[REGS + reg]}, not {value}`)
+            set_error(`{register} should have value {scratch_space[#REGS + reg]}, not {value}`)
             return fail
 
         }
@@ -294,9 +294,9 @@ def check_output($scratch_space: [Int], tick: Int, inputs: [Int], outputs: [Int]
     }
 
 }
-//# 151:21-151:35 -Warning -You are casting an enum to a signed integer - this will result in some values having negative value!
-//# 152:21-152:46 -Warning -You are casting an enum to a signed integer - this will result in some values having negative value!
-//# 153:21-153:46 -Warning -You are casting an enum to a signed integer - this will result in some values having negative value!
-//# 11:42-11:48 -Warning -A function with return type should return a value
-//# 66:19-66:26 -Warning -You should not redeclare variables: 'COUNTER'
-//# 251:83-251:93 -Warning -A function with return type should return a value
+//# 151:20-151:33 -Warning -You are casting an enum to a signed integer - this will result in some values having negative value!
+//# 152:20-152:40 -Warning -You are casting an enum to a signed integer - this will result in some values having negative value!
+//# 153:20-153:40 -Warning -You are casting an enum to a signed integer - this will result in some values having negative value!
+//# 11:42-11:48 -Warning -A function with return type should return a value in all cases
+//# 66:19-66:27 -Warning -You should not redeclare variables: 'COUNTER'
+//# 251:83-251:93 -Warning -A function with return type should return a value in all cases

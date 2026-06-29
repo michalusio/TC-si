@@ -50,7 +50,6 @@ export function isRValue(node: Token<Statement>): node is Token<RValue> {
         case "number":
         case "array":
         case "function":
-        case "_default":
         case "dotMethod":
         case "index":
         case "variable":
@@ -541,9 +540,8 @@ function compileRValueNode(node: Token<RValue>, regState: RegisterState, varStat
             }
             return statementsResult;
         }
-        case '_default': {
-            const reg = reserveRegisterValue(regState, varState, nodeMarker);
-            return [Mov(reg, { type: 'immediate', value: 0 })];
+        case 'type': {
+            return [];
         }
         case 'cast': {
             const code = compileNode(node.value.value, regState, varState, utilities);
@@ -781,8 +779,15 @@ function compileRValueNode(node: Token<RValue>, regState: RegisterState, varStat
         case 'dotMethod': {
             throw `Dot methods are currently not supported`
         }
-        case 'interpolated': {
+        case 'dotProperty': {
+            throw `Dot properties are currently not supported`
+        }
+        case 'interpolated':
+        case 'translation': {
             throw `String interpolation is currently not supported`
+        }
+        case 'struct': {
+            throw `Structs are currently not supported`
         }
         case 'ternary': {
             throw `Ternaries are currently not supported`;
@@ -904,15 +909,18 @@ export const CP850TableMap = new Map(CP850Table.split('').map((c, i) => [c, i + 
 
 const tryGetStaticValue = (rValue: RValue): number | null => {
     switch (rValue.type) {
-        case '_default': return 0;
         case 'dotMethod':
+        case 'dotProperty':
         case 'function':
+        case 'struct':
         case 'index':
         case 'interpolated':
+        case 'translation':
         case 'string':
         case 'ternary':
         case 'variable':
         case 'array':
+        case 'type':
             return null;
         case 'number':
             return rValue.value;
